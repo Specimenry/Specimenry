@@ -734,6 +734,44 @@ window.app = {
     // --- Export / Import ---
     exportData: function() { exportToJSON(); },
 
+    importJSON: function(event) {
+        var file = event.target.files[0];
+        if (!file) return;
+
+        var reader = new FileReader();
+        reader.onload = function(e) {
+            try {
+                var data = JSON.parse(e.target.result);
+                if (!Array.isArray(data)) {
+                    throw new Error("Invalid format: Expected an array of fossils.");
+                }
+
+                var successCount = 0;
+                var chain = Promise.resolve();
+
+                data.forEach(function(fossil) {
+                    chain = chain.then(function() {
+                        // "put" handles both insert (if id is brand new) and update
+                        return updateFossil(fossil).then(function() {
+                            successCount++;
+                        });
+                    });
+                });
+
+                chain.then(function() {
+                    alert('Successfully restored ' + successCount + ' fossil(s) from backup!');
+                    window.app.renderFossils();
+                    document.getElementById('file-restore-json').value = '';
+                });
+
+            } catch (err) {
+                alert('Error reading JSON backup: ' + err.message);
+                document.getElementById('file-restore-json').value = '';
+            }
+        };
+        reader.readAsText(file);
+    },
+
     importCSV: function(event) {
         var file = event.target.files[0];
         if (!file) return;
