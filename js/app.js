@@ -389,6 +389,17 @@ window.addEventListener('DOMContentLoaded', function() {
         }
     }
 
+    // Backup Pulse logic
+    var lastBackup = localStorage.getItem('last_backup');
+    var sevenDaysMs = 7 * 24 * 60 * 60 * 1000;
+    if (!lastBackup || Date.now() - parseInt(lastBackup, 10) > sevenDaysMs) {
+        var exportBtn = document.getElementById('btn-export');
+        if (exportBtn) {
+            exportBtn.style.position = 'relative';
+            exportBtn.insertAdjacentHTML('beforeend', '<div class="pulse-dot" title="You haven\'t backed up in over 7 days!"></div>');
+        }
+    }
+
     populateDropdowns();
     fetchExchangeRates();
     initDB().then(function() {
@@ -1036,6 +1047,27 @@ window.app = {
                     imgHtml = '<svg class="card-placeholder-icon" xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>';
                 }
 
+                var timelineHtml = '';
+
+                var fullTimelineBlock = '';
+                if (f.ageMa > 0) {
+                    var percentage = Math.min((f.ageMa / 650) * 100, 100);
+                    var eraColor = '#a878d0';
+                    var eraName = 'Precambrian';
+                    if (f.ageMa <= 66) { eraColor = '#e6a817'; eraName = 'Cenozoic'; }
+                    else if (f.ageMa <= 252) { eraColor = '#439775'; eraName = 'Mesozoic'; }
+                    else if (f.ageMa <= 541) { eraColor = '#3a8fb7'; eraName = 'Paleozoic'; }
+                    
+                    fullTimelineBlock = '<div style="margin-top: 0.6rem; margin-bottom: 0.4rem; display: flex; flex-direction: column; gap: 0.35rem;">' +
+                                        '<div style="display: flex; justify-content: space-between; font-size: 0.65rem; color: var(--text-secondary); text-transform: uppercase; font-weight: 700; letter-spacing: 0.05em;">' +
+                                            '<span>Present</span>' +
+                                            '<span style="color: ' + eraColor + ';">' + escapeHtml(eraName) + ' (~' + f.ageMa + ' Ma)</span>' +
+                                        '</div>' +
+                                        '<div style="width: 100%; height: 6px; background: var(--border-color); border-radius: 3px; overflow: hidden; position: relative;" title="~' + f.ageMa + ' Million Years Old">' +
+                                            '<div style="width: ' + Math.max(percentage, 1) + '%; height: 100%; background-color: ' + eraColor + ';"></div>' +
+                                        '</div></div>';
+                }
+
                 var badgeClass = f.isWishlist ? 'badge badge-wishlist' : 'badge';
                 var periodText = f.geologicalPeriod ? ' &middot; ' + escapeHtml(f.geologicalPeriod) : '';
                 var epochText  = f.epoch ? ' (' + escapeHtml(f.epoch) + ')' : '';
@@ -1064,12 +1096,13 @@ window.app = {
                     '<div class="checkbox-container">' +
                         '<input type="checkbox" aria-label="Select ' + escapeHtml(f.specimen) + '" onchange="app.toggleSelectFossil(event, \'' + f.id + '\')" ' + (selectedFossils.has(f.id) ? 'checked' : '') + '>' +
                     '</div>' +
-                    '<div class="card-img-container" data-current-index="0">' + imgHtml + '</div>' +
+                    '<div class="card-img-container" data-current-index="0" style="position: relative;">' + imgHtml + '</div>' +
                     '<div class="card-content">' +
                         '<h3 class="card-title">' + escapeHtml(f.specimen) + '</h3>' +
                         (f.anatomy ? '<div style="margin-top: -0.25rem; margin-bottom: 0.5rem;"><span style="display: inline-flex; align-items: center; gap: 0.35rem; background: transparent; border: 1px solid var(--accent); color: var(--accent); padding: 0.15rem 0.5rem; border-radius: 1rem; font-size: 0.75rem; font-weight: 600;"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg> ' + escapeHtml(f.anatomy) + '</span></div>' : '') +
-                        '<p class="card-meta"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg> ' + escapeHtml(f.category) + periodText + epochText + stratAgeText + ageText + '</p>' +
-                        '<p class="card-meta"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg> ' + locationHtmlStr + '</p>' +
+                        '<p class="card-meta"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg> ' + escapeHtml(f.category) + periodText + epochText + stratAgeText + '</p>' +
+                        fullTimelineBlock + 
+                        '<p class="card-meta" style="margin-top: 0.5rem;"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg> ' + locationHtmlStr + '</p>' +
                         detailsText +
                         '<div class="card-footer">' +
                             '<span class="' + badgeClass + '">' + (f.isWishlist ? 'Wishlist' : 'Owned') + '</span>' +
@@ -1088,7 +1121,12 @@ window.app = {
     },
 
     // --- Export / Import ---
-    exportData: function() { exportToJSON(); },
+    exportData: function() { 
+        localStorage.setItem('last_backup', Date.now());
+        var pd = document.querySelector('#btn-export .pulse-dot');
+        if (pd) pd.remove();
+        exportToJSON(); 
+    },
 
     importJSON: function(event) {
         var file = event.target.files[0];
