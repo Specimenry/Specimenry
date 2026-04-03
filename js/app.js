@@ -587,6 +587,8 @@ window.addEventListener('DOMContentLoaded', function() {
         window.app.renderFossils();
         // Run background check for bloated images 2 seconds after load
         setTimeout(optimizeExistingDatabase, 2000);
+        // Automatic ID Migration (UUID -> Catalog) 1 second after load
+        setTimeout(migrateToCatalogIds, 1000);
     });
 });
 
@@ -989,7 +991,7 @@ window.app = {
         var isEditing = !!idVal;
 
         var fossil = {
-            id: isEditing ? idVal : generateId(),
+            id: isEditing ? idVal : generateCatalogId(document.getElementById('f-category').value, fossils),
             specimen: document.getElementById('f-specimen').value,
             anatomy: document.getElementById('f-anatomy').value,
             category: document.getElementById('f-category').value,
@@ -1366,7 +1368,7 @@ window.app = {
                     '<div class="card-content">' +
                         '<h3 class="card-title">' + annotateSpecimenName(f.specimen) + '</h3>' +
                         (f.anatomy ? '<div style="margin-top: -0.25rem; margin-bottom: 0.5rem;"><span style="display: inline-flex; align-items: center; gap: 0.35rem; background: transparent; border: 1px solid var(--accent); color: var(--accent); padding: 0.15rem 0.5rem; border-radius: 1rem; font-size: 0.75rem; font-weight: 600;"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg> ' + escapeHtml(f.anatomy) + '</span></div>' : '') +
-                        '<p class="card-meta"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg> ' + escapeHtml(f.category) + periodText + epochText + stratAgeText + '</p>' +
+                        '<p class="card-meta"><span style="font-weight:700; color:var(--accent); letter-spacing:0.02em;">' + escapeHtml(f.id) + '</span> &middot; <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg> ' + escapeHtml(f.category) + periodText + epochText + stratAgeText + '</p>' +
                         '<p class="card-meta" style="margin-top: 0.5rem;"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg> ' + locationHtmlStr + '</p>' +
                         detailsText +
                         '<div class="card-footer">' +
@@ -1493,6 +1495,115 @@ function generateId() {
         return Math.floor(Math.random() * 16).toString(16);
     });
 }
+
+function getCategoryPrefix(cat) {
+    if (!cat) return "FOSL";
+    var c = cat.toLowerCase();
+    if (c.indexOf('vertebrate') !== -1 && c.indexOf('invertebrate') === -1) return "VERT";
+    if (c.indexOf('invertebrate') !== -1) return "INVT";
+    if (c.indexOf('plant') !== -1) return "PLNT";
+    if (c.indexOf('trace') !== -1 || c.indexOf('ichno') !== -1) return "TRCE";
+    if (c.indexOf('micro') !== -1) return "MICR";
+    return "FOSL";
+}
+
+function generateCatalogId(category, list) {
+    var prefix = getCategoryPrefix(category);
+    var maxNum = 0;
+    var listToSearch = list || fossils || [];
+    
+    listToSearch.forEach(function(f) {
+        if (f.id && f.id.startsWith(prefix + '-')) {
+            var num = parseInt(f.id.split('-')[1], 10);
+            if (!isNaN(num) && num > maxNum) maxNum = num;
+        }
+    });
+    
+    var nextNum = maxNum + 1;
+    var padded = nextNum.toString().padStart(3, '0');
+    return prefix + '-' + padded;
+}
+
+function migrateToCatalogIds() {
+    return getAllFossils().then(function(allFossils) {
+        if (!allFossils || allFossils.length === 0) return;
+
+        // Find fossils with UUID-like IDs or non-catalog IDs.
+        // Catalog IDs follow the format: [PREFIX]-[3+ DIGITS]
+        var toMigrate = allFossils.filter(function(f) {
+            var id = f.id || "";
+            var dashIndex = id.indexOf('-');
+            if (dashIndex === -1) return true; // No dash = migrate
+            
+            var prefix = id.split('-')[0];
+            var numPart = id.split('-')[1];
+            
+            // If prefix isn't one of ours or number part isn't purely numeric or too short (UUIDs have hex)
+            var validPrefixes = ['VERT', 'INVT', 'PLNT', 'TRCE', 'MICR', 'FOSL'];
+            var isLegacy = validPrefixes.indexOf(prefix) === -1 || isNaN(parseInt(numPart, 10)) || id.length > 12;
+            return isLegacy;
+        });
+
+        if (toMigrate.length === 0) return;
+
+        console.log('Migrating ' + toMigrate.length + ' fossils to professional Catalog IDs...');
+        
+        var workingList = JSON.parse(JSON.stringify(allFossils));
+        var chain = Promise.resolve();
+        var migratedCount = 0;
+
+        toMigrate.forEach(function(orig) {
+            chain = chain.then(function() {
+                var idx = workingList.findIndex(function(x) { return x.id === orig.id; });
+                if (idx !== -1) workingList.splice(idx, 1);
+
+                var newId = generateCatalogId(orig.category, workingList);
+                var updatedFossil = JSON.parse(JSON.stringify(orig));
+                updatedFossil.id = newId;
+
+                workingList.push(updatedFossil);
+
+                return deleteFossil(orig.id).then(function() {
+                    return addFossil(updatedFossil).then(function() {
+                        migratedCount++;
+                    });
+                });
+            });
+        });
+
+        return chain.then(function() {
+            if (migratedCount > 0) {
+                showToast('Successfully cataloged ' + migratedCount + ' specimens!');
+                window.app.renderFossils();
+            }
+        });
+    });
+}
+
+function showToast(msg) {
+    var toast = document.createElement('div');
+    toast.style.cssText = 'position:fixed; bottom:30px; right:30px; background:var(--accent); color:#fff; padding:1rem 1.5rem; border-radius:var(--radius-md); box-shadow:0 10px 30px rgba(0,0,0,0.3); z-index:10001; font-weight:700; display:flex; align-items:center; gap:0.75rem; animation:toastSlideIn 0.4s ease-out;';
+    toast.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> ' + msg;
+    
+    // Auto-inject animation if missing
+    if (!document.getElementById('toast-animation')) {
+        var s = document.createElement('style');
+        s.id = 'toast-animation';
+        s.innerHTML = '@keyframes toastSlideIn { from { transform:translateX(100%); opacity:0; } to { transform:translateX(0); opacity:1; } }';
+        document.head.appendChild(s);
+    }
+    
+    document.body.appendChild(toast);
+    setTimeout(function() {
+        toast.style.transform = 'translateX(120%)';
+        toast.style.opacity = '0';
+        toast.style.transition = 'all 0.4s ease-in';
+        setTimeout(function() { toast.remove(); }, 400);
+    }, 4000);
+}
+
+
+
 
 function escapeHtml(str) {
     if (!str) return '';
