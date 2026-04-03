@@ -255,6 +255,22 @@
         </form>
     </dialog>
 
+    <!-- Lightbox Overlay -->
+    <div id="lightbox" class="lightbox-overlay" onclick="if(event.target===this) app.closeLightbox();">
+        <div class="lightbox-inner">
+            <button class="lightbox-close" onclick="app.closeLightbox()" title="Close">&times;</button>
+            <button class="lightbox-nav prev" onclick="app.lightboxNav(-1)">&#10094;</button>
+            <img id="lightbox-img" src="" alt="Full-size fossil image" />
+            <button class="lightbox-nav next" onclick="app.lightboxNav(1)">&#10095;</button>
+            <div class="lightbox-info">
+                <h3 id="lightbox-title"></h3>
+                <p id="lightbox-detail"></p>
+                <p id="lightbox-location"></p>
+                <div class="lightbox-counter" id="lightbox-counter"></div>
+            </div>
+        </div>
+    </div>
+
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js" integrity="sha512-doSKIKVlMhB2hO3+YAMkFG0+bxBHSjbCOSVFcOIlqLCO6vgD0/07HL8rSfKiEx8dONBh0tyltk2NiKLMsacs0A==" crossorigin="anonymous"></script>
     <script src="js/app.js"></script>
 </body>

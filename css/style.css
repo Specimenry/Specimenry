@@ -532,7 +532,6 @@ main {
     background: var(--bg-surface);
     border: 1px solid var(--border-color);
     border-radius: var(--radius-md);
-    overflow: hidden;
     position: relative;
     transition: var(--transition);
     box-shadow: var(--shadow-sm);
@@ -554,6 +553,7 @@ main {
     justify-content: center;
     overflow: hidden;
     position: relative;
+    border-radius: var(--radius-md) var(--radius-md) 0 0;
 }
 
 .card-img-container img {
@@ -660,6 +660,187 @@ main {
     font-size: 1.15rem;
     color: var(--text-primary);
     margin-bottom: 0.5rem;
+}
+
+.etym-hint {
+    cursor: help;
+    position: relative;
+    display: inline;
+    background-color: var(--accent-bg);
+    border-bottom: 2px solid var(--accent-ring);
+    padding: 0 2px;
+    margin: 0 -2px;
+    border-radius: 3px 3px 0 0;
+    transition: background-color 0.2s ease, border-color 0.2s ease;
+    text-decoration: none;
+}
+
+.etym-hint:hover {
+    background-color: var(--accent-ring);
+    border-bottom-color: var(--accent);
+}
+
+.etym-hint::before {
+    content: '';
+    position: absolute;
+    bottom: calc(100% + 2px);
+    left: 50%;
+    transform: translateX(-50%);
+    border: 5px solid transparent;
+    border-top-color: var(--accent);
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.15s ease;
+    z-index: 101;
+}
+
+.etym-hint::after {
+    content: '📖 ' attr(data-meaning);
+    position: absolute;
+    bottom: calc(100% + 11px);
+    left: 50%;
+    transform: translateX(-50%) translateY(4px);
+    background: var(--accent);
+    color: #fff;
+    padding: 0.35rem 0.65rem;
+    border-radius: var(--radius-sm);
+    font-family: 'Inter', sans-serif;
+    font-size: 0.68rem;
+    font-weight: 600;
+    font-style: normal;
+    white-space: nowrap;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.15s ease, transform 0.15s ease;
+    z-index: 100;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+    letter-spacing: 0.01em;
+}
+
+.etym-hint:hover::before {
+    opacity: 1;
+}
+
+.etym-hint:hover::after {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+}
+
+/* --- Lightbox --- */
+.lightbox-overlay {
+    display: none;
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0, 0, 0, 0.92);
+    z-index: 9999;
+    align-items: center;
+    justify-content: center;
+    backdrop-filter: blur(8px);
+    animation: lightboxFadeIn 0.25s ease;
+}
+
+.lightbox-overlay.active {
+    display: flex;
+}
+
+@keyframes lightboxFadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+.lightbox-inner {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    max-width: 90vw;
+    max-height: 90vh;
+    position: relative;
+}
+
+.lightbox-inner img {
+    max-width: 90vw;
+    max-height: 75vh;
+    object-fit: contain;
+    border-radius: var(--radius-md);
+    box-shadow: 0 8px 40px rgba(0,0,0,0.5);
+}
+
+.lightbox-info {
+    margin-top: 1rem;
+    text-align: center;
+    color: #e0e6ed;
+    max-width: 600px;
+}
+
+.lightbox-info h3 {
+    font-family: 'Playfair Display', Georgia, serif;
+    font-size: 1.4rem;
+    font-weight: 700;
+    margin-bottom: 0.35rem;
+    color: #fff;
+}
+
+.lightbox-info p {
+    font-size: 0.8rem;
+    color: #9da8b5;
+    margin-bottom: 0.15rem;
+}
+
+.lightbox-close {
+    position: absolute;
+    top: -40px;
+    right: -10px;
+    background: none;
+    border: none;
+    color: #fff;
+    font-size: 2rem;
+    cursor: pointer;
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    transition: background 0.2s ease;
+    line-height: 1;
+}
+
+.lightbox-close:hover {
+    background: rgba(255,255,255,0.1);
+}
+
+.lightbox-nav {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    background: rgba(255,255,255,0.1);
+    border: 1px solid rgba(255,255,255,0.2);
+    color: #fff;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    font-size: 1.2rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.2s;
+}
+
+.lightbox-nav:hover {
+    background: rgba(255,255,255,0.2);
+}
+
+.lightbox-nav.prev { left: -60px; }
+.lightbox-nav.next { right: -60px; }
+
+.lightbox-counter {
+    color: #9da8b5;
+    font-size: 0.7rem;
+    font-weight: 600;
+    margin-top: 0.5rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
 }
 
 .card-meta {

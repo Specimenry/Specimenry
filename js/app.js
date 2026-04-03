@@ -47,6 +47,185 @@ var PERIOD_AGES = {
     'Proterozoic': 541, 'Archean': 541, 'Hadean': 541
 };
 
+// Scientific name etymology — common Greek/Latin roots in paleontology
+// Sorted longest-first so the matcher always prefers the most specific root
+var ETYMOLOGY = [
+    // Multi-syllable compound roots (longest first)
+    { root: 'ceratops', meaning: 'horned face (Greek: kerato + ops)' },
+    { root: 'carcharodon', meaning: 'jagged tooth (Greek)' },
+    { root: 'carcharo', meaning: 'jagged / sharp (Greek: karcharos)' },
+    { root: 'tyranno', meaning: 'tyrant (Greek: tyrannos)' },
+    { root: 'mammuthus', meaning: 'earth burrower (Tatar: mamma)' },
+    { root: 'mammut', meaning: 'earth burrower (Tatar)' },
+    { root: 'rhinoceros', meaning: 'nose horn (Greek)' },
+    { root: 'pithecus', meaning: 'ape (Greek: pithekos)' },
+    { root: 'styraco', meaning: 'spiked (Greek: styrax)' },
+    { root: 'rhyncho', meaning: 'snout / beak (Greek)' },
+    { root: 'cephalo', meaning: 'head (Greek: kephale)' },
+    { root: 'opisth', meaning: 'behind (Greek: opisthen)' },
+    { root: 'gnathus', meaning: 'jaw (Greek: gnathos)' },
+    { root: 'onychus', meaning: 'claw (Greek: onyx)' },
+    { root: 'therium', meaning: 'beast (Greek: therion)' },
+    { root: 'ichthyo', meaning: 'fish (Greek: ichthys)' },
+    { root: 'ichthy', meaning: 'fish (Greek: ichthys)' },
+    { root: 'morpho', meaning: 'form / shape (Greek)' },
+    { root: 'venator', meaning: 'hunter (Latin)' },
+    { root: 'mosasaur', meaning: 'Meuse lizard (Latin: Mosa + Greek: sauros)' },
+    { root: 'ankylo', meaning: 'fused / stiff (Greek: ankylos)' },
+    { root: 'pseudo', meaning: 'false (Greek: pseudos)' },
+    { root: 'brachy', meaning: 'short (Greek: brakhys)' },
+    { root: 'veloci', meaning: 'swift (Latin: velox)' },
+    { root: 'campto', meaning: 'flexible / bent (Greek)' },
+    { root: 'archae', meaning: 'ancient / beginning (Greek)' },
+    { root: 'palaeo', meaning: 'ancient (Greek: palaios)' },
+    { root: 'paleo', meaning: 'ancient (Greek: palaios)' },
+    { root: 'amphi', meaning: 'both / around (Greek)' },
+    { root: 'ammon', meaning: 'Egyptian god Amun (spiral horns)' },
+
+    // 6-letter roots
+    { root: 'saurus', meaning: 'lizard (Greek: sauros)' },
+    { root: 'raptor', meaning: 'thief / plunderer (Latin)' },
+    { root: 'pteryx', meaning: 'wing (Greek: pteryx)' },
+    { root: 'pteron', meaning: 'wing (Greek)' },
+    { root: 'pterus', meaning: 'winged (Greek)' },
+    { root: 'theria', meaning: 'beasts (Greek)' },
+    { root: 'suchus', meaning: 'crocodile (Greek: soukhos)' },
+    { root: 'chelys', meaning: 'turtle (Greek)' },
+    { root: 'chelone', meaning: 'turtle (Greek)' },
+    { root: 'rhinus', meaning: 'nose / snout (Greek: rhis)' },
+    { root: 'spino', meaning: 'spine / thorn (Latin: spina)' },
+    { root: 'carno', meaning: 'flesh (Latin: caro)' },
+    { root: 'diplo', meaning: 'double (Greek: diploos)' },
+    { root: 'apato', meaning: 'deceptive (Greek: apate)' },
+    { root: 'iguan', meaning: 'iguana (Taíno: iwana)' },
+    { root: 'stego', meaning: 'roof / covered (Greek: stegos)' },
+    { root: 'hadro', meaning: 'thick / stout (Greek: hadros)' },
+    { root: 'archo', meaning: 'ruling / chief (Greek: arkhon)' },
+    { root: 'ptero', meaning: 'wing (Greek: pteron)' },
+    { root: 'thero', meaning: 'beast (Greek: therion)' },
+    { root: 'platy', meaning: 'flat / broad (Greek: platys)' },
+
+    // 5-letter roots
+    { root: 'saura', meaning: 'lizard (Greek: saura)' },
+    { root: 'ceras', meaning: 'horn (Greek: keras)' },
+    { root: 'ceros', meaning: 'horned (Greek)' },
+    { root: 'stoma', meaning: 'mouth (Greek)' },
+    { root: 'ornis', meaning: 'bird (Greek)' },
+    { root: 'rhina', meaning: 'nose / snout (Greek)' },
+    { root: 'derma', meaning: 'skin (Greek)' },
+    { root: 'lopho', meaning: 'crest (Greek: lophos)' },
+    { root: 'mimus', meaning: 'mimic (Greek: mimos)' },
+    { root: 'titan', meaning: 'giant (Greek: Titan)' },
+    { root: 'orbis', meaning: 'circle / disc (Latin)' },
+    { root: 'proto', meaning: 'first (Greek: protos)' },
+    { root: 'macro', meaning: 'large (Greek: makros)' },
+    { root: 'micro', meaning: 'small (Greek: mikros)' },
+    { root: 'dacty', meaning: 'finger (Greek: daktylos)' },
+    { root: 'phyll', meaning: 'leaf (Greek: phyllon)' },
+    { root: 'scler', meaning: 'hard (Greek: skleros)' },
+
+    // 4-letter roots
+    { root: 'mega', meaning: 'great / large (Greek: megas)' },
+    { root: 'dino', meaning: 'terrible (Greek: deinos)' },
+    { root: 'odon', meaning: 'tooth (Greek: odous)' },
+    { root: 'dont', meaning: 'tooth (Greek: odont-)' },
+    { root: 'odus', meaning: 'tooth (Greek)' },
+    { root: 'onyx', meaning: 'claw (Greek)' },
+    { root: 'baro', meaning: 'heavy / weight (Greek: baros)' },
+    { root: 'allo', meaning: 'other / different (Greek: allos)' },
+    { root: 'para', meaning: 'beside / near (Greek)' },
+    { root: 'mono', meaning: 'single (Greek)' },
+    { root: 'poly', meaning: 'many (Greek)' },
+    { root: 'lith', meaning: 'stone (Greek: lithos)' },
+    { root: 'meso', meaning: 'middle (Greek: mesos)' },
+    { root: 'xeno', meaning: 'strange / foreign (Greek)' },
+    { root: 'xero', meaning: 'dry (Greek: xeros)' },
+    { root: 'nycho', meaning: 'claw (Greek: onyx)' },
+    { root: 'nyx', meaning: 'claw / night (Greek)' },
+    { root: 'giga', meaning: 'giant (Greek: gigas)' },
+    { root: 'nano', meaning: 'dwarf (Greek: nanos)' },
+    { root: 'plio', meaning: 'more (Greek: pleion)' },
+    { root: 'mosa', meaning: 'of the Meuse river (Latin)' },
+    { root: 'croc', meaning: 'pebble / crocodile (Greek: kroke)' },
+    { root: 'hypo', meaning: 'under / below (Greek)' },
+    { root: 'ovis', meaning: 'sheep (Latin)' },
+    { root: 'equu', meaning: 'horse (Latin: equus)' },
+    { root: 'urus', meaning: 'wild ox (Latin)' },
+    { root: 'leon', meaning: 'lion (Greek: leon)' },
+    { root: 'loph', meaning: 'crest (Greek: lophos)' },
+    { root: 'acan', meaning: 'spine / thorn (Greek: akantha)' },
+    { root: 'glyp', meaning: 'carved (Greek: glypho)' },
+    { root: 'cyan', meaning: 'blue (Greek: kyanos)' },
+    { root: 'ecto', meaning: 'outside (Greek)' },
+    { root: 'endo', meaning: 'within (Greek)' },
+    { root: 'phago', meaning: 'eater (Greek: phagein)' },
+    { root: 'sauro', meaning: 'lizard (Greek: sauros)' },
+    { root: 'podo', meaning: 'foot (Greek: pous)' },
+
+    // 3-letter roots (careful — only match these at word boundaries ideally)
+    { root: 'tri', meaning: 'three (Greek/Latin)' },
+    { root: 'ops', meaning: 'face / eye (Greek)' },
+    { root: 'pod', meaning: 'foot (Greek: pous)' },
+    { root: 'pes', meaning: 'foot (Latin)' },
+    { root: 'pus', meaning: 'foot (Greek)' },
+    { root: 'rex', meaning: 'king (Latin)' },
+    { root: 'leo', meaning: 'lion (Latin)' },
+    { root: 'neo', meaning: 'new (Greek: neos)' }
+];
+
+// Scan specimen name for etymology roots and wrap matches in tooltip spans
+function annotateSpecimenName(rawName) {
+    if (!rawName) return '';
+    var safeName = escapeHtml(rawName);
+    var nameLower = rawName.toLowerCase();
+    var matches = [];
+
+    ETYMOLOGY.forEach(function(entry) {
+        var idx = nameLower.indexOf(entry.root.toLowerCase());
+        while (idx !== -1) {
+            // Avoid overlapping matches — only keep the longest at each position
+            var dominated = false;
+            for (var m = 0; m < matches.length; m++) {
+                var em = matches[m];
+                // If existing match fully covers this one, skip
+                if (em.start <= idx && em.end >= idx + entry.root.length) { dominated = true; break; }
+                // If this match fully covers existing, replace it
+                if (idx <= em.start && idx + entry.root.length >= em.end) { matches.splice(m, 1); m--; }
+            }
+            if (!dominated) {
+                matches.push({ start: idx, end: idx + entry.root.length, meaning: entry.meaning });
+            }
+            idx = nameLower.indexOf(entry.root.toLowerCase(), idx + 1);
+        }
+    });
+
+    if (matches.length === 0) return safeName;
+
+    // Sort by start position
+    matches.sort(function(a, b) { return a.start - b.start; });
+
+    // Remove overlapping matches (keep longer ones)
+    var cleaned = [matches[0]];
+    for (var i = 1; i < matches.length; i++) {
+        var last = cleaned[cleaned.length - 1];
+        if (matches[i].start >= last.end) {
+            cleaned.push(matches[i]);
+        }
+    }
+
+    // Build annotated HTML
+    var result = '';
+    var cursor = 0;
+    cleaned.forEach(function(m) {
+        result += escapeHtml(rawName.substring(cursor, m.start));
+        result += '<span class="etym-hint" data-meaning="' + escapeHtml(m.meaning) + '">' +
+                  escapeHtml(rawName.substring(m.start, m.end)) + '</span>';
+        cursor = m.end;
+    });
+    result += escapeHtml(rawName.substring(cursor));
+    return result;
+}
+
 // Map exact millions of years ago to proper Epoch, Period, and Age
 var AGE_RANGES = [
     { max: 0.0042, period: "Quaternary", epoch: "Holocene", age: "Meghalayan" },
@@ -354,6 +533,8 @@ var isStatsOpen = false;
 var chartCountry = null;
 var chartPeriod = null;
 var exchangeRates = null;
+var lightboxFossilId = null;
+var lightboxIdx = 0;
 
 function fetchExchangeRates() {
     var cached = localStorage.getItem('exchangeRates_SEK');
@@ -409,6 +590,14 @@ window.addEventListener('DOMContentLoaded', function() {
     });
 });
 
+// Lightbox keyboard navigation
+document.addEventListener('keydown', function(e) {
+    var overlay = document.getElementById('lightbox');
+    if (!overlay || !overlay.classList.contains('active')) return;
+    if (e.key === 'Escape') { window.app.closeLightbox(); }
+    else if (e.key === 'ArrowLeft') { window.app.lightboxNav(-1); }
+    else if (e.key === 'ArrowRight') { window.app.lightboxNav(1); }
+});
 
 // =========================================================================
 // APP METHODS — attached to window.app for inline HTML handlers
@@ -428,6 +617,65 @@ window.app = {
             localStorage.setItem('oceanic_theme', 'dark');
             if (icon) icon.innerHTML = '<circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>';
         }
+    },
+
+    // --- Lightbox ---
+    openLightbox: function(fossilId, imgIndex) {
+        var f = fossils.find(function(x) { return x.id === fossilId; });
+        if (!f || !f.images || f.images.length === 0) return;
+        lightboxFossilId = fossilId;
+        lightboxIdx = imgIndex || 0;
+
+        var overlay = document.getElementById('lightbox');
+        var img = document.getElementById('lightbox-img');
+        var title = document.getElementById('lightbox-title');
+        var detail = document.getElementById('lightbox-detail');
+        var loc = document.getElementById('lightbox-location');
+        var counter = document.getElementById('lightbox-counter');
+
+        img.src = f.images[lightboxIdx];
+        title.textContent = f.specimen || 'Unknown Specimen';
+
+        var detailParts = [];
+        if (f.category) detailParts.push(f.category);
+        if (f.geologicalPeriod) detailParts.push(f.geologicalPeriod);
+        if (f.epoch) detailParts.push(f.epoch);
+        if (f.ageMa) detailParts.push('~' + f.ageMa + ' Ma');
+        if (f.anatomy) detailParts.push('⚡ ' + f.anatomy);
+        detail.textContent = detailParts.join(' · ');
+
+        var locParts = [];
+        if (f.location) locParts.push(f.location);
+        if (f.country) locParts.push(f.country);
+        if (f.formation) locParts.push(f.formation);
+        loc.textContent = locParts.length > 0 ? '📍 ' + locParts.join(', ') : '';
+
+        counter.textContent = f.images.length > 1 ? 'Photo ' + (lightboxIdx + 1) + ' of ' + f.images.length : '';
+
+        // Show/hide nav arrows
+        var prevBtn = overlay.querySelector('.lightbox-nav.prev');
+        var nextBtn = overlay.querySelector('.lightbox-nav.next');
+        prevBtn.style.display = f.images.length > 1 ? 'flex' : 'none';
+        nextBtn.style.display = f.images.length > 1 ? 'flex' : 'none';
+
+        overlay.classList.add('active');
+        document.body.style.overflow = 'hidden';
+    },
+
+    closeLightbox: function() {
+        var overlay = document.getElementById('lightbox');
+        overlay.classList.remove('active');
+        document.body.style.overflow = '';
+        lightboxFossilId = null;
+    },
+
+    lightboxNav: function(dir) {
+        if (!lightboxFossilId) return;
+        var f = fossils.find(function(x) { return x.id === lightboxFossilId; });
+        if (!f || !f.images || f.images.length <= 1) return;
+        lightboxIdx = (lightboxIdx + dir + f.images.length) % f.images.length;
+        document.getElementById('lightbox-img').src = f.images[lightboxIdx];
+        document.getElementById('lightbox-counter').textContent = 'Photo ' + (lightboxIdx + 1) + ' of ' + f.images.length;
     },
 
     // --- Dashboard ---
@@ -1052,7 +1300,7 @@ window.app = {
                 
                 var imgHtml = '';
                 if (hasImage) {
-                    imgHtml = '<img src="' + f.images[0] + '" alt="' + escapeHtml(f.specimen) + ' photograph" loading="lazy" />';
+                    imgHtml = '<img src="' + f.images[0] + '" alt="' + escapeHtml(f.specimen) + ' photograph" loading="lazy" style="cursor: zoom-in;" onclick="event.stopPropagation(); var idx = parseInt(this.parentElement.getAttribute(\'data-current-index\') || 0); app.openLightbox(\'' + f.id + '\', idx);" />';
                     if (multipleImages) {
                         imgHtml += '<button class="carousel-btn prev" onclick="event.stopPropagation(); app.changeImage(\'' + f.id + '\', -1)">&#10094;</button>' +
                                    '<button class="carousel-btn next" onclick="event.stopPropagation(); app.changeImage(\'' + f.id + '\', 1)">&#10095;</button>' +
@@ -1116,7 +1364,7 @@ window.app = {
                     '</div>' +
                     '<div class="card-img-container" data-current-index="0" style="position: relative;">' + imgHtml + '</div>' +
                     '<div class="card-content">' +
-                        '<h3 class="card-title">' + escapeHtml(f.specimen) + '</h3>' +
+                        '<h3 class="card-title">' + annotateSpecimenName(f.specimen) + '</h3>' +
                         (f.anatomy ? '<div style="margin-top: -0.25rem; margin-bottom: 0.5rem;"><span style="display: inline-flex; align-items: center; gap: 0.35rem; background: transparent; border: 1px solid var(--accent); color: var(--accent); padding: 0.15rem 0.5rem; border-radius: 1rem; font-size: 0.75rem; font-weight: 600;"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg> ' + escapeHtml(f.anatomy) + '</span></div>' : '') +
                         '<p class="card-meta"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg> ' + escapeHtml(f.category) + periodText + epochText + stratAgeText + '</p>' +
                         '<p class="card-meta" style="margin-top: 0.5rem;"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg> ' + locationHtmlStr + '</p>' +
