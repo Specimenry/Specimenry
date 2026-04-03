@@ -319,6 +319,7 @@ function normalizeCSVRow(row) {
     }
 
     mapped.specimen   = keyMap['specimen'] || keyMap['specimen name'] || keyMap['name'] || keyMap['fossil'] || keyMap['fossil name'] || '';
+    mapped.anatomy    = keyMap['anatomy'] || keyMap['part'] || '';
     mapped.category   = keyMap['category'] || keyMap['type'] || keyMap['fossil type'] || keyMap['type of fossil'] || '';
 
     var wl = (keyMap['iswishlist'] || keyMap['wishlist'] || keyMap['is wishlist'] || '').toLowerCase();
@@ -352,9 +353,35 @@ var currentView = 'false'; // 'false' = Collection, 'true' = Wishlist
 var isStatsOpen = false;
 var chartCountry = null;
 var chartPeriod = null;
+var exchangeRates = null;
+
+function fetchExchangeRates() {
+    var cached = localStorage.getItem('exchangeRates_SEK');
+    var cachedTime = localStorage.getItem('exchangeRates_time');
+    var now = Date.now();
+    // Cache for 12 hours (43200000 ms)
+    if (cached && cachedTime && (now - cachedTime < 43200000)) {
+        exchangeRates = JSON.parse(cached);
+        if(isStatsOpen) window.app.renderFossils();
+        return;
+    }
+    
+    fetch('https://open.er-api.com/v6/latest/SEK')
+        .then(function(res) { return res.json(); })
+        .then(function(data) {
+            if (data && data.result === 'success' && data.rates) {
+                exchangeRates = data.rates;
+                localStorage.setItem('exchangeRates_SEK', JSON.stringify(data.rates));
+                localStorage.setItem('exchangeRates_time', now.toString());
+                if(isStatsOpen) window.app.renderFossils();
+            }
+        })
+        .catch(function(err) { console.error('Failed to fetch exchange rates', err); });
+}
 
 window.addEventListener('DOMContentLoaded', function() {
     populateDropdowns();
+    fetchExchangeRates();
     initDB().then(function() {
         window.app.renderFossils();
         // Run background check for bloated images 2 seconds after load
@@ -398,6 +425,7 @@ window.app = {
             if (f) {
                 document.getElementById('fossil-id').value = f.id;
                 document.getElementById('f-specimen').value = f.specimen || '';
+                document.getElementById('f-anatomy').value = f.anatomy || '';
                 document.getElementById('f-category').value = f.category || '';
                 document.getElementById('f-wishlist').value = f.isWishlist ? 'true' : 'false';
                 document.getElementById('f-period').value = f.geologicalPeriod || '';
@@ -423,12 +451,20 @@ window.app = {
             }
         } else {
             document.getElementById('fossil-id').value = '';
+            document.getElementById('f-anatomy').value = '';
             document.getElementById('f-age').value = 0;
             document.getElementById('f-age-slider').value = 0;
             document.getElementById('f-size-unit').value = 'cm';
             document.getElementById('f-currency').value = 'USD';
-            window.app.updateEpochs();
-            window.app.updateStratAges();
+
+            // Auto-load last used geography/geology for batch logging
+            document.getElementById('f-country').value = localStorage.getItem('last_country') || '';
+            document.getElementById('f-location').value = localStorage.getItem('last_location') || '';
+            document.getElementById('f-formation').value = localStorage.getItem('last_formation') || '';
+            document.getElementById('f-period').value = localStorage.getItem('last_period') || '';
+            
+            window.app.updateEpochs(localStorage.getItem('last_epoch') || '');
+            window.app.updateStratAges(localStorage.getItem('last_stratAge') || '');
         }
 
         modal.showModal();
@@ -654,6 +690,7 @@ window.app = {
         var fossil = {
             id: isEditing ? idVal : generateId(),
             specimen: document.getElementById('f-specimen').value,
+            anatomy: document.getElementById('f-anatomy').value,
             category: document.getElementById('f-category').value,
             isWishlist: document.getElementById('f-wishlist').value === 'true',
             geologicalPeriod: document.getElementById('f-period').value,
@@ -677,6 +714,14 @@ window.app = {
         if (isEditing) {
             var existing = fossils.find(function(f){ return f.id === idVal; });
             if (existing) fossil.createdAt = existing.createdAt || Date.now();
+        } else {
+            // Save last used geography/geology for future batch logging
+            localStorage.setItem('last_country', document.getElementById('f-country').value);
+            localStorage.setItem('last_location', document.getElementById('f-location').value);
+            localStorage.setItem('last_formation', document.getElementById('f-formation').value);
+            localStorage.setItem('last_period', document.getElementById('f-period').value);
+            localStorage.setItem('last_epoch', document.getElementById('f-epoch').value);
+            localStorage.setItem('last_stratAge', document.getElementById('f-strat-age').value);
         }
 
         var action = isEditing ? updateFossil(fossil) : addFossil(fossil);
@@ -752,6 +797,7 @@ window.app = {
         if (!f) return;
         document.getElementById('modal-title').innerText = 'Duplicate Fossil';
         document.getElementById('f-specimen').value = f.specimen || '';
+        document.getElementById('f-anatomy').value = f.anatomy || '';
         document.getElementById('f-category').value = f.category || '';
         document.getElementById('f-wishlist').value = f.isWishlist ? 'true' : 'false';
         document.getElementById('f-period').value = f.geologicalPeriod || '';
@@ -787,11 +833,12 @@ window.app = {
             // --- FILTER ---
             var filtered = fossils.filter(function(f) {
                 var s = f.specimen ? f.specimen.toLowerCase() : '';
+                var a = f.anatomy  ? f.anatomy.toLowerCase()  : '';
                 var n = f.notes    ? f.notes.toLowerCase()    : '';
                 var c = f.country  ? f.country.toLowerCase()  : '';
                 var fm = f.formation ? f.formation.toLowerCase() : '';
-                var matchSearch = s.indexOf(searchQ) !== -1 || n.indexOf(searchQ) !== -1 ||
-                                  c.indexOf(searchQ) !== -1 || fm.indexOf(searchQ) !== -1;
+                var matchSearch = s.indexOf(searchQ) !== -1 || a.indexOf(searchQ) !== -1 ||
+                                  n.indexOf(searchQ) !== -1 || c.indexOf(searchQ) !== -1 || fm.indexOf(searchQ) !== -1;
                 var matchCat      = !catQ    || f.category === catQ;
                 var matchPeriod   = !periodQ || f.geologicalPeriod === periodQ;
                 var matchWishlist = !!f.isWishlist === wlQ;
@@ -862,12 +909,16 @@ window.app = {
                 var hasTotalValue = false;
                 for (var currencyKey in valueByCurrency) {
                     var val = valueByCurrency[currencyKey];
-                    // Approximate conversion rates to SEK
-                    if (currencyKey === 'USD') totalValueSEK += val * 10.50;
-                    else if (currencyKey === 'EUR') totalValueSEK += val * 11.50;
-                    else if (currencyKey === 'SEK') totalValueSEK += val;
-                    else totalValueSEK += val; // fallback for unhandled
-                    
+                    // Use dynamic exchangeRates if available
+                    if (exchangeRates && exchangeRates[currencyKey]) {
+                        totalValueSEK += val / exchangeRates[currencyKey];
+                    } else {
+                        // Approximate conversion rates fallback
+                        if (currencyKey === 'USD') totalValueSEK += val * 10.50;
+                        else if (currencyKey === 'EUR') totalValueSEK += val * 11.50;
+                        else if (currencyKey === 'SEK') totalValueSEK += val;
+                        else totalValueSEK += val; // fallback for unhandled
+                    }
                     if (val > 0) hasTotalValue = true;
                 }
                 
@@ -972,6 +1023,9 @@ window.app = {
                 if (f.weight) detailsArr.push('Weight: ' + escapeHtml(f.weight) + 'g');
                 if (f.price) detailsArr.push('Price: ' + f.price + ' ' + (f.currency || 'USD'));
                 var detailsText = detailsArr.length > 0 ? '<p class="card-meta" style="margin-top: 0.25rem; font-weight: 500;"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg> ' + detailsArr.join(' &middot; ') + '</p>' : '';
+                
+                var speciesFirstWord = (f.specimen || '').trim().split(' ')[0] || '';
+                var wikiQuery = encodeURIComponent(speciesFirstWord);
 
                 card.innerHTML =
                     '<div class="checkbox-container">' +
@@ -980,12 +1034,14 @@ window.app = {
                     '<div class="card-img-container" data-current-index="0">' + imgHtml + '</div>' +
                     '<div class="card-content">' +
                         '<h3 class="card-title">' + escapeHtml(f.specimen) + '</h3>' +
+                        (f.anatomy ? '<div style="margin-top: -0.25rem; margin-bottom: 0.5rem;"><span style="display: inline-flex; align-items: center; gap: 0.35rem; background: transparent; border: 1px solid var(--accent); color: var(--accent); padding: 0.15rem 0.5rem; border-radius: 1rem; font-size: 0.75rem; font-weight: 600;"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg> ' + escapeHtml(f.anatomy) + '</span></div>' : '') +
                         '<p class="card-meta"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg> ' + escapeHtml(f.category) + periodText + epochText + stratAgeText + ageText + '</p>' +
                         '<p class="card-meta"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg> ' + escapeHtml(f.country || 'Unknown Origin') + (f.formation ? ' (' + escapeHtml(f.formation) + ')' : '') + '</p>' +
                         detailsText +
                         '<div class="card-footer">' +
                             '<span class="' + badgeClass + '">' + (f.isWishlist ? 'Wishlist' : 'Owned') + '</span>' +
                             '<div class="card-actions">' +
+                                (speciesFirstWord ? '<button title="Read about ' + escapeHtml(speciesFirstWord) + ' on Wikipedia" onclick="window.open(\'https://en.wikipedia.org/wiki/Special:Search?search=\' + \'' + wikiQuery + '\', \'_blank\')"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg></button>' : '') +
                                 '<button title="Edit" onclick="app.openModal(\'' + f.id + '\')"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>' +
                                 '<button title="Duplicate" onclick="app.duplicateFossil(\'' + f.id + '\')"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>' +
                                 '<button class="btn-delete" title="Delete" onclick="app.deleteFossilItem(\'' + f.id + '\')"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>' +
