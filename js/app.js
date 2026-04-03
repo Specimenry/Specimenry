@@ -1276,15 +1276,37 @@ window.app = {
                 var tg = (f.tags || []).join(' ').toLowerCase();
 
                 var matchSearch = false;
-                if (searchQ.startsWith('#')) {
-                    // Specific tag search
-                    var tagQ = searchQ.substring(1);
-                    matchSearch = (f.tags || []).some(function(t) { return t.indexOf(tagQ) !== -1; });
+                if (!searchQ) {
+                    matchSearch = true;
+                } else if (searchQ.startsWith('#')) {
+                    // Precise Tag Search (Exact matching for organization)
+                    var tagQ = searchQ.substring(1).trim();
+                    matchSearch = (f.tags || []).some(function(t) { return t.toLowerCase().indexOf(tagQ) !== -1; });
                 } else {
-                    // General search includes tags
-                    matchSearch = s.indexOf(searchQ) !== -1 || a.indexOf(searchQ) !== -1 ||
-                                  n.indexOf(searchQ) !== -1 || c.indexOf(searchQ) !== -1 || 
-                                  fm.indexOf(searchQ) !== -1 || tg.indexOf(searchQ) !== -1;
+                    // "Smart" Fuzzy Search (Typos & Transpositions)
+                    // 1. First check for exact substring matches (Instant high-confidence)
+                    if (s.indexOf(searchQ) !== -1 || a.indexOf(searchQ) !== -1 || 
+                        n.indexOf(searchQ) !== -1 || c.indexOf(searchQ) !== -1 || 
+                        fm.indexOf(searchQ) !== -1 || tg.indexOf(searchQ) !== -1) {
+                        matchSearch = true;
+                    } else {
+                        // 2. Fallback to Precision Fuzzy (handles "Megladon", "Shrak", etc.)
+                        // Only perform fuzzy evaluation for queries longer than 3 characters to ensure intent
+                        if (searchQ.length > 3) {
+                            var distSpecimen = getLevenshteinDistance(s, searchQ);
+                            var distAnatomy  = getLevenshteinDistance(a, searchQ);
+                            var distLocation = Math.min(getLevenshteinDistance(c, searchQ), getLevenshteinDistance(fm, searchQ));
+                            
+                            // We allow up to 2 typos for specimen names (longer words = more room for error)
+                            // This prevents "Allosaurus" matching "Spinosaurus" (dist ~4) while
+                            // still catching "Megladon" (dist 1) or "Shrak" (dist 2).
+                            matchSearch = (distSpecimen <= 2) || 
+                                          (distAnatomy <= 1) || 
+                                          (distLocation <= 1);
+                        } else {
+                            matchSearch = false; // Too short for fuzzy matching
+                        }
+                    }
                 }
 
                 var matchCat      = !catQ    || f.category === catQ;
@@ -1814,6 +1836,45 @@ function escapeHtml(str) {
     div.appendChild(document.createTextNode(str));
     return div.innerHTML;
 }
+
+/**
+ * Levenshtein Distance Algorithm
+ * Calculates the number of single-character edits (insertions, deletions, substitutions) 
+ * required to change one string into another.
+ */
+function getLevenshteinDistance(s1, s2) {
+    var a = (s1 || '').trim().toLowerCase();
+    var b = (s2 || '').trim().toLowerCase();
+    if (a === b) return 0;
+    if (a.length === 0) return b.length;
+    if (b.length === 0) return a.length;
+
+    // Use a more memory-efficient one-dimensional array approach
+    var row = new Array(a.length + 1);
+    for (var i = 0; i <= a.length; i++) { row[i] = i; }
+
+    for (var i = 1; i <= b.length; i++) {
+        var prev = i;
+        for (var j = 1; j <= a.length; j++) {
+            var val;
+            if (b.charAt(i - 1) === a.charAt(j - 1)) {
+                val = row[j - 1]; // No edit needed
+            } else {
+                val = Math.min(
+                    row[j - 1] + 1, // Substitution
+                    prev + 1,      // Insertion
+                    row[j] + 1       // Deletion
+                );
+            }
+            row[j - 1] = prev;
+            prev = val;
+        }
+        row[a.length] = prev;
+    }
+    return row[a.length];
+}
+
+
 
 function populateDropdowns() {
     // --- Category (form + filter) ---
