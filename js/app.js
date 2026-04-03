@@ -155,6 +155,22 @@ var ETYMOLOGY = [
     { root: 'petri', meaning: 'stone / rock (Greek: petra)' },
     { root: 'docidae', meaning: 'common family ending for sauropods like Diplodocidae' },
     { root: 'indet.', meaning: 'indeterminate (could not be identified to species level)' },
+    { root: 'spino', meaning: 'spine / thorn (Latin: spina)' },
+    { root: 'archi', meaning: 'first / chief (Greek: archos)' },
+    { root: 'paleo', meaning: 'ancient (Greek: palaios)' },
+    { root: 'stego', meaning: 'roof / covered (Greek: stegos)' },
+    { root: 'ankyl', meaning: 'fused / stiff (Greek: ankylos)' },
+    { root: 'hadro', meaning: 'sturdy / large (Greek: hadros)' },
+    { root: 'bronto', meaning: 'thunder (Greek: bronte)' },
+    { root: 'plesio', meaning: 'near / close to (Greek: plesios)' },
+    { root: 'isurus', meaning: 'equal tail (Greek)' },
+    { root: 'otodus', meaning: 'ear-tooth (Greek: ous + odon)' },
+    { root: 'coelo', meaning: 'hollow (Greek: koilos)' },
+    { root: 'donta', meaning: 'tooth (Greek: odont- variant)' },
+    { root: 'lodon', meaning: 'tooth (Greek: odon variant)' },
+    { root: 'corax', meaning: 'raven / crow (Greek: korax)' },
+    { root: 'creta', meaning: 'chalk / Cretaceous (Latin: creta)' },
+    { root: 'planus', meaning: 'flat (Latin)' },
 
     // 4-letter roots
     { root: 'mega', meaning: 'great / large (Greek: megas)' },
@@ -164,6 +180,9 @@ var ETYMOLOGY = [
     { root: 'odus', meaning: 'tooth (Greek)' },
     { root: 'onyx', meaning: 'claw (Greek)' },
     { root: 'baro', meaning: 'heavy / weight (Greek: baros)' },
+    { root: 'carchar', meaning: 'jagged / sharp (Greek: karkharos)' },
+    { root: 'smilo', meaning: 'knife / chisel (Greek: smile)' },
+    { root: 'cetus', meaning: 'whale / sea monster (Greek: ketos)' },
     { root: 'allo', meaning: 'other / different (Greek: allos)' },
     { root: 'para', meaning: 'beside / near (Greek)' },
     { root: 'mono', meaning: 'single (Greek)' },
@@ -178,6 +197,22 @@ var ETYMOLOGY = [
     { root: 'nano', meaning: 'dwarf (Greek: nanos)' },
     { root: 'plio', meaning: 'more (Greek: pleion)' },
     { root: 'naut', meaning: 'sailor (Greek: nautilos)' },
+    { root: 'mammut', meaning: 'mammoth (Russian: mammot)' },
+    { root: 'lamna', meaning: 'shark / thin plate (Greek)' },
+    { root: 'ceros', meaning: 'horn (Greek: keras)' },
+    { root: 'diplo', meaning: 'double (Greek: diplos)' },
+    { root: 'docus', meaning: 'beam / bar (Greek: dokos)' },
+    { root: 'raptor', meaning: 'thief / robber (Latin)' },
+    { root: 'veloci', meaning: 'fast / swift (Latin: velox)' },
+    { root: 'hastalis', meaning: 'spear-like (Latin: hasta)' },
+    { root: 'obliquus', meaning: 'slanted / indirect (Latin)' },
+    { root: 'mantelli', meaning: 'after Gideon Mantell' },
+    { root: 'serratus', meaning: 'saw-toothed (Latin: serra)' },
+    { root: 'antiqu', meaning: 'ancient (Latin: antiquus)' },
+    { root: 'primige', meaning: 'first-born / original (Latin)' },
+    { root: 'mammut', meaning: 'mammoth (Russian: mammot)' },
+    { root: 'lamna', meaning: 'shark / thin plate (Greek)' },
+    { root: 'otodus', meaning: 'ear-tooth (Greek: ous + odon)' },
     { root: 'idae', meaning: 'standard suffix for animal family names' },
     { root: 'mosa', meaning: 'of the Meuse river (Latin)' },
     { root: 'croc', meaning: 'pebble / crocodile (Greek: kroke)' },
@@ -190,10 +225,20 @@ var ETYMOLOGY = [
     { root: 'acan', meaning: 'spine / thorn (Greek: akantha)' },
     { root: 'glyp', meaning: 'carved (Greek: glypho)' },
     { root: 'cyan', meaning: 'blue (Greek: kyanos)' },
+    { root: 'tyranno', meaning: 'tyrant (Greek: tyrannos)' },
+    { root: 'rhyncho', meaning: 'snout / beak (Greek)' },
+    { root: 'scapan', meaning: 'spade / shovel (Greek)' },
+    { root: 'ichthyo', meaning: 'fish (Greek: ichthys)' },
+    { root: 'pteron', meaning: 'wing / feather (Greek)' },
+    { root: 'megal', meaning: 'great / large (Greek: megas)' },
+    { root: 'elephas', meaning: 'elephant (Greek)' },
     { root: 'ecto', meaning: 'outside (Greek)' },
     { root: 'endo', meaning: 'within (Greek)' },
     { root: 'phago', meaning: 'eater (Greek: phagein)' },
     { root: 'sauro', meaning: 'lizard (Greek: sauros)' },
+    { root: 'therium', meaning: 'beast / wild animal (Greek: therion)' },
+    { root: 'isurus', meaning: 'equal tail (Greek)' },
+    { root: 'galeo', meaning: 'shark (Greek: galeos)' },
     { root: 'Saur', meaning: 'lizard (Greek: sauros)' },
     { root: 'podo', meaning: 'foot (Greek: pous)' },
 
@@ -204,6 +249,7 @@ var ETYMOLOGY = [
     { root: 'pes', meaning: 'foot (Latin)' },
     { root: 'pus', meaning: 'foot (Greek)' },
     { root: 'rex', meaning: 'king (Latin)' },
+    { root: 'ther', meaning: 'beast (Greek: ther)' },
     { root: 'sp.', meaning: 'species (abbreviation for unknown species)' },
     { root: 'leo', meaning: 'lion (Latin)' },
     { root: 'neo', meaning: 'new (Greek: neos)' }
@@ -763,7 +809,9 @@ window.app = {
                 document.getElementById('f-weight').value = f.weight || '';
                 document.getElementById('f-price').value = f.price || '';
                 document.getElementById('f-currency').value = f.currency || 'USD';
+                document.getElementById('f-link').value = f.sourceUrl || '';
                 document.getElementById('f-notes').value = f.notes || '';
+                document.getElementById('f-tags').value = (f.tags || []).join(', ');
 
                 if (f.images && Array.isArray(f.images)) {
                     currentImages = f.images.slice();
@@ -777,6 +825,8 @@ window.app = {
             document.getElementById('f-age-slider').value = 0;
             document.getElementById('f-size-unit').value = 'cm';
             document.getElementById('f-currency').value = 'USD';
+            document.getElementById('f-link').value = '';
+            document.getElementById('f-tags').value = '';
 
             // Auto-load last used geography/geology for batch logging
             document.getElementById('f-country').value = localStorage.getItem('last_country') || '';
@@ -1044,7 +1094,9 @@ window.app = {
             weight: parseFloat(document.getElementById('f-weight').value) || null,
             price: parseFloat(document.getElementById('f-price').value) || null,
             currency: document.getElementById('f-currency').value,
+            sourceUrl: document.getElementById('f-link').value,
             notes: document.getElementById('f-notes').value,
+            tags: (document.getElementById('f-tags').value || '').split(/[,\s]+/).map(function(t) { return t.trim().toLowerCase().replace(/^#/, ''); }).filter(function(t) { return t.length > 0; }),
             images: currentImages,
             createdAt: isEditing ? undefined : Date.now()  // timestamp for sort
         };
@@ -1088,9 +1140,52 @@ window.app = {
     },
 
     updateMassDeleteButton: function() {
-        var btn = document.getElementById('btn-mass-delete');
-        btn.style.display = selectedFossils.size > 0 ? 'inline-flex' : 'none';
-        btn.innerText = 'Delete Selected (' + selectedFossils.size + ')';
+        var btnDelete = document.getElementById('btn-mass-delete');
+        var btnTag = document.getElementById('btn-mass-tag');
+        var count = selectedFossils.size;
+        
+        btnDelete.style.display = count > 0 ? 'inline-flex' : 'none';
+        btnDelete.innerText = 'Delete Selected (' + count + ')';
+        
+        btnTag.style.display = count > 0 ? 'inline-flex' : 'none';
+        btnTag.innerText = 'Tag Selected (' + count + ')';
+    },
+
+    massTagSelected: function() {
+        if (selectedFossils.size === 0) return;
+        var tagInput = prompt('Enter tags to add (comma or space separated):');
+        if (!tagInput) return;
+        
+        var newTags = tagInput.split(/[,\s]+/).map(function(t) { 
+            return t.trim().toLowerCase().replace(/^#/, ''); 
+        }).filter(function(t) { return t.length > 0; });
+        
+        if (newTags.length === 0) return;
+
+        var ids = Array.from(selectedFossils);
+        var chain = Promise.resolve();
+        
+        ids.forEach(function(id) {
+            chain = chain.then(function() {
+                var f = fossils.find(function(x) { return x.id === id; });
+                if (f) {
+                    var currentTags = f.tags || [];
+                    newTags.forEach(function(nt) {
+                        if (currentTags.indexOf(nt) === -1) {
+                            currentTags.push(nt);
+                        }
+                    });
+                    f.tags = currentTags;
+                    return updateFossil(f);
+                }
+            });
+        });
+
+        chain.then(function() {
+            selectedFossils.clear();
+            window.app.updateMassDeleteButton();
+            window.app.renderFossils();
+        });
     },
 
     deleteSelected: function() {
@@ -1153,7 +1248,9 @@ window.app = {
         document.getElementById('f-weight').value = f.weight || '';
         document.getElementById('f-price').value = f.price || '';
         document.getElementById('f-currency').value = f.currency || 'USD';
+        document.getElementById('f-link').value = f.sourceUrl || '';
         document.getElementById('f-notes').value = f.notes || '';
+        document.getElementById('f-tags').value = (f.tags || []).join(', ');
     },
 
     // --- Render ---
@@ -1176,8 +1273,20 @@ window.app = {
                 var n = f.notes    ? f.notes.toLowerCase()    : '';
                 var c = f.country  ? f.country.toLowerCase()  : '';
                 var fm = f.formation ? f.formation.toLowerCase() : '';
-                var matchSearch = s.indexOf(searchQ) !== -1 || a.indexOf(searchQ) !== -1 ||
-                                  n.indexOf(searchQ) !== -1 || c.indexOf(searchQ) !== -1 || fm.indexOf(searchQ) !== -1;
+                var tg = (f.tags || []).join(' ').toLowerCase();
+
+                var matchSearch = false;
+                if (searchQ.startsWith('#')) {
+                    // Specific tag search
+                    var tagQ = searchQ.substring(1);
+                    matchSearch = (f.tags || []).some(function(t) { return t.indexOf(tagQ) !== -1; });
+                } else {
+                    // General search includes tags
+                    matchSearch = s.indexOf(searchQ) !== -1 || a.indexOf(searchQ) !== -1 ||
+                                  n.indexOf(searchQ) !== -1 || c.indexOf(searchQ) !== -1 || 
+                                  fm.indexOf(searchQ) !== -1 || tg.indexOf(searchQ) !== -1;
+                }
+
                 var matchCat      = !catQ    || f.category === catQ;
                 var matchPeriod   = !periodQ || f.geologicalPeriod === periodQ;
                 var matchWishlist = !!f.isWishlist === wlQ;
@@ -1290,7 +1399,15 @@ window.app = {
                                     backgroundColor: ['#4e79a7', '#f28e2c', '#e15759', '#76b7b2', '#59a14f', '#edc949', '#af7aa1', '#ff9da7', '#9c755f', '#bab0ab']
                                 }]
                             },
-                            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right' }, title: { display: true, text: 'Country of Origin' } } }
+                            options: { 
+                                responsive: true, 
+                                maintainAspectRatio: true,
+                                aspectRatio: 1.15,
+                                plugins: { 
+                                    legend: { position: 'bottom', labels: { boxWidth: 12, padding: 10, font: { size: 10 } } }, 
+                                    title: { display: false } 
+                                } 
+                            }
                         });
 
                         if (chartPeriod) chartPeriod.destroy();
@@ -1304,7 +1421,15 @@ window.app = {
                                     backgroundColor: ['#4e79a7', '#f28e2c', '#e15759', '#76b7b2', '#59a14f', '#edc949', '#af7aa1', '#ff9da7', '#9c755f', '#bab0ab']
                                 }]
                             },
-                            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right' }, title: { display: true, text: 'Geological Period' } } }
+                            options: { 
+                                responsive: true, 
+                                maintainAspectRatio: true,
+                                aspectRatio: 1.15,
+                                plugins: { 
+                                    legend: { position: 'bottom', labels: { boxWidth: 12, padding: 10, font: { size: 10 } } }, 
+                                    title: { display: false } 
+                                } 
+                            }
                         });
                     } catch (e) {
                         console.error('Chart.js error:', e);
@@ -1330,103 +1455,140 @@ window.app = {
             }
 
             // --- RENDER CARDS ---
+            grid.classList.toggle('wishlist-mode', wlQ);
+
             filtered.forEach(function(f) {
                 var card = document.createElement('article');
-                card.className = 'fossil-card';
                 card.setAttribute('data-id', f.id);
 
-                var hasImage = f.images && f.images.length > 0;
-                var multipleImages = f.images && f.images.length > 1;
-                
-                var imgHtml = '';
-                if (hasImage) {
-                    imgHtml = '<img src="' + f.images[0] + '" alt="' + escapeHtml(f.specimen) + ' photograph" loading="lazy" style="cursor: zoom-in;" onclick="event.stopPropagation(); var idx = parseInt(this.parentElement.getAttribute(\'data-current-index\') || 0); app.openLightbox(\'' + f.id + '\', idx);" />';
-                    if (multipleImages) {
-                        imgHtml += '<button class="carousel-btn prev" onclick="event.stopPropagation(); app.changeImage(\'' + f.id + '\', -1)">&#10094;</button>' +
-                                   '<button class="carousel-btn next" onclick="event.stopPropagation(); app.changeImage(\'' + f.id + '\', 1)">&#10095;</button>' +
-                                   '<div class="photo-counter" id="counter-' + f.id + '">1 / ' + f.images.length + '</div>' +
-                                   '<div class="carousel-dots" id="dots-' + f.id + '">' +
-                                        f.images.map(function(_, i) { return '<span class="dot ' + (i === 0 ? 'active' : '') + '"></span>'; }).join('') +
-                                   '</div>';
-                    }
-                } else {
-                    imgHtml = '<svg class="card-placeholder-icon" xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>';
-                }
-
-                var timelineHtml = '';
-
-                var fullTimelineBlock = '';
-                if (f.ageMa > 0) {
-                    var percentage = Math.min((f.ageMa / 541) * 100, 100);
-                    var eraColor = '#a878d0';
-                    var eraName = 'Precambrian';
-                    if (f.ageMa <= 66) { eraColor = '#e6a817'; eraName = 'Cenozoic'; }
-                    else if (f.ageMa <= 252) { eraColor = '#439775'; eraName = 'Mesozoic'; }
-                    else if (f.ageMa <= 541) { eraColor = '#3a8fb7'; eraName = 'Paleozoic'; }
+                if (wlQ) {
+                    // WISHLIST CHECKLIST VIEW
+                    card.className = 'wishlist-row';
+                    var linkHtml = f.sourceUrl ? '<a href="' + f.sourceUrl + '" target="_blank" class="btn-link" title="Open Source Link"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg> Source</a>' : '';
                     
-                    var geoText = (f.geologicalPeriod || 'Unknown Period') + (f.epoch ? ' (' + f.epoch + ')' : '') + (f.stratAge ? ' · ' + f.stratAge : '');
-
-                    fullTimelineBlock = '<div class="card-timeline-container">' +
-                                        '<div class="card-timeline-header">' +
-                                            '<div style="display: flex; flex-direction: column; line-height: 1.1;"><span class="card-timeline-label">Present</span><span style="font-size: 0.75rem; color: ' + eraColor + '; font-weight: 700;">' + f.ageMa + ' Ma</span></div>' +
-                                            '<span class="card-timeline-value" style="color: ' + eraColor + ';" title="' + escapeHtml(geoText) + '">' + escapeHtml(geoText) + '</span>' +
-                                        '</div>' +
-                                        '<div class="card-timeline-bar-track">' +
-                                            '<div class="card-timeline-bar-fill" style="width: ' + Math.max(percentage, 1) + '%; background-color: ' + eraColor + ';"></div>' +
-                                        '</div></div>';
-                }
-
-                var badgeClass = f.isWishlist ? 'badge badge-wishlist' : 'badge';
-                var periodText = f.geologicalPeriod ? ' &middot; ' + escapeHtml(f.geologicalPeriod) : '';
-                var epochText  = f.epoch ? ' (' + escapeHtml(f.epoch) + ')' : '';
-                var stratAgeText = f.stratAge ? ' &middot; ' + escapeHtml(f.stratAge) + ' Age' : '';
-                var ageText    = f.ageMa ? ' &middot; ~' + f.ageMa + ' Ma' : '';
-
-                var detailsArr = [];
-                if (f.size) detailsArr.push('Size: ' + escapeHtml(f.size) + ' ' + (f.sizeUnit || 'cm'));
-                if (f.weight) detailsArr.push('Weight: ' + escapeHtml(f.weight) + 'g');
-                if (f.price) detailsArr.push('Price: ' + f.price + ' ' + (f.currency || 'USD'));
-                var detailsText = detailsArr.length > 0 ? '<p class="card-meta" style="margin-top: 0.25rem; font-weight: 500;"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg> ' + detailsArr.join(' &middot; ') + '</p>' : '';
-                
-                var speciesFirstWord = (f.specimen || '').trim().split(' ')[0] || '';
-                var wikiQuery = encodeURIComponent(speciesFirstWord);
-                
-                var locQueryArr = [];
-                if (f.location) locQueryArr.push(f.location);
-                if (f.formation) locQueryArr.push(f.formation);
-                if (f.country) locQueryArr.push(f.country);
-                var mapQuery = encodeURIComponent(locQueryArr.join(', '));
-                
-                var locationTextRaw = (f.location ? escapeHtml(f.location) + ', ' : '') + escapeHtml(f.country || 'Unknown Origin') + (f.formation ? ' (' + escapeHtml(f.formation) + ')' : '');
-                var locationHtmlStr = locQueryArr.length > 0 ? '<a href="https://www.google.com/maps/search/?api=1&query=' + mapQuery + '" target="_blank" onclick="event.stopPropagation();" title="View on Google Maps" style="color: inherit; text-decoration: none; transition: color 0.15s ease;" onmouseover="this.style.color=\'var(--accent)\'" onmouseout="this.style.color=\'inherit\'">' + locationTextRaw + '</a>' : locationTextRaw;
-
-                card.innerHTML =
-                    '<div class="checkbox-container">' +
-                        '<input type="checkbox" aria-label="Select ' + escapeHtml(f.specimen) + '" onchange="app.toggleSelectFossil(event, \'' + f.id + '\')" ' + (selectedFossils.has(f.id) ? 'checked' : '') + '>' +
-                    '</div>' +
-                    '<div class="card-img-container" data-current-index="0" style="position: relative;">' + imgHtml + '</div>' +
-                    '<div class="card-content">' +
-                        '<div style="font-size: 0.7rem; color: var(--text-secondary); opacity: 0.8; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 0.2rem;">' + escapeHtml(f.id) + '</div>' +
-                        '<h3 class="card-title">' + annotateSpecimenName(f.specimen) + '</h3>' +
-                        (f.anatomy ? '<div style="margin-top: -0.25rem; margin-bottom: 0.5rem;"><span style="display: inline-flex; align-items: center; gap: 0.35rem; background: transparent; border: 1px solid var(--accent); color: var(--accent); padding: 0.15rem 0.5rem; border-radius: 1rem; font-size: 0.75rem; font-weight: 600;"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg> ' + escapeHtml(f.anatomy) + '</span></div>' : '') +
-                        '<p class="card-meta"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg> ' + escapeHtml(f.category) + '</p>' +
-                        '<p class="card-meta" style="margin-top: 0.5rem;"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg> ' + locationHtmlStr + '</p>' +
-                        detailsText +
-                        '<div class="card-footer">' +
-                            '<span class="' + badgeClass + '">' + (f.isWishlist ? 'Wishlist' : 'Owned') + '</span>' +
-                            '<div class="card-actions">' +
-                                (speciesFirstWord ? '<button title="Read about ' + escapeHtml(speciesFirstWord) + ' on Wikipedia" onclick="window.open(\'https://en.wikipedia.org/wiki/Special:Search?search=\' + \'' + wikiQuery + '\', \'_blank\')"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg></button>' : '') +
-                                '<button title="Edit" onclick="app.openModal(\'' + f.id + '\')"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>' +
-                                '<button title="Duplicate" onclick="app.duplicateFossil(\'' + f.id + '\')"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>' +
-                                '<button class="btn-delete" title="Delete" onclick="app.deleteFossilItem(\'' + f.id + '\')"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>' +
+                    card.innerHTML = 
+                        '<div class="wishlist-check-container">' +
+                            '<input type="checkbox" class="wishlist-checkbox" title="Mark as Found" onchange="app.markAsFound(event, \'' + f.id + '\', \'' + escapeHtml(f.specimen) + '\')">' +
+                        '</div>' +
+                        '<div class="wishlist-info">' +
+                            '<h3 class="wishlist-title">' + annotateSpecimenName(f.specimen) + '</h3>' +
+                            '<div class="wishlist-meta">' +
+                                '<span class="badge badge-wishlist">' + escapeHtml(f.category) + '</span>' +
+                                (f.geologicalPeriod ? '<span>&middot; ' + escapeHtml(f.geologicalPeriod) + '</span>' : '') +
+                                (f.location || f.country ? '<span>&middot; ' + escapeHtml(f.location || f.country) + '</span>' : '') +
                             '</div>' +
                         '</div>' +
-                    '</div>' +
-                    fullTimelineBlock;
+                        '<div class="wishlist-actions">' +
+                            linkHtml +
+                        '</div>' +
+                        '<div class="card-actions">' +
+                            '<button title="Edit" onclick="app.openModal(\'' + f.id + '\')"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>' +
+                            '<button class="btn-delete" title="Delete" onclick="app.deleteFossilItem(\'' + f.id + '\')"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>' +
+                        '</div>';
+                } else {
+                    // STANDARD COLLECTION CARD VIEW
+                    card.className = 'fossil-card';
+                    var hasImage = f.images && f.images.length > 0;
+                    var multipleImages = f.images && f.images.length > 1;
+                    
+                    var imgHtml = '';
+                    if (hasImage) {
+                        imgHtml = '<img src="' + f.images[0] + '" alt="' + escapeHtml(f.specimen) + ' photograph" loading="lazy" style="cursor: zoom-in;" onclick="event.stopPropagation(); var idx = parseInt(this.parentElement.getAttribute(\'data-current-index\') || 0); app.openLightbox(\'' + f.id + '\', idx);" />';
+                        if (multipleImages) {
+                            imgHtml += '<button class="carousel-btn prev" onclick="event.stopPropagation(); app.changeImage(\'' + f.id + '\', -1)">&#10094;</button>' +
+                                       '<button class="carousel-btn next" onclick="event.stopPropagation(); app.changeImage(\'' + f.id + '\', 1)">&#10095;</button>' +
+                                       '<div class="photo-counter" id="counter-' + f.id + '">1 / ' + f.images.length + '</div>' +
+                                       '<div class="carousel-dots" id="dots-' + f.id + '">' +
+                                            f.images.map(function(_, i) { return '<span class="dot ' + (i === 0 ? 'active' : '') + '"></span>'; }).join('') +
+                                       '</div>';
+                        }
+                    } else {
+                        imgHtml = '<svg class="card-placeholder-icon" xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>';
+                    }
+
+                    var fullTimelineBlock = '';
+                    if (f.ageMa > 0) {
+                        var percentage = Math.min((f.ageMa / 541) * 100, 100);
+                        var eraColor = '#a878d0';
+                        if (f.ageMa <= 66) eraColor = '#e6a817';
+                        else if (f.ageMa <= 252) eraColor = '#439775';
+                        else if (f.ageMa <= 541) eraColor = '#3a8fb7';
+                        
+                        var geoText = (f.geologicalPeriod || 'Unknown Period') + (f.epoch ? ' (' + f.epoch + ')' : '') + (f.stratAge ? ' · ' + f.stratAge : '');
+
+                        fullTimelineBlock = '<div class="card-timeline-container">' +
+                                            '<div class="card-timeline-header">' +
+                                                '<div style="display: flex; flex-direction: column; line-height: 1.1;"><span class="card-timeline-label">Present</span><span style="font-size: 0.75rem; color: ' + eraColor + '; font-weight: 700;">' + f.ageMa + ' Ma</span></div>' +
+                                                '<span class="card-timeline-value" style="color: ' + eraColor + ';" title="' + escapeHtml(geoText) + '">' + escapeHtml(geoText) + '</span>' +
+                                            '</div>' +
+                                            '<div class="card-timeline-bar-track">' +
+                                                '<div class="card-timeline-bar-fill" style="width: ' + Math.max(percentage, 1) + '%; background-color: ' + eraColor + ';"></div>' +
+                                            '</div></div>';
+                    }
+
+                    var speciesFirstWord = (f.specimen || '').trim().split(' ')[0] || '';
+                    var wikiQuery = encodeURIComponent(speciesFirstWord);
+                    var locQueryArr = [];
+                    if (f.location) locQueryArr.push(f.location);
+                    if (f.formation) locQueryArr.push(f.formation);
+                    if (f.country) locQueryArr.push(f.country);
+                    var mapQuery = encodeURIComponent(locQueryArr.join(', '));
+                    
+                    var locationTextRaw = (f.location ? escapeHtml(f.location) + ', ' : '') + escapeHtml(f.country || 'Unknown Origin') + (f.formation ? ' (' + escapeHtml(f.formation) + ')' : '');
+                    var locationHtmlStr = locQueryArr.length > 0 ? '<a href="https://www.google.com/maps/search/?api=1&query=' + mapQuery + '" target="_blank" onclick="event.stopPropagation();" title="View on Google Maps" style="color: inherit; text-decoration: none; transition: color 0.15s ease;" onmouseover="this.style.color=\'var(--accent)\'" onmouseout="this.style.color=\'inherit\'">' + locationTextRaw + '</a>' : locationTextRaw;
+
+                    var detailsArr = [];
+                    if (f.size) detailsArr.push('Size: ' + escapeHtml(f.size) + ' ' + (f.sizeUnit || 'cm'));
+                    if (f.weight) detailsArr.push('Weight: ' + escapeHtml(f.weight) + 'g');
+                    if (f.price) detailsArr.push('Price: ' + f.price + ' ' + (f.currency || 'USD'));
+                    var detailsText = detailsArr.length > 0 ? '<p class="card-meta" style="margin-top: 0.25rem; font-weight: 500;"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg> ' + detailsArr.join(' &middot; ') + '</p>' : '';
+
+                    card.innerHTML =
+                        '<div class="checkbox-container">' +
+                            '<input type="checkbox" aria-label="Select ' + escapeHtml(f.specimen) + '" onchange="app.toggleSelectFossil(event, \'' + f.id + '\')" ' + (selectedFossils.has(f.id) ? 'checked' : '') + '>' +
+                        '</div>' +
+                        '<div class="card-img-container" data-current-index="0" style="position: relative;">' + imgHtml + '</div>' +
+                        '<div class="card-content">' +
+                            '<div style="font-size: 0.7rem; color: var(--text-secondary); opacity: 0.8; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 0.2rem;">' + escapeHtml(f.id) + '</div>' +
+                            '<h3 class="card-title">' + annotateSpecimenName(f.specimen) + '</h3>' +
+                            (f.anatomy ? '<div style="margin-top: -0.25rem; margin-bottom: 0.5rem;"><span style="display: inline-flex; align-items: center; gap: 0.35rem; background: transparent; border: 1px solid var(--accent); color: var(--accent); padding: 0.15rem 0.5rem; border-radius: 1rem; font-size: 0.75rem; font-weight: 600;"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg> ' + escapeHtml(f.anatomy) + '</span></div>' : '') +
+                            '<p class="card-meta"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg> ' + escapeHtml(f.category) + '</p>' +
+                            '<p class="card-meta" style="margin-top: 0.5rem;"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg> ' + locationHtmlStr + '</p>' +
+                            detailsText +
+                            ((f.tags && f.tags.length > 0) ? '<div class="card-tags">' + f.tags.map(function(t) { return '<span class="tag-pill" onclick="event.stopPropagation(); document.getElementById(\'search\').value = \'#' + t + '\'; app.renderFossils();">#' + t + '</span>'; }).join('') + '</div>' : '') +
+                            '<div class="card-footer">' +
+                                '<span class="badge badge-owned">Owned</span>' +
+                                '<div class="card-actions">' +
+                                    (speciesFirstWord ? '<button title="Read about ' + escapeHtml(speciesFirstWord) + ' on Wikipedia" onclick="window.open(\'https://en.wikipedia.org/wiki/Special:Search?search=\' + \'' + wikiQuery + '\', \'_blank\')"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg></button>' : '') +
+                                    '<button title="Edit" onclick="app.openModal(\'' + f.id + '\')"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>' +
+                                    '<button title="Duplicate" onclick="app.duplicateFossil(\'' + f.id + '\')"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>' +
+                                    '<button class="btn-delete" title="Delete" onclick="app.deleteFossilItem(\'' + f.id + '\')"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>' +
+                                '</div>' +
+                            '</div>' +
+                        '</div>' +
+                        fullTimelineBlock;
+                }
 
                 grid.appendChild(card);
             });
         });
+    },
+
+    markAsFound: function(event, id, specimenName) {
+        if (event.target.checked) {
+            if (confirm('Did you find this specimen? Move "' + specimenName + '" from Wishlist to your Physical Collection?')) {
+                var f = fossils.find(function(x) { return x.id === id; });
+                if (f) {
+                    f.isWishlist = false;
+                    updateFossil(f).then(function() {
+                        window.app.renderFossils();
+                    });
+                }
+            } else {
+                // User cancelled - uncheck the box
+                event.target.checked = false;
+            }
+        }
     },
 
     // --- Export / Import ---

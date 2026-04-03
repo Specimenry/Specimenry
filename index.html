@@ -36,6 +36,10 @@
                 </button>
                 <input type="file" id="file-import" accept=".csv" style="display:none;" onchange="app.importCSV(event)">
 
+                <button id="btn-mass-tag" class="btn-secondary" style="display:none;" onclick="app.massTagSelected()">
+                    Tag Selected
+                </button>
+
                 <button id="btn-mass-delete" class="btn-danger" style="display:none;" onclick="app.deleteSelected()">
                     Delete Selected
                 </button>
@@ -112,8 +116,14 @@
         <div id="stats-summary" class="stats-summary" aria-live="polite">
             <div id="stats-summary-text" class="stats-text" style="width: 100%;"></div>
             <div class="stats-charts">
-                <div class="chart-wrapper"><canvas id="chart-country"></canvas></div>
-                <div class="chart-wrapper"><canvas id="chart-period"></canvas></div>
+                <div class="chart-wrapper">
+                    <h3 class="chart-title">Country of Origin</h3>
+                    <canvas id="chart-country"></canvas>
+                </div>
+                <div class="chart-wrapper">
+                    <h3 class="chart-title">Geological Distribution</h3>
+                    <canvas id="chart-period"></canvas>
+                </div>
             </div>
         </div>
         <div id="fossil-grid" class="fossil-grid" aria-live="polite">
@@ -233,8 +243,19 @@
                     </div>
 
                     <div class="form-group full-width">
+                        <label for="f-link">Source Link / URL</label>
+                        <input type="url" id="f-link" placeholder="https://www.fossilera.com/fossils/...">
+                    </div>
+
+                    <div class="form-group full-width">
                         <label for="f-notes">Notes</label>
                         <textarea id="f-notes" rows="3" placeholder="Condition, preparation details, provenance..."></textarea>
+                    </div>
+
+                    <div class="form-group full-width">
+                        <label for="f-tags">Tags (Keywords)</label>
+                        <input type="text" id="f-tags" placeholder="e.g. shark, predator, tooth, fragile">
+                        <span class="upload-hint" style="margin-top: 0.25rem; display: block;">Separate tags with commas or spaces. Use tags like #shark for quick filtering.</span>
                     </div>
 
                     <div class="form-group full-width">
