@@ -357,8 +357,13 @@ button:focus-visible {
 
 input[type="text"],
 input[type="number"],
+input[type="url"],
+input[type="email"],
 select,
-textarea {
+textarea,
+.fossil-input {
+    -webkit-appearance: none;
+    appearance: none;
     font-family: 'Inter', sans-serif;
     padding: 0.6rem 0.75rem;
     background: var(--bg-surface);
@@ -370,7 +375,7 @@ textarea {
     width: 100%;
 }
 
-input:focus, select:focus, textarea:focus {
+input:focus, select:focus, textarea:focus, .fossil-input:focus {
     outline: none;
     border-color: var(--accent);
     box-shadow: 0 0 0 3px var(--accent-ring);

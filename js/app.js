@@ -1544,7 +1544,7 @@ window.app = {
                     statsHtml += ' &middot; Cost: <strong>' + Math.round(totalCostSEK).toLocaleString() + ' SEK</strong>';
                 }
                 if (totalEstSEK > 0) {
-                    statsHtml += ' &middot; Portfolio: <strong>' + Math.round(totalEstSEK).toLocaleString() + ' SEK</strong>';
+                    statsHtml += ' &middot; Value: <strong>' + Math.round(totalEstSEK).toLocaleString() + ' SEK</strong>';
                 }
 
                 if (mostCommonCat) {
