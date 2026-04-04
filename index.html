@@ -225,7 +225,7 @@
                     </div>
 
                     <div class="form-group">
-                        <label for="f-size">Size</label>
+                        <label for="f-size">Size (Length)</label>
                         <div class="input-with-select">
                             <input type="number" step="0.01" id="f-size" placeholder="e.g. 10">
                             <select id="f-size-unit">
@@ -250,6 +250,23 @@
                                 <option value="SEK">SEK</option>
                             </select>
                         </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="f-est-value">Estimated Current Value</label>
+                        <div class="input-with-select">
+                            <input type="number" step="0.01" id="f-est-value" placeholder="e.g. 200">
+                            <select id="f-est-currency">
+                                <option value="USD">USD</option>
+                                <option value="EUR">EUR</option>
+                                <option value="SEK">SEK</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="form-group full-width" style="display: flex; flex-direction: row; align-items: center; gap: 0.65rem; border-top: 1px dashed var(--border-color); padding-top: 1rem; margin-top: 0.5rem;">
+                        <input type="checkbox" id="f-self-found" style="width: 18px; height: 18px; cursor: pointer; accent-color: var(--accent);">
+                        <label for="f-self-found" style="margin: 0; cursor: pointer; white-space: nowrap; font-size: 0.85rem; font-weight: 500;">Field Discovery / Self Found</label>
                     </div>
 
                     <div class="form-group full-width">

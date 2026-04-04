@@ -196,6 +196,13 @@ button:focus-visible {
     border-color: var(--border-hover);
 }
 
+.btn-secondary.active {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+    box-shadow: var(--shadow-sm);
+}
+
 .btn-danger {
     background: var(--danger);
     color: #fff;
@@ -974,7 +981,9 @@ main {
 }
 
 .badge {
-    display: inline-block;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
     padding: 0.2rem 0.6rem;
     border-radius: 999px;
     font-size: 0.7rem;
@@ -990,6 +999,17 @@ main {
     background: var(--wishlist-bg);
     color: var(--wishlist-color);
     border-color: rgba(120, 80, 160, 0.15);
+}
+
+.badge-self-found {
+    background: rgba(30, 128, 114, 0.1);
+    color: #1e8072;
+    border-color: rgba(30, 128, 114, 0.2);
+}
+
+[data-theme="dark"] .badge-self-found {
+    background: rgba(45, 179, 161, 0.12);
+    color: #2db3a1;
 }
 
 .card-tags {

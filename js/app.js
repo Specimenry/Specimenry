@@ -612,6 +612,21 @@ var selectedFossils = new Set();
 var currentImages = [];
 var currentView = 'false'; // 'false' = Collection, 'true' = Wishlist
 var isStatsOpen = false;
+
+// Debounce utility — delays fn execution until wait ms after the last call
+function debounce(fn, wait) {
+    var timer = null;
+    return function() {
+        var context = this, args = arguments;
+        clearTimeout(timer);
+        timer = setTimeout(function() { fn.apply(context, args); }, wait);
+    };
+}
+
+// Debounced search handler (250ms) to avoid Levenshtein stutter on large collections
+var debouncedSearch = debounce(function() {
+    window.app.renderFossils();
+}, 250);
 var isStratColumnOpen = false;
 var chartCountry = null;
 var chartPeriod = null;
@@ -817,6 +832,7 @@ window.app = {
                 document.getElementById('f-anatomy').value = f.anatomy || '';
                 document.getElementById('f-category').value = f.category || '';
                 document.getElementById('f-wishlist').value = f.isWishlist ? 'true' : 'false';
+                document.getElementById('f-self-found').checked = !!f.isSelfFound;
                 document.getElementById('f-period').value = f.geologicalPeriod || '';
                 window.app.updateEpochs(f.epoch);
                 window.app.updateStratAges(f.stratAge);
@@ -831,6 +847,8 @@ window.app = {
                 document.getElementById('f-weight').value = f.weight || '';
                 document.getElementById('f-price').value = f.price || '';
                 document.getElementById('f-currency').value = f.currency || 'USD';
+                document.getElementById('f-est-value').value = f.estimatedValue || '';
+                document.getElementById('f-est-currency').value = f.estimatedCurrency || 'USD';
                 document.getElementById('f-link').value = f.sourceUrl || '';
                 document.getElementById('f-notes').value = f.notes || '';
                 document.getElementById('f-tags').value = (f.tags || []).join(', ');
@@ -847,6 +865,8 @@ window.app = {
             document.getElementById('f-age-slider').value = 0;
             document.getElementById('f-size-unit').value = 'cm';
             document.getElementById('f-currency').value = 'USD';
+            document.getElementById('f-est-value').value = '';
+            document.getElementById('f-est-currency').value = 'USD';
             document.getElementById('f-link').value = '';
             document.getElementById('f-tags').value = '';
 
@@ -855,6 +875,7 @@ window.app = {
             document.getElementById('f-location').value = localStorage.getItem('last_location') || '';
             document.getElementById('f-formation').value = localStorage.getItem('last_formation') || '';
             document.getElementById('f-period').value = localStorage.getItem('last_period') || '';
+            document.getElementById('f-self-found').checked = false;
             
             window.app.updateEpochs(localStorage.getItem('last_epoch') || '');
             window.app.updateStratAges(localStorage.getItem('last_stratAge') || '');
@@ -1104,6 +1125,7 @@ window.app = {
             anatomy: document.getElementById('f-anatomy').value,
             category: document.getElementById('f-category').value,
             isWishlist: document.getElementById('f-wishlist').value === 'true',
+            isSelfFound: document.getElementById('f-self-found').checked,
             geologicalPeriod: document.getElementById('f-period').value,
             epoch: document.getElementById('f-epoch').value,
             stratAge: document.getElementById('f-strat-age').value,
@@ -1116,6 +1138,8 @@ window.app = {
             weight: parseFloat(document.getElementById('f-weight').value) || null,
             price: parseFloat(document.getElementById('f-price').value) || null,
             currency: document.getElementById('f-currency').value,
+            estimatedValue: parseFloat(document.getElementById('f-est-value').value) || null,
+            estimatedCurrency: document.getElementById('f-est-currency').value,
             sourceUrl: document.getElementById('f-link').value,
             notes: document.getElementById('f-notes').value,
             tags: (document.getElementById('f-tags').value || '').split(/[,\s]+/).map(function(t) { return t.trim().toLowerCase().replace(/^#/, ''); }).filter(function(t) { return t.length > 0; }),
@@ -1256,6 +1280,7 @@ window.app = {
         document.getElementById('f-anatomy').value = f.anatomy || '';
         document.getElementById('f-category').value = f.category || '';
         document.getElementById('f-wishlist').value = f.isWishlist ? 'true' : 'false';
+        document.getElementById('f-self-found').checked = !!f.isSelfFound;
         document.getElementById('f-period').value = f.geologicalPeriod || '';
         window.app.updateEpochs(f.epoch);
         window.app.updateStratAges(f.stratAge);
@@ -1270,6 +1295,8 @@ window.app = {
         document.getElementById('f-weight').value = f.weight || '';
         document.getElementById('f-price').value = f.price || '';
         document.getElementById('f-currency').value = f.currency || 'USD';
+        document.getElementById('f-est-value').value = f.estimatedValue || '';
+        document.getElementById('f-est-currency').value = f.estimatedCurrency || 'USD';
         document.getElementById('f-link').value = f.sourceUrl || '';
         document.getElementById('f-notes').value = f.notes || '';
         document.getElementById('f-tags').value = (f.tags || []).join(', ');
@@ -1357,7 +1384,7 @@ window.app = {
             var grid = document.getElementById('fossil-grid');
             grid.innerHTML = '';
 
-            var searchQ   = document.getElementById('search').value.toLowerCase();
+            var searchQ   = document.getElementById('search').value.toLowerCase().trim();
             var catQ      = document.getElementById('filter-category').value;
             var periodQ   = document.getElementById('filter-period').value;
             var sortQ     = document.getElementById('filter-sort').value;
@@ -1371,6 +1398,7 @@ window.app = {
                 var c = f.country  ? f.country.toLowerCase()  : '';
                 var fm = f.formation ? f.formation.toLowerCase() : '';
                 var tg = (f.tags || []).join(' ').toLowerCase();
+                var foundText = f.isSelfFound ? 'self found found collected' : '';
 
                 var matchSearch = false;
                 if (!searchQ) {
@@ -1380,11 +1408,12 @@ window.app = {
                     var tagQ = searchQ.substring(1).trim();
                     matchSearch = (f.tags || []).some(function(t) { return t.toLowerCase().indexOf(tagQ) !== -1; });
                 } else {
-                    // "Smart" Fuzzy Search (Typos & Transpositions)
-                    // 1. First check for exact substring matches (Instant high-confidence)
+                    // "Smart" Search: check against a virtual index for this fossil
+                    // This index includes specimen name, anatomy, notes, location, and the 'Self Found' status keywords
                     if (s.indexOf(searchQ) !== -1 || a.indexOf(searchQ) !== -1 || 
                         n.indexOf(searchQ) !== -1 || c.indexOf(searchQ) !== -1 || 
-                        fm.indexOf(searchQ) !== -1 || tg.indexOf(searchQ) !== -1) {
+                        fm.indexOf(searchQ) !== -1 || tg.indexOf(searchQ) !== -1 ||
+                        foundText.indexOf(searchQ) !== -1) {
                         matchSearch = true;
                     } else {
                         // 2. Fallback to Precision Fuzzy (handles "Megladon", "Shrak", etc.)
@@ -1444,8 +1473,9 @@ window.app = {
             // --- STATS DASHBOARD ---
             var statsContainer = document.getElementById('stats-summary');
             if (filtered.length > 0) {
-                // Group by Currency
+                // GROUP AND TALLY VALUE
                 var valueByCurrency = {};
+                var estValueByCurrency = {};
                 
                 // Charts Data Arrays
                 var countryCounts = {};
@@ -1468,10 +1498,16 @@ window.app = {
                         }
                     }
 
-                    // Tally Currency
+                    // Tally Purchase Value
                     if (f.price > 0) {
                         var curr = f.currency || 'USD';
                         valueByCurrency[curr] = (valueByCurrency[curr] || 0) + f.price;
+                    }
+
+                    // Tally Estimated Value
+                    if (f.estimatedValue > 0) {
+                        var estCurr = f.estimatedCurrency || 'USD';
+                        estValueByCurrency[estCurr] = (estValueByCurrency[estCurr] || 0) + f.estimatedValue;
                     }
 
                     // Tally Country
@@ -1486,25 +1522,29 @@ window.app = {
                 
                 var statsHtml = 'Showing <strong>' + filtered.length + '</strong> specimens';
                 
-                var totalValueSEK = 0;
-                var hasTotalValue = false;
-                for (var currencyKey in valueByCurrency) {
-                    var val = valueByCurrency[currencyKey];
-                    // Use dynamic exchangeRates if available
-                    if (exchangeRates && exchangeRates[currencyKey]) {
-                        totalValueSEK += val / exchangeRates[currencyKey];
-                    } else {
-                        // Approximate conversion rates fallback
-                        if (currencyKey === 'USD') totalValueSEK += val * 10.50;
-                        else if (currencyKey === 'EUR') totalValueSEK += val * 11.50;
-                        else if (currencyKey === 'SEK') totalValueSEK += val;
-                        else totalValueSEK += val; // fallback for unhandled
+                function calculateTotalSEK(map) {
+                    var total = 0;
+                    for (var k in map) {
+                        var val = map[k];
+                        if (exchangeRates && exchangeRates[k]) {
+                            total += val / exchangeRates[k];
+                        } else {
+                            if (k === 'USD') total += val * 10.50;
+                            else if (k === 'EUR') total += val * 11.50;
+                            else total += val;
+                        }
                     }
-                    if (val > 0) hasTotalValue = true;
+                    return total;
                 }
+
+                var totalCostSEK = calculateTotalSEK(valueByCurrency);
+                var totalEstSEK = calculateTotalSEK(estValueByCurrency);
                 
-                if (hasTotalValue) {
-                    statsHtml += ' &middot; Est. Total Value: <strong>' + Math.round(totalValueSEK).toLocaleString() + ' SEK</strong>';
+                if (totalCostSEK > 0) {
+                    statsHtml += ' &middot; Cost: <strong>' + Math.round(totalCostSEK).toLocaleString() + ' SEK</strong>';
+                }
+                if (totalEstSEK > 0) {
+                    statsHtml += ' &middot; Portfolio: <strong>' + Math.round(totalEstSEK).toLocaleString() + ' SEK</strong>';
                 }
 
                 if (mostCommonCat) {
@@ -1524,6 +1564,10 @@ window.app = {
                     } else {
                         // Render Charts
                         try {
+                        var isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+                        var chartTextColor = isDark ? '#9da8b5' : '#7a6e5d';
+                        var chartBorderColor = isDark ? '#141d26' : '#ffffff';
+
                         if (chartCountry) chartCountry.destroy();
                         var ctxCountry = document.getElementById('chart-country').getContext('2d');
                         chartCountry = new Chart(ctxCountry, {
@@ -1532,7 +1576,9 @@ window.app = {
                                 labels: Object.keys(countryCounts),
                                 datasets: [{
                                     data: Object.values(countryCounts),
-                                    backgroundColor: ['#4e79a7', '#f28e2c', '#e15759', '#76b7b2', '#59a14f', '#edc949', '#af7aa1', '#ff9da7', '#9c755f', '#bab0ab']
+                                    backgroundColor: ['#4e79a7', '#f28e2c', '#e15759', '#76b7b2', '#59a14f', '#edc949', '#af7aa1', '#ff9da7', '#9c755f', '#bab0ab'],
+                                    borderColor: chartBorderColor,
+                                    borderWidth: 1.5
                                 }]
                             },
                             options: { 
@@ -1540,7 +1586,16 @@ window.app = {
                                 maintainAspectRatio: true,
                                 aspectRatio: 1.15,
                                 plugins: { 
-                                    legend: { position: 'bottom', labels: { boxWidth: 12, padding: 10, font: { size: 10 } } }, 
+                                    legend: { 
+                                        position: 'bottom', 
+                                        labels: { 
+                                            boxWidth: 10, 
+                                            usePointStyle: true,
+                                            padding: 10, 
+                                            color: chartTextColor,
+                                            font: { size: 10, weight: '600' } 
+                                        } 
+                                    }, 
                                     title: { display: false } 
                                 } 
                             }
@@ -1554,7 +1609,9 @@ window.app = {
                                 labels: Object.keys(periodCounts),
                                 datasets: [{
                                     data: Object.values(periodCounts),
-                                    backgroundColor: ['#4e79a7', '#f28e2c', '#e15759', '#76b7b2', '#59a14f', '#edc949', '#af7aa1', '#ff9da7', '#9c755f', '#bab0ab']
+                                    backgroundColor: ['#4e79a7', '#f28e2c', '#e15759', '#76b7b2', '#59a14f', '#edc949', '#af7aa1', '#ff9da7', '#9c755f', '#bab0ab'],
+                                    borderColor: chartBorderColor,
+                                    borderWidth: 1.5
                                 }]
                             },
                             options: { 
@@ -1562,7 +1619,16 @@ window.app = {
                                 maintainAspectRatio: true,
                                 aspectRatio: 1.15,
                                 plugins: { 
-                                    legend: { position: 'bottom', labels: { boxWidth: 12, padding: 10, font: { size: 10 } } }, 
+                                    legend: { 
+                                        position: 'bottom', 
+                                        labels: { 
+                                            boxWidth: 10, 
+                                            usePointStyle: true,
+                                            padding: 10, 
+                                            color: chartTextColor,
+                                            font: { size: 10, weight: '600' } 
+                                        } 
+                                    }, 
                                     title: { display: false } 
                                 } 
                             }
@@ -1694,7 +1760,10 @@ window.app = {
                             detailsText +
                             ((f.tags && f.tags.length > 0) ? '<div class="card-tags">' + f.tags.map(function(t) { return '<span class="tag-pill" onclick="event.stopPropagation(); document.getElementById(\'search\').value = \'#' + t + '\'; app.renderFossils();">#' + t + '</span>'; }).join('') + '</div>' : '') +
                             '<div class="card-footer">' +
-                                '<span class="badge badge-owned">Owned</span>' +
+                                '<div style="display: flex; gap: 0.5rem; align-items: center;">' +
+                                    '<span class="badge badge-owned">Owned</span>' +
+                                    (f.isSelfFound ? '<span class="badge badge-self-found" style="display: flex; align-items: center; gap: 4px;"><svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg> Found</span>' : '') +
+                                '</div>' +
                                 '<div class="card-actions">' +
                                     (speciesFirstWord ? '<button title="Read about ' + escapeHtml(speciesFirstWord) + ' on Wikipedia" onclick="window.open(\'https://en.wikipedia.org/wiki/Special:Search?search=\' + \'' + wikiQuery + '\', \'_blank\')"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg></button>' : '') +
                                     '<button title="Edit" onclick="app.openModal(\'' + f.id + '\')"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>' +
