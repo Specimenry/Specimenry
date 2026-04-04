@@ -97,15 +97,17 @@ function getFlagHtml(countryName) {
     // Direct match
     var code = COUNTRY_TO_ISO[clean];
     
-    // Handle common multi-word aliases or messy inputs
+    // Handle complex names or common aliases
     if (!code) {
         if (clean.indexOf('united states') !== -1 || clean === 'usa') code = 'us';
         else if (clean.indexOf('united kingdom') !== -1 || clean === 'uk') code = 'gb';
         else if (clean.indexOf('morocco') !== -1) code = 'ma';
         else if (clean.indexOf('netherlands') !== -1) code = 'nl';
+        else if (clean.indexOf('germany') !== -1) code = 'de';
+        else if (clean.indexOf('france') !== -1) code = 'fr';
     }
 
-    // Fallback: if the user already provided a 2-char code
+    // Fallback: if the user typed "US", "MA", etc directly
     if (!code && clean.length === 2) code = clean;
     
     if (code) {
@@ -1444,6 +1446,7 @@ window.app = {
         document.getElementById('f-age').value = ageVal;
         document.getElementById('f-age-slider').value = ageVal;
         document.getElementById('f-country').value = f.country || '';
+        if (window.app.updateModalFlag) window.app.updateModalFlag();
         document.getElementById('f-location').value = f.location || '';
         document.getElementById('f-formation').value = f.formation || '';
         document.getElementById('f-size').value = f.size || '';
@@ -1635,6 +1638,8 @@ window.app = {
                 
                 // Charts Data Arrays
                 var countryCounts = {};
+                var maxCountryCount = 0;
+                var mostCommonCountry = null;
                 var periodCounts = {};
 
                 var catCounts = {};
@@ -1670,18 +1675,14 @@ window.app = {
                     var cntry = f.country ? f.country.trim() : 'Unknown';
                     if (cntry.length === 0) cntry = 'Unknown';
                     countryCounts[cntry] = (countryCounts[cntry] || 0) + 1;
+                    if (countryCounts[cntry] > maxCountryCount && cntry !== 'Unknown') {
+                        maxCountryCount = countryCounts[cntry];
+                        mostCommonCountry = cntry;
+                    }
 
                     // Tally Period
                     var per = f.geologicalPeriod ? f.geologicalPeriod : 'Unknown';
                     periodCounts[per] = (periodCounts[per] || 0) + 1;
-                }
-                
-                var statsHtml = 'Showing <strong>' + filtered.length + '</strong> specimens';
-                
-                // Add top country flag to summary
-                if (mostCommonCountry && mostCommonCountry !== 'Unknown') {
-                    var summaryFlag = getFlagHtml(mostCommonCountry);
-                    statsHtml += ' &middot; Top Origin: ' + summaryFlag + '<strong>' + (window.escapeHtml ? escapeHtml(mostCommonCountry) : mostCommonCountry) + '</strong>';
                 }
                 
                 function calculateTotalSEK(map) {
@@ -1701,36 +1702,65 @@ window.app = {
 
                 var totalCostSEK = calculateTotalSEK(valueByCurrency);
                 var totalEstSEK = calculateTotalSEK(estValueByCurrency);
+                var totalAppreciation = totalEstSEK - totalCostSEK;
+
+                // Redesigned Quick Stats (Better visuals)
+                var statsHtml = '<div class="stats-summary-pills" style="display: flex; flex-wrap: wrap; gap: 0.65rem; align-items: center; justify-content: flex-start;">';
                 
-                if (totalCostSEK > 0) {
-                    statsHtml += ' &middot; Cost: <strong>' + Math.round(totalCostSEK).toLocaleString() + ' SEK</strong>';
-                }
-                if (totalEstSEK > 0) {
-                    statsHtml += ' &middot; Value: <strong>' + Math.round(totalEstSEK).toLocaleString() + ' SEK</strong>';
+                // Count Pill
+                statsHtml += '<div class="stats-pill" style="display: flex; align-items: center; gap: 0.5rem; background: var(--bg-warm); padding: 0.4rem 0.85rem; border-radius: 2rem; border: 1px solid var(--border-color); font-size: 0.85rem; font-weight: 500;">' +
+                                '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2v11z"/></svg>' +
+                                '<span><strong>' + filtered.length + '</strong> Specimens</span>' +
+                              '</div>';
+
+                // Top Origin Pill
+                if (mostCommonCountry && mostCommonCountry !== 'Unknown') {
+                    var summaryFlag = getFlagHtml(mostCommonCountry);
+                    statsHtml += '<div class="stats-pill" style="display: flex; align-items: center; gap: 0.5rem; background: var(--bg-warm); padding: 0.4rem 0.85rem; border-radius: 2rem; border: 1px solid var(--border-color); font-size: 0.85rem; font-weight: 500;">' +
+                                    summaryFlag + '<span>Top Origin: <strong>' + (window.escapeHtml ? escapeHtml(mostCommonCountry) : mostCommonCountry) + '</strong></span>' +
+                                  '</div>';
                 }
 
-                if (mostCommonCat) {
-                    statsHtml += ' &middot; Primary: <strong>' + (window.escapeHtml ? escapeHtml(mostCommonCat) : mostCommonCat) + '</strong>';
+                // Pricing Pill (Aggregated)
+                if (totalCostSEK > 0) {
+                    statsHtml += '<div class="stats-pill" style="display: flex; align-items: center; gap: 0.5rem; background: var(--bg-warm); padding: 0.4rem 0.85rem; border-radius: 2rem; border: 1px solid var(--border-color); font-size: 0.85rem; font-weight: 500;">' +
+                                    '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#e6a817" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v12M17 12H7"/></svg>' +
+                                    '<span>Investment: <strong>' + Math.round(totalCostSEK).toLocaleString() + ' SEK</strong></span>' +
+                                  '</div>';
                 }
-                
+
+                // Appreciation Pill ( স্ট্যান্ডআউট / Standout )
+                if (totalAppreciation > 0) {
+                    var percentGain = Math.round((totalAppreciation / totalCostSEK) * 100);
+                    statsHtml += '<div class="stats-pill" style="display: flex; align-items: center; gap: 0.5rem; background: rgba(67, 151, 117, 0.1); color: #439775; padding: 0.4rem 0.85rem; border-radius: 2rem; border: 1px solid rgba(67, 151, 117, 0.2); font-size: 0.85rem; font-weight: 700;">' +
+                                    '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>' +
+                                    '<span>Appreciation: +' + Math.round(totalAppreciation).toLocaleString() + ' SEK (↑' + percentGain + '%)</span>' +
+                                  '</div>';
+                }
+
+                statsHtml += '</div>';
+
                 var textContainer = document.getElementById('stats-summary-text');
                 if (textContainer) {
                     textContainer.innerHTML = statsHtml;
                 }
 
-                // Distribution List for Countries (with Flags)
-                var countryListHtml = '<div class="dashboard-country-list" style="margin-top: 1rem; padding-top: 1rem; border-top: 1px dashed var(--border-color); display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 0.75rem;">';
+                // Vertical List Legend with Flags (Reverting grid layout as requested)
+                var countryListHtml = '<div class="dashboard-custom-legend" style="margin-top: 1.25rem; display: flex; flex-direction: column; gap: 0.4rem; max-height: none; overflow: visible;">';
                 var sortedCountries = Object.entries(countryCounts).sort(function(a,b){ return b[1] - a[1]; });
-                sortedCountries.forEach(function(entry) {
+                var chartColors = ['#4e79a7', '#f28e2c', '#e15759', '#76b7b2', '#59a14f', '#edc949', '#af7aa1', '#ff9da7', '#9c755f', '#bab0ab'];
+                
+                sortedCountries.forEach(function(entry, idx) {
                     var cName = entry[0];
                     var cValue = entry[1];
                     var cFlagHtml = getFlagHtml(cName);
-                    var percent = Math.round((cValue / filtered.length) * 100);
-                    countryListHtml += '<div style="display: flex; align-items: center; justify-content: space-between; font-size: 0.85rem; background: var(--bg-warm); padding: 0.5rem 0.75rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color);">' +
-                                        '<div style="display: flex; align-items: center; gap: 0.5rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">' +
-                                            cFlagHtml + '<span style="font-weight: 600;">' + (window.escapeHtml ? escapeHtml(cName) : cName) + '</span>' +
-                                        '</div>' +
-                                        '<span style="opacity: 0.6; font-weight: 700; color: var(--accent);">' + cValue + ' (' + percent + '%)</span>' +
+                    var color = chartColors[idx % chartColors.length];
+                    
+                    countryListHtml += '<div style="display: flex; align-items: center; gap: 0.75rem; font-size: 0.85rem; padding: 0.25rem 0; border-bottom: 1px solid rgba(0,0,0,0.03);">' +
+                                        '<div style="width: 10px; height: 10px; border-radius: 50%; background: ' + color + '; flex-shrink: 0;"></div>' +
+                                        '<div style="width: 20px; display: flex; align-items: center;">' + cFlagHtml.replace('margin-right: 0.4rem;', 'margin-right: 0;') + '</div>' + 
+                                        '<div style="flex: 1; font-weight: 600;">' + (window.escapeHtml ? escapeHtml(cName) : cName) + '</div>' +
+                                        '<span style="opacity: 0.6; font-weight: 700; color: var(--accent);">' + cValue + '</span>' +
                                       '</div>';
                 });
                 countryListHtml += '</div>';
@@ -1738,7 +1768,7 @@ window.app = {
                 var countryChartElem = document.getElementById('chart-country');
                 if (countryChartElem && countryChartElem.parentElement) {
                     var countryChartWrapper = countryChartElem.parentElement;
-                    var existingList = countryChartWrapper.querySelector('.dashboard-country-list');
+                    var existingList = countryChartWrapper.querySelector('.dashboard-country-list') || countryChartWrapper.querySelector('.dashboard-custom-legend');
                     if (existingList) existingList.remove();
                     countryChartWrapper.insertAdjacentHTML('beforeend', countryListHtml);
                 }
@@ -1773,16 +1803,7 @@ window.app = {
                                 maintainAspectRatio: true,
                                 aspectRatio: 1.15,
                                 plugins: { 
-                                    legend: { 
-                                        position: 'bottom', 
-                                        labels: { 
-                                            boxWidth: 10, 
-                                            usePointStyle: true,
-                                            padding: 10, 
-                                            color: chartTextColor,
-                                            font: { size: 10, weight: '600' } 
-                                        } 
-                                    }, 
+                                    legend: { display: false }, 
                                     title: { display: false } 
                                 } 
                             }
@@ -1931,7 +1952,10 @@ window.app = {
                     var detailsArr = [];
                     if (f.size) detailsArr.push('Size: ' + escapeHtml(f.size) + ' ' + (f.sizeUnit || 'cm'));
                     if (f.weight) detailsArr.push('Weight: ' + escapeHtml(f.weight) + 'g');
-                    if (f.price) detailsArr.push('Price: ' + f.price + ' ' + (f.currency || 'USD'));
+                    if (f.price) {
+                        var pText = 'Price: ' + f.price + ' ' + (f.currency || 'USD');
+                        detailsArr.push(pText);
+                    }
                     var detailsText = detailsArr.length > 0 ? '<p class="card-meta" style="margin-top: 0.25rem; font-weight: 500;"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg> ' + detailsArr.join(' &middot; ') + '</p>' : '';
 
                     card.innerHTML =
