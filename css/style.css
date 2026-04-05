@@ -1887,3 +1887,59 @@ dialog::backdrop {
 .flag-icon:hover {
     transform: scale(1.2);
 }
+
+/* --- Taxonomy Treemap --- */
+.treemap-svg {
+    width: 100%;
+    height: auto;
+    max-height: 500px;
+    background: var(--bg-surface);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-sm);
+    overflow: hidden;
+}
+
+.treemap-node {
+    cursor: pointer;
+    transition: filter 0.2s ease;
+}
+
+.treemap-node:hover {
+    filter: brightness(1.1);
+}
+
+.treemap-rect {
+    stroke: var(--bg-surface);
+    stroke-width: 2px;
+    rx: 4px;
+    ry: 4px;
+}
+
+.treemap-label {
+    fill: #fff;
+    font-weight: 800;
+    pointer-events: none;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.4);
+    letter-spacing: 0.02em;
+}
+
+.treemap-sublabel {
+    fill: rgba(255, 255, 255, 0.9);
+    font-weight: 600;
+    pointer-events: none;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.4);
+}
+
+#treemap-status {
+    animation: pulse 2s infinite ease-in-out;
+}
+
+@keyframes pulse {
+    0% { opacity: 0.5; }
+    50% { opacity: 1; }
+    100% { opacity: 0.5; }
+}
+
+[data-theme=" dark\] .treemap-rect {
+ stroke: var(--bg-main);
+}

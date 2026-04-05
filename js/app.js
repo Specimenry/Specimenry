@@ -858,6 +858,8 @@ var renderFossilsDebounced = debounce(function() {
 }, 250);
 var isStratColumnOpen = false;
 var isDataInsightsOpen = false;
+var isTreemapOpen = false;
+var isAutoFetching = false;
 var chartCountry = null;
 var chartPeriod = null;
 var exchangeRates = null;
@@ -1106,10 +1108,30 @@ window.app = {
         }
     },
 
+    toggleData: function() {
+        isDataInsightsOpen = !isDataInsightsOpen;
+        if (isDataInsightsOpen) {
+            isStratColumnOpen = false; 
+            isTreemapOpen = false;
+        }
+
+        var btnData = document.getElementById('btn-toggle-data');
+        var btnStrat = document.getElementById('btn-toggle-visuals');
+        var btnTreemap = document.getElementById('btn-toggle-treemap');
+        if (btnData) btnData.classList.toggle('active', isDataInsightsOpen);
+        if (btnStrat) btnStrat.classList.remove('active');
+        if (btnTreemap) btnTreemap.classList.remove('active');
+        
+        var chartsContainer = document.getElementById('stats-charts-container');
+        var stratContainer = document.getElementById('strat-column-container');
+        var dataContainer = document.getElementById('data-insights-container');
+        var treemapContainer = document.getElementById('treemap-container');
+        
         if (isDataInsightsOpen) {
             if (chartsContainer) chartsContainer.style.display = 'none';
             if (stratContainer) stratContainer.style.display = 'none';
             if (dataContainer) dataContainer.style.display = 'block';
+            if (treemapContainer) treemapContainer.style.display = 'none';
         } else {
             if (chartsContainer) chartsContainer.style.display = 'flex';
             if (dataContainer) dataContainer.style.display = 'none';
@@ -1120,6 +1142,36 @@ window.app = {
         }
     },
 
+    toggleTreemap: function() {
+        isTreemapOpen = !isTreemapOpen;
+        if (isTreemapOpen) {
+            isStratColumnOpen = false;
+            isDataInsightsOpen = false;
+        }
+
+        var btnTreemap = document.getElementById('btn-toggle-treemap');
+        var btnData = document.getElementById('btn-toggle-data');
+        var btnStrat = document.getElementById('btn-toggle-visuals');
+        if (btnTreemap) btnTreemap.classList.toggle('active', isTreemapOpen);
+        if (btnData) btnData.classList.remove('active');
+        if (btnStrat) btnStrat.classList.remove('active');
+        
+        var chartsContainer = document.getElementById('stats-charts-container');
+        var stratContainer = document.getElementById('strat-column-container');
+        var dataContainer = document.getElementById('data-insights-container');
+        var treemapContainer = document.getElementById('treemap-container');
+        
+        if (isTreemapOpen) {
+            if (chartsContainer) chartsContainer.style.display = 'none';
+            if (stratContainer) stratContainer.style.display = 'none';
+            if (dataContainer) dataContainer.style.display = 'none';
+            if (treemapContainer) treemapContainer.style.display = 'block';
+        } else {
+            if (chartsContainer) chartsContainer.style.display = 'flex';
+            if (treemapContainer) treemapContainer.style.display = 'none';
+        }
+        
+        if (isStatsOpen) {
             window.app.renderFossils();
         }
     },
@@ -2234,6 +2286,8 @@ window.app = {
                         window.app.renderStratigraphicColumn(filtered);
                     } else if (isDataInsightsOpen) {
                         // Logic is already handled above in the inline section
+                    } else if (isTreemapOpen) {
+                        window.app.renderTaxonomyTreemap(filtered);
                     } else {
                         // Render Charts
                         try {
@@ -2578,6 +2632,172 @@ window.app = {
         reader.readAsText(file);
     },
 
+    autoFetchMissingTaxonomy: function(toFetchList) {
+        if (isAutoFetching) return;
+        
+        var missing = (toFetchList || []).filter(function(f) { 
+            return !f.taxonomy && f.specimen && f.specimen.trim() !== ''; 
+        });
+        
+        if (missing.length === 0) return;
+        
+        isAutoFetching = true;
+        var count = 0;
+        var total = missing.length;
+        
+        function fetchNext() {
+            if (!isTreemapOpen || missing.length === 0) {
+                isAutoFetching = false;
+                var statusEl = document.getElementById('treemap-status');
+                if (statusEl) statusEl.style.display = 'none';
+                return;
+            }
+            
+            var f = missing.shift();
+            count++;
+            
+            var statusEl = document.getElementById('treemap-status');
+            if (statusEl) {
+                statusEl.innerText = 'Updating taxonomy database: ' + count + ' / ' + total + '...';
+                statusEl.style.display = 'block';
+            }
+            
+            fetchTaxonomyData(f.specimen)
+                .then(function(taxonomy) {
+                    f.taxonomy = taxonomy;
+                    return updateFossil(f);
+                })
+                .then(function() {
+                    // Update only the treemap if it's still open
+                    if (isTreemapOpen) {
+                        var filtered = fossils.filter(function(x) {
+                             return currentView === 'true' ? x.isWishlist : !x.isWishlist;
+                        });
+                        window.app.renderTaxonomyTreemap(filtered);
+                    }
+                    setTimeout(fetchNext, 1000); // 1s second delay to be gentle with PBDB API
+                })
+                .catch(function() {
+                    setTimeout(fetchNext, 500); // Shorter delay on error
+                });
+        }
+        
+        fetchNext();
+    },
+
+    renderTaxonomyTreemap: function(filtered) {
+        var container = document.getElementById('treemap-container');
+        if (!container) return;
+
+        // --- 1. Aggregation ---
+        var hierarchy = { name: "Root", children: [] };
+        var phylaMap = {};
+
+        filtered.forEach(function(f) {
+            var tax = f.taxonomy || {};
+            var phylum = tax.phylum || f.category || "Unknown Phylum";
+            var className = tax.class || "Unknown Class";
+            var order = tax.order || "Unknown Order";
+
+            if (!phylaMap[phylum]) {
+                phylaMap[phylum] = { name: phylum, children: [], map: {}, value: 0 };
+                hierarchy.children.push(phylaMap[phylum]);
+            }
+            phylaMap[phylum].value++;
+            
+            var pNode = phylaMap[phylum];
+            if (!pNode.map[className]) {
+                pNode.map[className] = { name: className, children: [], map: {}, value: 0 };
+                pNode.children.push(pNode.map[className]);
+            }
+            pNode.map[className].value++;
+        });
+
+        // --- 2. Squarified Algorithm ---
+        function getSquarifiedLayout(rect, nodes) {
+            var totalValue = nodes.reduce(function(a, b) { return a + b.value; }, 0);
+            var sorted = nodes.slice().sort(function(a, b) { return b.value - a.value; });
+            var result = [];
+
+            function worst(row, side) {
+                var rSum = row.reduce(function(a, b) { return a + b; }, 0);
+                var rMax = Math.max.apply(null, row);
+                var rMin = Math.min.apply(null, row);
+                return Math.max((side * side * rMax) / (rSum * rSum), (rSum * rSum) / (side * side * rMin));
+            }
+
+            function layoutRow(row, r, total) {
+                var rowTotal = row.reduce(function(a, b) { return a + b.value; }, 0);
+                var isVertical = r.w < r.h;
+                var side = isVertical ? r.w : r.h;
+                var otherSide = rowTotal / total * (isVertical ? r.h : r.w);
+                var offset = 0;
+
+                row.forEach(function(item) {
+                    var length = item.value / rowTotal * side;
+                    var nodeRect = isVertical 
+                        ? { x: r.x + offset, y: r.y, w: length, h: otherSide }
+                        : { x: r.x, y: r.y + offset, w: otherSide, h: length };
+                    result.push({ name: item.name, value: item.value, x: nodeRect.x, y: nodeRect.y, w: nodeRect.w, h: nodeRect.h });
+                    offset += length;
+                });
+
+                if (isVertical) { r.y += otherSide; r.h -= otherSide; }
+                else { r.x += otherSide; r.w -= otherSide; }
+            }
+
+            var currentRow = [];
+            while (sorted.length > 0) {
+                var item = sorted[0];
+                var side = rect.w < rect.h ? rect.w : rect.h;
+                var rowValues = currentRow.map(function(d) { return d.value; });
+                var curWorst = currentRow.length === 0 ? Infinity : worst(rowValues, side);
+                var nextWorst = worst(rowValues.concat([item.value]), side);
+
+                if (curWorst >= nextWorst) {
+                    currentRow.push(sorted.shift());
+                } else {
+                    layoutRow(currentRow, rect, totalValue);
+                    currentRow = [];
+                }
+            }
+            if (currentRow.length > 0) layoutRow(currentRow, rect, totalValue);
+            return result;
+        }
+
+        // --- 3. Render SVG ---
+        var width = container.clientWidth - 40;
+        if (width <= 0) width = 800; // Fallback
+        var height = 500;
+        var svgHtml = '<svg class="treemap-svg" viewBox="0 0 ' + width + ' ' + height + '" preserveAspectRatio="xMidYMid meet">';
+        
+        var colors = ['#a878d0', '#6eb4f2', '#82c91e', '#fab005', '#fd7e14', '#fa5252', '#be4bdb', '#7950f2', '#228be6', '#12b886', '#40c057', '#82c91e'];
+        
+        var phylaLayout = getSquarifiedLayout({x: 0, y: 0, w: width, h: height}, hierarchy.children);
+        
+        phylaLayout.forEach(function(node, idx) {
+            var color = colors[idx % colors.length];
+            svgHtml += '<g class="treemap-node" data-name="' + node.name + '" data-count="' + node.value + '">';
+            svgHtml += '<rect class="treemap-rect" x="' + node.x + '" y="' + node.y + '" width="' + node.w + '" height="' + node.h + '" fill="' + color + '"></rect>';
+            
+            if (node.w > 40 && node.h > 30) {
+                var fontSize = Math.min(node.w / 6, node.h / 4, 14);
+                svgHtml += '<text class="treemap-label" x="' + (node.x + node.w/2) + '" y="' + (node.y + node.h/2 - 5) + '" style="font-size: ' + fontSize + 'px;" dominant-baseline="middle" text-anchor="middle">' + node.name + '</text>';
+                svgHtml += '<text class="treemap-sublabel" x="' + (node.x + node.w/2) + '" y="' + (node.y + node.h/2 + 10) + '" style="font-size: ' + (fontSize * 0.8) + 'px;" dominant-baseline="middle" text-anchor="middle">' + node.value + ' specimens</text>';
+            }
+            svgHtml += '<title>' + node.name + ': ' + node.value + ' specimens</title>';
+            svgHtml += '</g>';
+        });
+        
+        svgHtml += '</svg>';
+        
+        var statusHtml = '<div id="treemap-status" style="font-size: 0.7rem; color: var(--text-muted); margin-top: 0.5rem; text-align: center; display: ' + (isAutoFetching ? 'block' : 'none') + ';">Updating taxonomy...</div>';
+        
+        container.innerHTML = '<h3 class="chart-title" style="margin-bottom: 0.5rem; text-align: center;">Taxonomic Diversity (Treemap)</h3>' + 
+                             '<p style="font-size: 0.75rem; color: var(--text-muted); text-align: center; margin-bottom: 1.5rem;">Hierarchy: Phylum > Class > Order</p>' + 
+                             svgHtml + statusHtml;
+    },
+
     importCSV: function(event) {
         var file = event.target.files[0];
         if (!file) return;
@@ -2623,144 +2843,6 @@ window.app = {
                 });
             }
         });
-    },
-
-    renderTaxonomyTreemap: function(filtered) {
-        var container = document.getElementById('treemap-container');
-        if (!container) return;
-
-        // --- 1. Aggregate Data ---
-        var hierarchy = { name: "Life", children: [] };
-        var phylaMap = {};
-
-        filtered.forEach(function(f) {
-            var tax = f.taxonomy || {};
-            var phylum = tax.phylum || f.category || "Unknown Phylum";
-            var className = tax.class || "Unknown Class";
-            var order = tax.order || "Unknown Order";
-
-            if (!phylaMap[phylum]) {
-                phylaMap[phylum] = { name: phylum, children: {}, value: 0 };
-                hierarchy.children.push(phylaMap[phylum]);
-            }
-            phylaMap[phylum].value++;
-
-            if (!phylaMap[phylum].children[className]) {
-                phylaMap[phylum].children[className] = { name: className, children: {}, value: 0 };
-            }
-            phylaMap[phylum].children[className].value++;
-
-            if (!phylaMap[phylum].children[className].children[order]) {
-                phylaMap[phylum].children[className].children[order] = { name: order, value: 0 };
-            }
-            phylaMap[phylum].children[className].children[order].value++;
-        });
-
-        // Flatten children maps to arrays
-        hierarchy.children.forEach(function(phy) {
-            var classes = [];
-            for (var cName in phy.children) {
-                var cls = phy.children[cName];
-                var orders = [];
-                for (var oName in cls.children) {
-                    orders.push(cls.children[oName]);
-                }
-                cls.children = orders;
-                classes.push(cls);
-            }
-            phy.children = classes;
-        });
-
-        // --- 2. Squarified Algorithm ---
-        function getSquarifiedLayout(rect, nodes) {
-            if (nodes.length === 0) return [];
-            
-            var totalValue = nodes.reduce(function(a, b) { return a + b.value; }, 0);
-            var sorted = nodes.slice().sort(function(a, b) { return b.value - a.value; });
-            var result = [];
-
-            function worst(row, side) {
-                if (row.length === 0) return Infinity;
-                var rMin = Math.min.apply(Math, row);
-                var rMax = Math.max.apply(Math, row);
-                var rSum = row.reduce(function(a, b) { return a + b; }, 0);
-                var s = rSum * rSum;
-                var w = side * side;
-                return Math.max((w * rMax) / s, s / (w * rMin));
-            }
-
-            function layoutRow(row, r, total) {
-                var isVertical = r.w < r.h;
-                var side = isVertical ? r.w : r.h;
-                var rowTotal = row.reduce(function(a, b) { return a + b.value; }, 0);
-                var thickness = (rowTotal / total) * (isVertical ? r.h : r.w);
-                
-                var offset = 0;
-                row.forEach(function(item) {
-                    var length = (item.value / rowTotal) * side;
-                    item.x = isVertical ? r.x + offset : r.x;
-                    item.y = isVertical ? r.y : r.y + offset;
-                    item.w = isVertical ? length : thickness;
-                    item.h = isVertical ? thickness : length;
-                    offset += length;
-                    result.push(item);
-                });
-                
-                if (isVertical) { r.y += thickness; r.h -= thickness; }
-                else { r.x += thickness; r.w -= thickness; }
-            }
-
-            var currentRect = { x: rect.x, y: rect.y, w: rect.w, h: rect.h };
-            var currentRow = [];
-            var remaining = sorted.slice();
-            
-            while (remaining.length > 0) {
-                var item = remaining[0];
-                var side = Math.min(currentRect.w, currentRect.h);
-                var rowValues = currentRow.map(function(d) { return d.value; });
-                
-                if (currentRow.length === 0 || worst(rowValues, side) >= worst(rowValues.concat(item.value), side)) {
-                    currentRow.push(remaining.shift());
-                } else {
-                    layoutRow(currentRow, currentRect, totalValue);
-                    currentRow = [];
-                }
-            }
-            if (currentRow.length > 0) layoutRow(currentRow, currentRect, totalValue);
-            return result;
-        }
-
-        // --- 3. Render SVG ---
-        var width = container.clientWidth - 40;
-        if (width <= 0) width = 800; // Fallback
-        var height = 500;
-        var svgHtml = '<svg class="treemap-svg" viewBox="0 0 ' + width + ' ' + height + '" preserveAspectRatio="xMidYMid meet">';
-        
-        var colors = ['#a878d0', '#6eb4f2', '#82c91e', '#fab005', '#fd7e14', '#fa5252', '#be4bdb', '#7950f2', '#228be6', '#12b886', '#40c057', '#82c91e'];
-        
-        var phylaLayout = getSquarifiedLayout({x: 0, y: 0, w: width, h: height}, hierarchy.children);
-        
-        phylaLayout.forEach(function(node, idx) {
-            var color = colors[idx % colors.length];
-            svgHtml += '<g class="treemap-node" data-name="' + node.name + '" data-count="' + node.value + '">';
-            svgHtml += '<rect class="treemap-rect" x="' + node.x + '" y="' + node.y + '" width="' + node.w + '" height="' + node.h + '" fill="' + color + '"></rect>';
-            
-            if (node.w > 40 && node.h > 30) {
-                var fontSize = Math.min(node.w / 6, node.h / 4, 14);
-                svgHtml += '<text class="treemap-label" x="' + (node.x + node.w/2) + '" y="' + (node.y + node.h/2 - 5) + '" style="font-size: ' + fontSize + 'px;" dominant-baseline="middle" text-anchor="middle">' + node.name + '</text>';
-                svgHtml += '<text class="treemap-sublabel" x="' + (node.x + node.w/2) + '" y="' + (node.y + node.h/2 + 10) + '" style="font-size: ' + (fontSize * 0.8) + 'px;" dominant-baseline="middle" text-anchor="middle">' + node.value + ' specimens</text>';
-            }
-            svgHtml += '<title>' + node.name + ': ' + node.value + ' specimens</title>';
-            svgHtml += '</g>';
-        });
-        
-        svgHtml += '</svg>';
-        
-        var statusHtml = '<div id="treemap-status" style="font-size: 0.7rem; color: var(--text-muted); margin-top: 0.5rem; text-align: center; display: ' + (isAutoFetching ? 'block' : 'none') + ';">Updating taxonomy...</div>';
-        
-        container.innerHTML = '<h3 class="chart-title" style="margin-bottom: 0.5rem; text-align: center;">Taxonomic Diversity (Treemap)</h3>' + 
-                             '<p style="font-size: 0.75rem; color: var(--text-muted); text-align: center; margin-bottom: 1.5rem;">Hierarchy: Phylum > Class > Order</p>' + 
-                             svgHtml + statusHtml;
     }
 };
 
