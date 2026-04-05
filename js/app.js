@@ -1075,24 +1075,30 @@ window.app = {
 
     toggleVisuals: function() {
         isStratColumnOpen = !isStratColumnOpen;
-        if (isStratColumnOpen) isDataInsightsOpen = false; // Close data if opening strat
+        if (isStratColumnOpen) {
+            isDataInsightsOpen = false;
+            isTreemapOpen = false;
+        }
 
         var btnStrat = document.getElementById('btn-toggle-visuals');
         var btnData = document.getElementById('btn-toggle-data');
+        var btnTreemap = document.getElementById('btn-toggle-treemap');
         if (btnStrat) btnStrat.classList.toggle('active', isStratColumnOpen);
         if (btnData) btnData.classList.remove('active');
+        if (btnTreemap) btnTreemap.classList.remove('active');
         
         var chartsContainer = document.getElementById('stats-charts-container');
         var stratContainer = document.getElementById('strat-column-container');
         var dataContainer = document.getElementById('data-insights-container');
+        var treemapContainer = document.getElementById('treemap-container');
         
         if (isStratColumnOpen) {
             if (chartsContainer) chartsContainer.style.display = 'none';
             if (stratContainer) stratContainer.style.display = 'block';
             if (dataContainer) dataContainer.style.display = 'none';
+            if (treemapContainer) treemapContainer.style.display = 'none';
         } else {
             if (chartsContainer) chartsContainer.style.display = 'flex';
-            if (stratContainer) stratContainer.style.display = 'none';
         }
         
         if (isStatsOpen) {
@@ -1100,19 +1106,6 @@ window.app = {
         }
     },
 
-    toggleData: function() {
-        isDataInsightsOpen = !isDataInsightsOpen;
-        if (isDataInsightsOpen) isStratColumnOpen = false; // Close strat if opening data
-
-        var btnData = document.getElementById('btn-toggle-data');
-        var btnStrat = document.getElementById('btn-toggle-visuals');
-        if (btnData) btnData.classList.toggle('active', isDataInsightsOpen);
-        if (btnStrat) btnStrat.classList.remove('active');
-        
-        var chartsContainer = document.getElementById('stats-charts-container');
-        var stratContainer = document.getElementById('strat-column-container');
-        var dataContainer = document.getElementById('data-insights-container');
-        
         if (isDataInsightsOpen) {
             if (chartsContainer) chartsContainer.style.display = 'none';
             if (stratContainer) stratContainer.style.display = 'none';
@@ -1123,6 +1116,10 @@ window.app = {
         }
         
         if (isStatsOpen) {
+            window.app.renderFossils();
+        }
+    },
+
             window.app.renderFossils();
         }
     },
@@ -2236,7 +2233,7 @@ window.app = {
                     if (isStratColumnOpen) {
                         window.app.renderStratigraphicColumn(filtered);
                     } else if (isDataInsightsOpen) {
-                        // Data Insights rendered above in this function
+                        // Logic is already handled above in the inline section
                     } else {
                         // Render Charts
                         try {
@@ -2626,6 +2623,144 @@ window.app = {
                 });
             }
         });
+    },
+
+    renderTaxonomyTreemap: function(filtered) {
+        var container = document.getElementById('treemap-container');
+        if (!container) return;
+
+        // --- 1. Aggregate Data ---
+        var hierarchy = { name: "Life", children: [] };
+        var phylaMap = {};
+
+        filtered.forEach(function(f) {
+            var tax = f.taxonomy || {};
+            var phylum = tax.phylum || f.category || "Unknown Phylum";
+            var className = tax.class || "Unknown Class";
+            var order = tax.order || "Unknown Order";
+
+            if (!phylaMap[phylum]) {
+                phylaMap[phylum] = { name: phylum, children: {}, value: 0 };
+                hierarchy.children.push(phylaMap[phylum]);
+            }
+            phylaMap[phylum].value++;
+
+            if (!phylaMap[phylum].children[className]) {
+                phylaMap[phylum].children[className] = { name: className, children: {}, value: 0 };
+            }
+            phylaMap[phylum].children[className].value++;
+
+            if (!phylaMap[phylum].children[className].children[order]) {
+                phylaMap[phylum].children[className].children[order] = { name: order, value: 0 };
+            }
+            phylaMap[phylum].children[className].children[order].value++;
+        });
+
+        // Flatten children maps to arrays
+        hierarchy.children.forEach(function(phy) {
+            var classes = [];
+            for (var cName in phy.children) {
+                var cls = phy.children[cName];
+                var orders = [];
+                for (var oName in cls.children) {
+                    orders.push(cls.children[oName]);
+                }
+                cls.children = orders;
+                classes.push(cls);
+            }
+            phy.children = classes;
+        });
+
+        // --- 2. Squarified Algorithm ---
+        function getSquarifiedLayout(rect, nodes) {
+            if (nodes.length === 0) return [];
+            
+            var totalValue = nodes.reduce(function(a, b) { return a + b.value; }, 0);
+            var sorted = nodes.slice().sort(function(a, b) { return b.value - a.value; });
+            var result = [];
+
+            function worst(row, side) {
+                if (row.length === 0) return Infinity;
+                var rMin = Math.min.apply(Math, row);
+                var rMax = Math.max.apply(Math, row);
+                var rSum = row.reduce(function(a, b) { return a + b; }, 0);
+                var s = rSum * rSum;
+                var w = side * side;
+                return Math.max((w * rMax) / s, s / (w * rMin));
+            }
+
+            function layoutRow(row, r, total) {
+                var isVertical = r.w < r.h;
+                var side = isVertical ? r.w : r.h;
+                var rowTotal = row.reduce(function(a, b) { return a + b.value; }, 0);
+                var thickness = (rowTotal / total) * (isVertical ? r.h : r.w);
+                
+                var offset = 0;
+                row.forEach(function(item) {
+                    var length = (item.value / rowTotal) * side;
+                    item.x = isVertical ? r.x + offset : r.x;
+                    item.y = isVertical ? r.y : r.y + offset;
+                    item.w = isVertical ? length : thickness;
+                    item.h = isVertical ? thickness : length;
+                    offset += length;
+                    result.push(item);
+                });
+                
+                if (isVertical) { r.y += thickness; r.h -= thickness; }
+                else { r.x += thickness; r.w -= thickness; }
+            }
+
+            var currentRect = { x: rect.x, y: rect.y, w: rect.w, h: rect.h };
+            var currentRow = [];
+            var remaining = sorted.slice();
+            
+            while (remaining.length > 0) {
+                var item = remaining[0];
+                var side = Math.min(currentRect.w, currentRect.h);
+                var rowValues = currentRow.map(function(d) { return d.value; });
+                
+                if (currentRow.length === 0 || worst(rowValues, side) >= worst(rowValues.concat(item.value), side)) {
+                    currentRow.push(remaining.shift());
+                } else {
+                    layoutRow(currentRow, currentRect, totalValue);
+                    currentRow = [];
+                }
+            }
+            if (currentRow.length > 0) layoutRow(currentRow, currentRect, totalValue);
+            return result;
+        }
+
+        // --- 3. Render SVG ---
+        var width = container.clientWidth - 40;
+        if (width <= 0) width = 800; // Fallback
+        var height = 500;
+        var svgHtml = '<svg class="treemap-svg" viewBox="0 0 ' + width + ' ' + height + '" preserveAspectRatio="xMidYMid meet">';
+        
+        var colors = ['#a878d0', '#6eb4f2', '#82c91e', '#fab005', '#fd7e14', '#fa5252', '#be4bdb', '#7950f2', '#228be6', '#12b886', '#40c057', '#82c91e'];
+        
+        var phylaLayout = getSquarifiedLayout({x: 0, y: 0, w: width, h: height}, hierarchy.children);
+        
+        phylaLayout.forEach(function(node, idx) {
+            var color = colors[idx % colors.length];
+            svgHtml += '<g class="treemap-node" data-name="' + node.name + '" data-count="' + node.value + '">';
+            svgHtml += '<rect class="treemap-rect" x="' + node.x + '" y="' + node.y + '" width="' + node.w + '" height="' + node.h + '" fill="' + color + '"></rect>';
+            
+            if (node.w > 40 && node.h > 30) {
+                var fontSize = Math.min(node.w / 6, node.h / 4, 14);
+                svgHtml += '<text class="treemap-label" x="' + (node.x + node.w/2) + '" y="' + (node.y + node.h/2 - 5) + '" style="font-size: ' + fontSize + 'px;" dominant-baseline="middle" text-anchor="middle">' + node.name + '</text>';
+                svgHtml += '<text class="treemap-sublabel" x="' + (node.x + node.w/2) + '" y="' + (node.y + node.h/2 + 10) + '" style="font-size: ' + (fontSize * 0.8) + 'px;" dominant-baseline="middle" text-anchor="middle">' + node.value + ' specimens</text>';
+            }
+            svgHtml += '<title>' + node.name + ': ' + node.value + ' specimens</title>';
+            svgHtml += '</g>';
+        });
+        
+        svgHtml += '</svg>';
+        
+        var statusHtml = '<div id="treemap-status" style="font-size: 0.7rem; color: var(--text-muted); margin-top: 0.5rem; text-align: center; display: ' + (isAutoFetching ? 'block' : 'none') + ';">Updating taxonomy...</div>';
+        
+        container.innerHTML = '<h3 class="chart-title" style="margin-bottom: 0.5rem; text-align: center;">Taxonomic Diversity (Treemap)</h3>' + 
+                             '<p style="font-size: 0.75rem; color: var(--text-muted); text-align: center; margin-bottom: 1.5rem;">Hierarchy: Phylum > Class > Order</p>' + 
+                             svgHtml + statusHtml;
     }
 };
 
