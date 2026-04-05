@@ -1643,6 +1643,56 @@ dialog::backdrop {
     background-image: repeating-linear-gradient(45deg, transparent, transparent 10px, rgba(255,255,255,0.02) 10px, rgba(255,255,255,0.02) 20px);
 }
 
+.strat-tooltip-trigger {
+    position: relative;
+    cursor: help;
+}
+
+.strat-tooltip-trigger:hover::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    bottom: 110%;
+    left: 50%;
+    transform: translateX(-50%) translateY(-10px);
+    background: var(--bg-surface);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    color: var(--text-primary);
+    padding: 0.9rem 1.3rem;
+    border-radius: var(--radius-md);
+    font-size: 0.875rem;
+    line-height: 1.6;
+    width: 340px;
+    box-shadow: var(--shadow-lg), 0 0 0 1px var(--border-color);
+    border: none;
+    z-index: 2000;
+    font-weight: 500;
+    pointer-events: none;
+    animation: tooltipFadeIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    white-space: normal;
+    text-align: left;
+    text-shadow: none;
+}
+
+@keyframes tooltipFadeIn {
+    from { opacity: 0; transform: translateX(-50%) translateY(0); }
+    to { opacity: 1; transform: translateX(-50%) translateY(-10px); }
+}
+
+.strat-tooltip-trigger:hover::before {
+    content: '';
+    position: absolute;
+    bottom: calc(110% - 10px);
+    left: 50%;
+    transform: translateX(-50%);
+    border: 10px solid transparent;
+    border-top-color: var(--bg-surface);
+    filter: drop-shadow(0 2px 2px rgba(0,0,0,0.1));
+    z-index: 2001;
+    pointer-events: none;
+    animation: fadeIn 0.3s ease forwards;
+}
+
 .strat-name {
     font-size: 0.95rem;
     text-shadow: 1px 1px 2px rgba(0,0,0,0.2);

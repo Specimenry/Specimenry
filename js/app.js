@@ -47,6 +47,24 @@ var PERIOD_AGES = {
     'Proterozoic': 541, 'Archean': 541, 'Hadean': 541
 };
 
+var GEOLOGICAL_CONTEXT = {
+    'Quaternary': "The Age of Humans. Glacial cycles and the rise of modern civilization.",
+    'Neogene': "The Rise of Grasslands. Mammals and birds continue to evolve into modern forms.",
+    'Paleogene': "The Dawn of Modern Mammals. Recovery from the K-Pg extinction, dense forests.",
+    'Cretaceous': "The Zenith of Dinosaurs. Flowering plants appear, ending with a massive asteroid impact.",
+    'Jurassic': "The Golden Age of Dinosaurs. Giant sauropods roam the land, first birds appear.",
+    'Triassic': "The Dawn of Dinosaurs. Earth recovers from the 'Great Dying', first mammals.",
+    'Permian': "The Age of Synapsids. Dense forests, single supercontinent Pangea, ended by the 'Great Dying'.",
+    'Carboniferous': "The Age of Coal. Giant insects, vast swamp forests, high oxygen levels.",
+    'Devonian': "The Age of Fishes. First forests appear, amphibians begin colonizing land.",
+    'Silurian': "The First Land Plants. Diversification of jawed fishes and reef-building corals.",
+    'Ordovician': "The Great Diversification. Massive marine radiation, first primitive plants on land.",
+    'Cambrian': "The Cambrian Explosion. Rapid appearance of most major animal groups.",
+    'Proterozoic': "The Rise of Complexity. Oxygenation of the atmosphere, first multicellular life.",
+    'Archean': "The Dawn of Life. Formation of Earth's crust, first single-celled organisms.",
+    'Hadean': "The Hellish Eon. Formation of the solar system, Earth cooling, early crust and oceans."
+};
+
 // Sorted longest-first so the matcher always prefers the most specific
 var COUNTRY_TO_ISO = {
     'afghanistan': 'af', 'albania': 'al', 'algeria': 'dz', 'andorra': 'ad', 'angola': 'ao',
@@ -2408,6 +2426,7 @@ window.app = {
                                 '</div>' +
                             '</div>' +
                         '</div>' +
+                        fullTimelineBlock +
                         getFullTaxonomyTray(f);
                 }
 
@@ -2479,7 +2498,10 @@ window.app = {
                 var textColor = isMissing ? 'var(--text-muted)' : '#ffffff';
                 var missingClass = isMissing ? ' strat-missing' : '';
                 
-                html += '<div class="strat-block' + missingClass + '" style="background-color: ' + bgColor + '; color: ' + textColor + ';" title="' + per + ': ' + count + ' specimens">';
+                var context = GEOLOGICAL_CONTEXT[per] || "";
+                var tooltipHTML = per + " — " + context + " (You have " + count + " specimens)";
+                
+                html += '<div class="strat-block' + missingClass + ' strat-tooltip-trigger" style="background-color: ' + bgColor + '; color: ' + textColor + ';" data-tooltip="' + escapeHtml(tooltipHTML) + '">';
                 html += '<span class="strat-name">' + per + '</span>';
                 if (!isMissing) {
                     html += '<span class="strat-count">' + count + '</span>';
