@@ -622,7 +622,7 @@ main {
 
 .wishlist-row {
     display: grid;
-    grid-template-columns: 48px 1fr auto auto;
+    grid-template-columns: 40px 64px 1fr auto auto;
     align-items: center;
     background: var(--bg-surface);
     border: 1px solid var(--border-color);
@@ -636,6 +636,22 @@ main {
     border-color: var(--accent);
     box-shadow: var(--shadow-sm);
     background: var(--bg-warm);
+}
+
+.wishlist-thumb {
+    width: 64px;
+    height: 64px;
+    border-radius: var(--radius-sm);
+    overflow: hidden;
+    flex-shrink: 0;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.wishlist-targets .badge {
+    font-size: 0.7rem;
+    font-weight: 700;
+    padding: 0.2rem 0.5rem;
+    border-radius: 4px;
 }
 
 .wishlist-check-container {
@@ -718,6 +734,12 @@ main {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
     gap: 1.5rem;
+    transition: backdrop-filter 0.8s ease, filter 0.8s ease;
+}
+
+.fossil-grid.sea-monster-scroll {
+    backdrop-filter: blur(1px) contrast(1.1);
+    -webkit-backdrop-filter: blur(1px) contrast(1.1);
 }
 
 /* --- Fossil Cards --- */
@@ -730,6 +752,40 @@ main {
     box-shadow: var(--shadow-sm);
     display: flex;
     flex-direction: column;
+    overflow: hidden; /* Important for the sonar ping */
+}
+
+/* Passive Sonar Ping Effect */
+.fossil-card::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 200px;
+    height: 200px;
+    margin-left: -100px;
+    margin-top: -100px;
+    border: 2px solid rgba(255, 60, 60, 0.6);
+    border-radius: 50%;
+    opacity: 0;
+    pointer-events: none;
+    z-index: 100;
+    transform: scale(0);
+}
+
+.fossil-card:hover::after {
+    animation: sonarPing 1.2s cubic-bezier(0.1, 0.8, 0.3, 1) forwards;
+}
+
+@keyframes sonarPing {
+    0% {
+        transform: scale(0);
+        opacity: 0.8;
+    }
+    100% {
+        transform: scale(4);
+        opacity: 0;
+    }
 }
 
 .fossil-card:hover {
@@ -2146,3 +2202,39 @@ dialog::backdrop {
     box-shadow: var(--shadow-md);
 }
 
+@media (max-width: 600px) {
+    .wishlist-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.75rem;
+        padding: 1rem;
+    }
+    .wishlist-check-container {
+        width: 100%;
+        justify-content: flex-start;
+        padding-bottom: 0.5rem;
+        border-bottom: 1px dashed var(--border-color);
+        margin-bottom: 0.25rem;
+    }
+    .wishlist-thumb {
+        width: 56px;
+        height: 56px;
+    }
+    .wishlist-info {
+        flex: 1;
+        min-width: 150px;
+    }
+    .wishlist-targets .badge {
+        font-size: 0.65rem;
+    }
+    .wishlist-row .card-actions {
+        width: 100%;
+        flex-direction: row !important;
+        justify-content: flex-end;
+        padding-top: 0.5rem;
+        padding-left: 0 !important;
+        margin-left: 0 !important;
+        border-left: none !important;
+        border-top: 1px solid var(--border-color);
+    }
+}

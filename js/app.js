@@ -2626,86 +2626,124 @@ window.app = {
                 // --- DATA INSIGHTS VIEW ---
                 var dataContainer = document.getElementById('data-insights-container');
                 if (dataContainer) {
-                    var avgSize = sizeCount > 0 ? (totalSizeCm / sizeCount).toFixed(2) : 0;
-                    var weightStr = totalWeight >= 1000 ? (totalWeight / 1000).toFixed(2) + ' kg' : totalWeight.toFixed(1) + ' g';
-                    
-                    // --- CALCULATE MISSING PERIODS ---
-                    var missingByEra = {};
-                    var totalMissing = 0;
-                    for (var era in PERIODS_AND_EPOCHS) {
-                        var eraMissing = [];
-                        for (var per in PERIODS_AND_EPOCHS[era]) {
-                            if (!periodCounts[per]) {
-                                eraMissing.push(per);
-                                totalMissing++;
+                    var dataHtml = '';
+
+                    if (currentView === 'true') {
+                        // Wishlist-Specific Data Insights
+                        var targetBudgetEst = totalEstSEK;
+                        var targetBudgetCost = totalCostSEK;
+                        var totalBudget = targetBudgetEst > 0 ? targetBudgetEst : targetBudgetCost;
+                        var missingCount = filtered.length;
+                        
+                        var topWantedCats = Object.entries(catCounts)
+                            .sort(function(a, b) { return b[1] - a[1]; })
+                            .slice(0, 4);
+
+                        dataHtml = '<div class="data-insights-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.5rem; padding: 1rem 0;">' +
+                                        // Budget Card
+                                        '<div class="data-card" style="background: var(--bg-warm); padding: 1.5rem; border-radius: 1rem; border: 1px solid var(--border-color); text-align: center; box-shadow: var(--shadow-sm);">' +
+                                            '<div style="color: var(--accent); margin-bottom: 0.5rem;"><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></div>' +
+                                            '<div style="font-size: 0.9rem; opacity: 0.7; font-weight: 600; text-transform: uppercase;">Total Target Budget</div>' +
+                                            '<div style="font-size: 2.25rem; font-weight: 800; color: var(--text-main); margin-top: 0.5rem;">' + Math.round(totalBudget).toLocaleString() + ' SEK</div>' +
+                                            '<div style="font-size: 0.8rem; opacity: 0.6; margin-top: 0.25rem;">For ' + missingCount + ' tracked specimens</div>' +
+                                        '</div>' +
+                                        // Most Wanted Card
+                                        '<div class="data-card" style="background: var(--bg-warm); padding: 1.5rem; border-radius: 1rem; border: 1px solid var(--border-color); text-align: left; box-shadow: var(--shadow-sm);">' +
+                                            '<div style="color: var(--accent); margin-bottom: 0.5rem;"><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg></div>' +
+                                            '<div style="font-size: 0.9rem; opacity: 0.7; font-weight: 600; text-transform: uppercase; margin-bottom: 1rem;">Most Wanted Categories</div>';
+                                            
+                                            topWantedCats.forEach(function(cat) {
+                                                dataHtml += '<div style="margin-bottom: 0.5rem; display: flex; justify-content: space-between; border-bottom: 1px dashed var(--border-color); padding-bottom: 0.25rem;">' +
+                                                                '<span style="font-weight: 600; opacity: 0.8;">' + cat[0] + '</span>' +
+                                                                '<span class="badge badge-wishlist">' + cat[1] + '</span>' +
+                                                            '</div>';
+                                            });
+                                            if (topWantedCats.length === 0) dataHtml += '<div style="font-size: 0.85rem; opacity: 0.6;">No categories found.</div>';
+                                            
+                        dataHtml +=     '</div></div>';
+                    } else {
+                        // Standard Collection Data Insights
+                        var avgSize = sizeCount > 0 ? (totalSizeCm / sizeCount).toFixed(2) : 0;
+                        var weightStr = totalWeight >= 1000 ? (totalWeight / 1000).toFixed(2) + ' kg' : totalWeight.toFixed(1) + ' g';
+                        
+                        // --- CALCULATE MISSING PERIODS ---
+                        var missingByEra = {};
+                        var totalMissing = 0;
+                        for (var era in PERIODS_AND_EPOCHS) {
+                            var eraMissing = [];
+                            for (var per in PERIODS_AND_EPOCHS[era]) {
+                                if (!periodCounts[per]) {
+                                    eraMissing.push(per);
+                                    totalMissing++;
+                                }
+                            }
+                            if (eraMissing.length > 0) {
+                                missingByEra[era] = eraMissing;
                             }
                         }
-                        if (eraMissing.length > 0) {
-                            missingByEra[era] = eraMissing;
-                        }
+
+                        // --- CALCULATE TOP TAGS ---
+                        var topTags = Object.entries(tagCounts)
+                            .sort(function(a, b) { return b[1] - a[1]; })
+                            .slice(0, 8);
+
+                        dataHtml = '<div class="data-insights-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.5rem; padding: 1rem 0;">' +
+                                        // Weight Card
+                                        '<div class="data-card" style="background: var(--bg-warm); padding: 1.5rem; border-radius: 1rem; border: 1px solid var(--border-color); text-align: center; box-shadow: var(--shadow-sm);">' +
+                                            '<div style="color: var(--accent); margin-bottom: 0.5rem;"><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg></div>' +
+                                            '<div style="font-size: 0.9rem; opacity: 0.7; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;">Total Collection Weight</div>' +
+                                            '<div style="font-size: 2.25rem; font-weight: 800; color: var(--text-main); margin-top: 0.5rem;">' + weightStr + '</div>' +
+                                            '<div style="font-size: 0.8rem; opacity: 0.6; margin-top: 0.25rem;">From ' + weightCount + ' weighed specimens</div>' +
+                                        '</div>' +
+                                        // Size Card
+                                        '<div class="data-card" style="background: var(--bg-warm); padding: 1.5rem; border-radius: 1rem; border: 1px solid var(--border-color); text-align: center; box-shadow: var(--shadow-sm);">' +
+                                            '<div style="color: var(--accent); margin-bottom: 0.5rem;"><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg></div>' +
+                                            '<div style="font-size: 0.9rem; opacity: 0.7; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;">Average Specimen Size</div>' +
+                                            '<div style="font-size: 2.25rem; font-weight: 800; color: var(--text-main); margin-top: 0.5rem;">' + avgSize + ' cm</div>' +
+                                            '<div style="font-size: 0.8rem; opacity: 0.6; margin-top: 0.25rem;">Based on ' + sizeCount + ' measured specimens</div>' +
+                                        '</div>' +
+                                        // Missing Periods Card
+                                        '<div class="data-card" style="background: var(--bg-warm); padding: 1.5rem; border-radius: 1rem; border: 1px solid var(--border-color); text-align: left; box-shadow: var(--shadow-sm);">' +
+                                            '<div style="color: var(--danger); margin-bottom: 0.5rem;"><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></div>' +
+                                            '<div style="font-size: 0.9rem; opacity: 0.7; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;">Lacking Fossils From</div>' +
+                                            '<div style="margin-top: 1rem; max-height: 120px; overflow-y: auto; padding-right: 0.5rem;">';
+                                            
+                                            for (var era in missingByEra) {
+                                                dataHtml += '<div style="margin-bottom: 0.5rem;">' +
+                                                                '<div style="font-size: 0.7rem; font-weight: 800; color: var(--accent); text-transform: uppercase; margin-bottom: 0.25rem;">' + era + '</div>' +
+                                                                '<div style="font-size: 0.85rem; color: var(--text-primary); opacity: 0.9;">' + missingByEra[era].join(', ') + '</div>' +
+                                                            '</div>';
+                                            }
+                                            if (totalMissing === 0) {
+                                                dataHtml += '<div style="font-size: 0.85rem; color: #439775; font-weight: 600;">You collection is geologically complete!</div>';
+                                            }
+
+                        dataHtml +=         '</div>' +
+                                        '</div>' +
+                                        // Top Tags Card
+                                        '<div class="data-card" style="background: var(--bg-warm); padding: 1.5rem; border-radius: 1rem; border: 1px solid var(--border-color); text-align: left; box-shadow: var(--shadow-sm);">' +
+                                            '<div style="color: var(--accent); margin-bottom: 0.5rem;"><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg></div>' +
+                                            '<div style="font-size: 0.9rem; opacity: 0.7; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;">Most Frequent Tags</div>' +
+                                            '<div style="margin-top: 1rem; display: flex; flex-wrap: wrap; gap: 0.5rem;">';
+                                            
+                                            topTags.forEach(function(tagPair) {
+                                                dataHtml += '<span class="tag-pill" style="margin: 0; background: var(--bg-surface); border: 1px solid var(--border-color); cursor: pointer;" onclick="document.getElementById(\'search\').value = \'#' + tagPair[0] + '\'; app.renderFossils();">#' + tagPair[0] + ' <small style="opacity: 0.6; margin-left: 2px;">' + tagPair[1] + '</small></span>';
+                                            });
+                                            if (topTags.length === 0) {
+                                                dataHtml += '<div style="font-size: 0.85rem; opacity: 0.6;">No tags used yet.</div>';
+                                            }
+
+                        dataHtml +=         '</div>' +
+                                        '</div>' +
+                                        // Batch Fetch Etymology Card
+                                        '<div class="data-card" style="background: var(--bg-warm); padding: 1.5rem; border-radius: 1rem; border: 1px solid var(--border-color); text-align: center; box-shadow: var(--shadow-sm); display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 0.75rem;">' +
+                                            '<div style="color: var(--accent);"><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg></div>' +
+                                            '<div style="font-size: 0.9rem; opacity: 0.7; font-weight: 600; text-transform: uppercase;">Missing Translations</div>' +
+                                            '<div style="font-size: 1.5rem; font-weight: 800; color: var(--text-main);">' + fossils.filter(function(f){return !f.etymology;}).length + '</div>' +
+                                            '<button type="button" class="btn-primary" onclick="app.batchFetchEtymologies()" style="font-size: 0.75rem; padding: 0.4rem 0.8rem; width: 100%;">Fetch All from Wikipedia</button>' +
+                                        '</div>' +
+                                       '</div>';
                     }
-
-                    // --- CALCULATE TOP TAGS ---
-                    var topTags = Object.entries(tagCounts)
-                        .sort(function(a, b) { return b[1] - a[1]; })
-                        .slice(0, 8);
-
-                    var dataHtml = '<div class="data-insights-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.5rem; padding: 1rem 0;">' +
-                                    // Weight Card
-                                    '<div class="data-card" style="background: var(--bg-warm); padding: 1.5rem; border-radius: 1rem; border: 1px solid var(--border-color); text-align: center; box-shadow: var(--shadow-sm);">' +
-                                        '<div style="color: var(--accent); margin-bottom: 0.5rem;"><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg></div>' +
-                                        '<div style="font-size: 0.9rem; opacity: 0.7; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;">Total Collection Weight</div>' +
-                                        '<div style="font-size: 2.25rem; font-weight: 800; color: var(--text-main); margin-top: 0.5rem;">' + weightStr + '</div>' +
-                                        '<div style="font-size: 0.8rem; opacity: 0.6; margin-top: 0.25rem;">From ' + weightCount + ' weighed specimens</div>' +
-                                    '</div>' +
-                                    // Size Card
-                                    '<div class="data-card" style="background: var(--bg-warm); padding: 1.5rem; border-radius: 1rem; border: 1px solid var(--border-color); text-align: center; box-shadow: var(--shadow-sm);">' +
-                                        '<div style="color: var(--accent); margin-bottom: 0.5rem;"><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg></div>' +
-                                        '<div style="font-size: 0.9rem; opacity: 0.7; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;">Average Specimen Size</div>' +
-                                        '<div style="font-size: 2.25rem; font-weight: 800; color: var(--text-main); margin-top: 0.5rem;">' + avgSize + ' cm</div>' +
-                                        '<div style="font-size: 0.8rem; opacity: 0.6; margin-top: 0.25rem;">Based on ' + sizeCount + ' measured specimens</div>' +
-                                    '</div>' +
-                                    // Missing Periods Card
-                                    '<div class="data-card" style="background: var(--bg-warm); padding: 1.5rem; border-radius: 1rem; border: 1px solid var(--border-color); text-align: left; box-shadow: var(--shadow-sm);">' +
-                                        '<div style="color: var(--danger); margin-bottom: 0.5rem;"><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></div>' +
-                                        '<div style="font-size: 0.9rem; opacity: 0.7; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;">Lacking Fossils From</div>' +
-                                        '<div style="margin-top: 1rem; max-height: 120px; overflow-y: auto; padding-right: 0.5rem;">';
-                                        
-                                        for (var era in missingByEra) {
-                                            dataHtml += '<div style="margin-bottom: 0.5rem;">' +
-                                                            '<div style="font-size: 0.7rem; font-weight: 800; color: var(--accent); text-transform: uppercase; margin-bottom: 0.25rem;">' + era + '</div>' +
-                                                            '<div style="font-size: 0.85rem; color: var(--text-primary); opacity: 0.9;">' + missingByEra[era].join(', ') + '</div>' +
-                                                        '</div>';
-                                        }
-                                        if (totalMissing === 0) {
-                                            dataHtml += '<div style="font-size: 0.85rem; color: #439775; font-weight: 600;">You collection is geologically complete!</div>';
-                                        }
-
-                    dataHtml +=         '</div>' +
-                                    '</div>' +
-                                    // Top Tags Card
-                                    '<div class="data-card" style="background: var(--bg-warm); padding: 1.5rem; border-radius: 1rem; border: 1px solid var(--border-color); text-align: left; box-shadow: var(--shadow-sm);">' +
-                                        '<div style="color: var(--accent); margin-bottom: 0.5rem;"><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg></div>' +
-                                        '<div style="font-size: 0.9rem; opacity: 0.7; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;">Most Frequent Tags</div>' +
-                                        '<div style="margin-top: 1rem; display: flex; flex-wrap: wrap; gap: 0.5rem;">';
-                                        
-                                        topTags.forEach(function(tagPair) {
-                                            dataHtml += '<span class="tag-pill" style="margin: 0; background: var(--bg-surface); border: 1px solid var(--border-color); cursor: pointer;" onclick="document.getElementById(\'search\').value = \'#' + tagPair[0] + '\'; app.renderFossils();">#' + tagPair[0] + ' <small style="opacity: 0.6; margin-left: 2px;">' + tagPair[1] + '</small></span>';
-                                        });
-                                        if (topTags.length === 0) {
-                                            dataHtml += '<div style="font-size: 0.85rem; opacity: 0.6;">No tags used yet.</div>';
-                                        }
-
-                    dataHtml +=         '</div>' +
-                                    '</div>' +
-                                    // Batch Fetch Etymology Card
-                                    '<div class="data-card" style="background: var(--bg-warm); padding: 1.5rem; border-radius: 1rem; border: 1px solid var(--border-color); text-align: center; box-shadow: var(--shadow-sm); display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 0.75rem;">' +
-                                        '<div style="color: var(--accent);"><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg></div>' +
-                                        '<div style="font-size: 0.9rem; opacity: 0.7; font-weight: 600; text-transform: uppercase;">Missing Translations</div>' +
-                                        '<div style="font-size: 1.5rem; font-weight: 800; color: var(--text-main);">' + fossils.filter(function(f){return !f.etymology;}).length + '</div>' +
-                                        '<button type="button" class="btn-primary" onclick="app.batchFetchEtymologies()" style="font-size: 0.75rem; padding: 0.4rem 0.8rem; width: 100%;">Fetch All from Wikipedia</button>' +
-                                    '</div>' +
-                                   '</div>';
                     dataContainer.innerHTML = dataHtml;
                 }
 
@@ -2810,19 +2848,55 @@ window.app = {
                 if (wlQ) {
                     // WISHLIST CHECKLIST VIEW
                     card.className = 'wishlist-row';
-                    var linkHtml = f.sourceUrl ? '<a href="' + f.sourceUrl + '" target="_blank" class="btn-link" title="Open Source Link"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg> Source</a>' : '';
                     
+                    // Trigger async fetch for source thumbnail if needed
+                    if ((!f.images || f.images.length === 0) && f.sourceUrl && !f.sourceThumb && !f.sourceThumbFailed) {
+                        window.app.fetchSourceThumb(f);
+                    }
+                    
+                    var thumbUrl = (f.images && f.images.length > 0) ? f.images[0] : (f.sourceThumb || null);
+                    if (!thumbUrl && f.sourceUrl) {
+                        try {
+                            var sUrl = new URL(f.sourceUrl);
+                            thumbUrl = 'https://t3.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=' + sUrl.protocol + '//' + sUrl.hostname + '&size=64';
+                        } catch(e) {}
+                    }
+
+                    var thumbHtml = '';
+                    if (thumbUrl) {
+                        thumbHtml = '<div class="wishlist-thumb"><img src="' + thumbUrl + '" alt="Thumbnail" loading="lazy" style="width: 100%; height: 100%; object-fit: cover;"></div>';
+                    } else {
+                        thumbHtml = '<div class="wishlist-thumb placeholder" style="display: flex; align-items: center; justify-content: center; background: var(--bg-surface);"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" opacity="0.4" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg></div>';
+                    }
+
+                    var linkHtml = f.sourceUrl ? '<a href="' + f.sourceUrl + '" target="_blank" class="btn-primary btn-sm" title="Open Source Link" style="white-space: nowrap; font-size: 0.75rem; padding: 0.4rem 0.7rem; border-radius: 2rem;"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="margin-right:0.25rem;"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="4"/><line x1="21.17" y1="8" x2="12" y2="8"/><line x1="3.95" y1="6.06" x2="8.54" y2="14"/><line x1="10.88" y1="21.94" x2="15.46" y2="14"/></svg> Hunt</a>' : '';
+
+                    var priceTarget = '';
+                    if (f.price > 0 || f.estimatedValue > 0) {
+                        var val = f.price > 0 ? f.price : f.estimatedValue;
+                        var curr = f.price > 0 ? (f.currency || 'USD') : (f.estimatedCurrency || 'USD');
+                        priceTarget = '<span class="badge badge-price" style="background: rgba(107, 93, 77, 0.1); color: #6b5d4d;">Price Target: ' + val.toLocaleString() + ' ' + curr + '</span>';
+                    }
+
+                    var sizeTarget = '';
+                    if (f.size > 0) {
+                        sizeTarget = '<span class="badge badge-size" style="background: rgba(58, 143, 183, 0.1); color: #3a8fb7;"><svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:2px; display:inline-block;"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg> Target Size: ' + f.size + ' ' + (f.sizeUnit || 'cm') + '</span>';
+                    }
+
                     cardInnerHtml = 
                         '<div class="wishlist-check-container">' +
                             '<input type="checkbox" class="wishlist-checkbox" title="Mark as Found" onchange="app.markAsFound(event, \'' + f.id + '\', \'' + escapeHtml(f.specimen) + '\')">' +
                         '</div>' +
+                        thumbHtml +
                         '<div class="wishlist-info">' +
                             '<h3 class="wishlist-title">' + annotateSpecimenName(f.specimen, f) + '</h3>' +
                             '<div class="wishlist-meta">' +
                                 '<span class="badge badge-wishlist">' + escapeHtml(f.category) + '</span>' +
+                                ((f.anatomy && f.anatomy.length > 0) ? '<span>&middot; ' + escapeHtml(f.anatomy) + '</span>' : '') +
                                 (f.geologicalPeriod ? '<span>&middot; ' + escapeHtml(f.geologicalPeriod) + '</span>' : '') +
                                 (f.location || f.country ? '<span>&middot; ' + escapeHtml(f.location || f.country) + '</span>' : '') +
                             '</div>' +
+                            ((priceTarget || sizeTarget) ? '<div class="wishlist-targets" style="display: flex; gap: 0.35rem; flex-wrap: wrap; margin-top: 0.35rem;">' + priceTarget + sizeTarget + '</div>' : '') + 
                         '</div>' +
                         '<div class="wishlist-actions">' +
                             linkHtml +
@@ -3237,6 +3311,53 @@ window.app = {
                              svgHtml + statusHtml;
     },
 
+    fetchSourceThumb: function(f) {
+        if (!f.sourceUrl || f.sourceThumb || f.sourceThumbFailed) return;
+        
+        f.sourceThumbFailed = true; // Set to prevent concurrent fetches
+        
+        var proxyUrl = 'https://api.allorigins.win/get?url=' + encodeURIComponent(f.sourceUrl);
+        
+        fetch(proxyUrl)
+            .then(function(response) {
+                if (response.ok) return response.json();
+                throw new Error('Network response was not ok.');
+            })
+            .then(function(data) {
+                if (!data || !data.contents) return;
+                var html = data.contents;
+                
+                // Extremely simple regex to parse og:image
+                var match = html.match(/<meta[^>]*property=['"]og:image['"][^>]*content=['"]([^'"]+)['"]/i) || 
+                            html.match(/<meta[^>]*content=['"]([^'"]+)['"][^>]*property=['"]og:image['"]/i) ||
+                            html.match(/<meta[^>]*name=['"]twitter:image['"][^>]*content=['"]([^'"]+)['"]/i);
+                            
+                if (match && match[1]) {
+                    var imgUrl = match[1];
+                    // Handle relative URLs
+                    if (imgUrl.startsWith('/')) {
+                        var urlObj = new URL(f.sourceUrl);
+                        imgUrl = urlObj.protocol + '//' + urlObj.host + imgUrl;
+                    }
+                    
+                    // Avoid data URIs being too large to store or invalid strings
+                    if (imgUrl.startsWith('http')) {
+                        delete f.sourceThumbFailed;
+                        f.sourceThumb = imgUrl;
+                        updateFossil(f).then(function() {
+                            // Re-render if we are in wishlist view
+                            if (currentView === 'true') {
+                                window.app.renderFossils();
+                            }
+                        });
+                    }
+                }
+            })
+            .catch(function(error) {
+                console.warn('Could not fetch source thumb for:', f.specimen, error);
+            });
+    },
+
     importCSV: function(event) {
         var file = event.target.files[0];
         if (!file) return;
@@ -3592,5 +3713,18 @@ function optimizeExistingDatabase() {
     });
 }
 
-
-
+// =========================================================================
+// SEA MONSTERS - THEME EFFECTS
+// =========================================================================
+var seaMonsterScrollTimeout;
+window.addEventListener('scroll', function() {
+    var grid = document.getElementById('fossil-grid');
+    if (!grid) return;
+    
+    grid.classList.add('sea-monster-scroll');
+    
+    clearTimeout(seaMonsterScrollTimeout);
+    seaMonsterScrollTimeout = setTimeout(function() {
+        grid.classList.remove('sea-monster-scroll');
+    }, 150);
+});
