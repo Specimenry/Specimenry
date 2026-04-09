@@ -2908,6 +2908,21 @@ window.app = {
                 } else {
                     // STANDARD COLLECTION CARD VIEW
                     card.className = 'fossil-card';
+                    if (f.geologicalPeriod) {
+                        var pLowCard = f.geologicalPeriod.toLowerCase();
+                        if (pLowCard.indexOf('ordovician') !== -1) card.classList.add('period-ordovician');
+                        else if (pLowCard.indexOf('cambrian') !== -1) card.classList.add('period-cambrian');
+                        else if (pLowCard.indexOf('silurian') !== -1) card.classList.add('period-silurian');
+                        else if (pLowCard.indexOf('devonian') !== -1) card.classList.add('period-devonian');
+                        else if (pLowCard.indexOf('carboniferous') !== -1) card.classList.add('period-carboniferous');
+                        else if (pLowCard.indexOf('permian') !== -1) card.classList.add('period-permian');
+                        else if (pLowCard.indexOf('triassic') !== -1) card.classList.add('period-triassic');
+                        else if (pLowCard.indexOf('jurassic') !== -1) card.classList.add('period-jurassic');
+                        else if (pLowCard.indexOf('cretaceous') !== -1) card.classList.add('period-cretaceous');
+                        else if (pLowCard.indexOf('paleogene') !== -1) card.classList.add('period-paleogene');
+                        else if (pLowCard.indexOf('neogene') !== -1) card.classList.add('period-neogene');
+                        else if (pLowCard.indexOf('quaternary') !== -1) card.classList.add('period-quaternary');
+                    }
                     var hasImage = f.images && f.images.length > 0;
                     var multipleImages = f.images && f.images.length > 1;
                     
