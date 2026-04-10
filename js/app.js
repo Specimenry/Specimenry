@@ -2403,19 +2403,41 @@ window.app = {
                 return f.price;
             };
 
-            filtered.sort(function(a, b) {
-                switch (sortQ) {
-                    case 'name-asc':   return (a.specimen || '').localeCompare(b.specimen || '');
-                    case 'name-desc':  return (b.specimen || '').localeCompare(a.specimen || '');
-                    case 'age-asc':    return (a.ageMa || 0) - (b.ageMa || 0);
-                    case 'age-desc':   return (b.ageMa || 0) - (a.ageMa || 0);
-                    case 'price-asc':  return toSEK(a) - toSEK(b);
-                    case 'price-desc': return toSEK(b) - toSEK(a);
-                    case 'oldest':     return (a.createdAt || 0) - (b.createdAt || 0);
-                    case 'newest':
-                    default:           return (b.createdAt || 0) - (a.createdAt || 0);
+            if (wlQ) {
+                var maxRank = 0;
+                var unassigned = [];
+                filtered.forEach(function(f) {
+                    if (typeof f.wishlistRank === 'number') {
+                        if (f.wishlistRank > maxRank) maxRank = f.wishlistRank;
+                    } else {
+                        unassigned.push(f);
+                    }
+                });
+                if (unassigned.length > 0) {
+                    unassigned.forEach(function(f) {
+                        maxRank++;
+                        f.wishlistRank = maxRank;
+                        updateFossil(f);
+                    });
                 }
-            });
+                filtered.sort(function(a, b) {
+                    return a.wishlistRank - b.wishlistRank;
+                });
+            } else {
+                filtered.sort(function(a, b) {
+                    switch (sortQ) {
+                        case 'name-asc':   return (a.specimen || '').localeCompare(b.specimen || '');
+                        case 'name-desc':  return (b.specimen || '').localeCompare(a.specimen || '');
+                        case 'age-asc':    return (a.ageMa || 0) - (b.ageMa || 0);
+                        case 'age-desc':   return (b.ageMa || 0) - (a.ageMa || 0);
+                        case 'price-asc':  return toSEK(a) - toSEK(b);
+                        case 'price-desc': return toSEK(b) - toSEK(a);
+                        case 'oldest':     return (a.createdAt || 0) - (b.createdAt || 0);
+                        case 'newest':
+                        default:           return (b.createdAt || 0) - (a.createdAt || 0);
+                    }
+                });
+            }
 
             // --- STATS DASHBOARD ---
             var statsContainer = document.getElementById('stats-summary');
@@ -2884,7 +2906,8 @@ window.app = {
                     }
 
                     cardInnerHtml = 
-                        '<div class="wishlist-check-container">' +
+                        '<div class="wishlist-check-container" style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.2rem; cursor: grab; padding-left: 0.5rem;" title="Drag to reorder">' +
+                            '<div style="font-size: 0.85rem; font-weight: 800; color: var(--accent); opacity: 0.8;">#' + f.wishlistRank + '</div>' +
                             '<input type="checkbox" class="wishlist-checkbox" title="Mark as Found" onchange="app.markAsFound(event, \'' + f.id + '\', \'' + escapeHtml(f.specimen) + '\')">' +
                         '</div>' +
                         thumbHtml +
@@ -2902,6 +2925,7 @@ window.app = {
                             linkHtml +
                         '</div>' +
                         '<div class="card-actions">' +
+                            '<button class="btn-copy" title="Copy Specimen Name" onclick="app.copySpecimenName(&quot;' + escapeHtml(f.specimen).replace(/"/g, '&quot;') + '&quot;)"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>' +
                             '<button title="Edit" onclick="app.openModal(\'' + f.id + '\')"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>' +
                             '<button class="btn-delete" title="Delete" onclick="app.deleteFossilItem(\'' + f.id + '\')"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>' +
                         '</div>';
@@ -3020,6 +3044,16 @@ window.app = {
                         getFullTaxonomyTray(f);
                 }
 
+                if (wlQ) {
+                    card.draggable = true;
+                    card.addEventListener('dragstart', window.app.handleDragStart);
+                    card.addEventListener('dragover', window.app.handleDragOver);
+                    card.addEventListener('dragenter', window.app.handleDragEnter);
+                    card.addEventListener('dragleave', window.app.handleDragLeave);
+                    card.addEventListener('drop', window.app.handleDrop);
+                    card.addEventListener('dragend', window.app.handleDragEnd);
+                }
+
                 card.innerHTML = cardInnerHtml;
                 fragment.appendChild(card);
             });
@@ -3027,6 +3061,89 @@ window.app = {
             grid.innerHTML = ''; // Batch clear
             grid.appendChild(fragment); // Batch append
         });
+    },
+    draggedFossilId: null,
+
+    handleDragStart: function(e) {
+        window.app.draggedFossilId = this.getAttribute('data-id');
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/plain', window.app.draggedFossilId);
+        this.classList.add('dragging');
+    },
+
+    handleDragOver: function(e) {
+        if (e.preventDefault) {
+            e.preventDefault();
+        }
+        e.dataTransfer.dropEffect = 'move';
+        return false;
+    },
+
+    handleDragEnter: function(e) {
+        this.classList.add('drag-over');
+    },
+
+    handleDragLeave: function(e) {
+        this.classList.remove('drag-over');
+    },
+
+    handleDrop: function(e) {
+        if (e.stopPropagation) {
+            e.stopPropagation();
+        }
+        this.classList.remove('drag-over');
+        
+        var draggedId = window.app.draggedFossilId;
+        var targetId = this.getAttribute('data-id');
+        
+        if (draggedId !== targetId && draggedId) {
+            var grid = document.getElementById('fossil-grid');
+            var rows = Array.from(grid.querySelectorAll('.wishlist-row'));
+            
+            var draggedIndex = rows.findIndex(function(row) { return row.getAttribute('data-id') === draggedId; });
+            var targetIndex = rows.findIndex(function(row) { return row.getAttribute('data-id') === targetId; });
+            
+            if (draggedIndex < 0 || targetIndex < 0) return false;
+            
+            var draggedRow = rows.splice(draggedIndex, 1)[0];
+            rows.splice(targetIndex, 0, draggedRow);
+            
+            grid.innerHTML = '';
+            rows.forEach(function(row) { grid.appendChild(row); });
+            
+            var updates = [];
+            rows.forEach(function(row, index) {
+                var id = row.getAttribute('data-id');
+                var f = fossils.find(function(x) { return x.id === id; });
+                if (f && f.wishlistRank !== index + 1) {
+                    f.wishlistRank = index + 1;
+                    updates.push(updateFossil(f));
+                }
+            });
+            
+            Promise.all(updates).then(function() {
+                window.app.renderFossils();
+            });
+        }
+        return false;
+    },
+
+    handleDragEnd: function(e) {
+        this.classList.remove('dragging');
+        var cols = document.querySelectorAll('.wishlist-row');
+        [].forEach.call(cols, function (col) {
+            col.classList.remove('drag-over');
+        });
+    },
+
+    copySpecimenName: function(name) {
+        if (navigator.clipboard) {
+            navigator.clipboard.writeText(name).then(function() {
+                if (window.app.showToast) {
+                    window.app.showToast('Copied: ' + name, 2000);
+                }
+            });
+        }
     },
 
     markAsFound: function(event, id, specimenName) {

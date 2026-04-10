@@ -638,6 +638,15 @@ main {
     background: var(--bg-warm);
 }
 
+.wishlist-row.dragging {
+    opacity: 0.4;
+    border: 2px dashed var(--accent);
+}
+
+.wishlist-row.drag-over {
+    border-top: 2px solid var(--accent);
+}
+
 .wishlist-thumb {
     width: 64px;
     height: 64px;
