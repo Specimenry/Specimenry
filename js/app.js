@@ -1106,7 +1106,12 @@ var renderFossilsDebounced = debounce(function() {
 var isDataInsightsOpen = false;
 var isTreemapOpen = false;
 var isEarthHistoryOpen = false;
+var isFossilMapOpen = false;
+var leafletMapInstance = null;
+var leafletMarkerGroup = null;
+var leafletActiveTileLayer = null;
 var isAutoFetching = false;
+var newlyAddedFossilId = null;
 var chartCountry = null;
 var chartPeriod = null;
 var exchangeRates = null;
@@ -1246,6 +1251,121 @@ document.addEventListener('keydown', function(e) {
     else if (e.key === 'ArrowDown') { e.preventDefault(); window.app.lightboxFossilNav(1); }
 });
 
+function getEraColor(period) {
+    if (!period) return '#4a5568';
+    var p = period.trim().toLowerCase();
+    if (p === 'quaternary' || p === 'neogene' || p === 'paleogene') return '#319795'; // Teal
+    if (p === 'cretaceous' || p === 'jurassic' || p === 'triassic') return '#dd6b20'; // Orange
+    if (p === 'permian' || p === 'carboniferous' || p === 'devonian' || p === 'silurian' || p === 'ordovician' || p === 'cambrian') return '#2b6cb0'; // Blue
+    return '#4a5568'; // Grey
+}
+
+function getSmartGeocodeQueries(location, formation, country) {
+    var loc = (location || '').trim();
+    var form = (formation || '').trim();
+    var cntry = (country || '').trim();
+    
+    function clean(str) {
+        if (!str) return '';
+        var parts = str.split(/\b(?:or|and|\/)\b/i);
+        var firstPart = parts[0].trim();
+        
+        var cleanStr = firstPart
+            .replace(/\b(?:formation|beds|group|member|fossils?|quarries?|pits?|deposits?|sites?|areas?|regions?|limestones?|shales?|clays?|sands?|beds?)\b/gi, '')
+            .replace(/\s+/g, ' ')
+            .trim();
+            
+        return cleanStr;
+    }
+    
+    var cleanLoc = clean(loc);
+    var cleanForm = clean(form);
+    var cleanCountry = cntry;
+    
+    var queries = [];
+    
+    if (cleanLoc && cleanForm && cleanCountry) {
+        queries.push(cleanLoc + ', ' + cleanForm + ', ' + cleanCountry);
+    }
+    if (cleanLoc && cleanCountry) {
+        queries.push(cleanLoc + ', ' + cleanCountry);
+    }
+    if (cleanForm && cleanCountry) {
+        queries.push(cleanForm + ', ' + cleanCountry);
+    }
+    if (cleanLoc) {
+        queries.push(cleanLoc);
+    }
+    if (cleanForm) {
+        queries.push(cleanForm);
+    }
+    if (cleanCountry) {
+        queries.push(cleanCountry);
+    }
+    
+    return queries.filter(function(q, index) {
+        return queries.indexOf(q) === index && q.trim().length > 0;
+    });
+}
+
+function trySmartGeocode(queries, index, onSuccess, onFailure) {
+    if (index >= queries.length) {
+        onFailure();
+        return;
+    }
+    
+    var query = queries[index];
+    var url = 'https://nominatim.openstreetmap.org/search?format=json&q=' + encodeURIComponent(query) + '&email=fossilarchiveapp@gmail.com';
+    
+    fetch(url, { headers: { 'Accept': 'application/json' } })
+        .then(function(res) { return res.json(); })
+        .then(function(data) {
+            if (data && data.length > 0) {
+                onSuccess(data[0], query);
+            } else {
+                setTimeout(function() {
+                    trySmartGeocode(queries, index + 1, onSuccess, onFailure);
+                }, 1300);
+            }
+        })
+        .catch(function(err) {
+            console.error('Geocoding error for query: ' + query, err);
+            setTimeout(function() {
+                trySmartGeocode(queries, index + 1, onSuccess, onFailure);
+            }, 1300);
+        });
+}
+
+async function fetchSmartCoordinates(location, formation, country) {
+    var queries = getSmartGeocodeQueries(location, formation, country);
+    if (queries.length === 0) return null;
+    
+    for (var i = 0; i < queries.length; i++) {
+        var query = queries[i];
+        try {
+            var url = 'https://nominatim.openstreetmap.org/search?format=json&q=' + encodeURIComponent(query) + '&email=fossilarchiveapp@gmail.com';
+            var response = await fetch(url, { headers: { 'Accept': 'application/json' } });
+            var data = await response.json();
+            
+            if (data && data.length > 0) {
+                return {
+                    lat: parseFloat(data[0].lat),
+                    lng: parseFloat(data[0].lon),
+                    query: query
+                };
+            }
+        } catch (err) {
+            console.error('Batch geocoding error for query: ' + query, err);
+        }
+        
+        // Strict 1300ms delay between fallbacks to respect Nominatim limits
+        if (i < queries.length - 1) {
+            await new Promise(function(resolve) { setTimeout(resolve, 1300); });
+        }
+    }
+    return null;
+}
+
 // =========================================================================
 // APP METHODS — attached to window.app for inline HTML handlers
 // =========================================================================
@@ -1316,6 +1436,20 @@ window.app = {
             document.documentElement.setAttribute('data-theme', 'dark');
             localStorage.setItem('oceanic_theme', 'dark');
             if (icon) icon.innerHTML = '<circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>';
+        }
+
+        if (leafletMapInstance && leafletActiveTileLayer) {
+            leafletMapInstance.removeLayer(leafletActiveTileLayer);
+            var isDarkNow = document.documentElement.getAttribute('data-theme') === 'dark';
+            var newTileUrl = isDarkNow ? 
+                'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png' :
+                'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png';
+            var attribution = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>';
+            leafletActiveTileLayer = L.tileLayer(newTileUrl, {
+                attribution: attribution,
+                maxZoom: 20
+            });
+            leafletActiveTileLayer.addTo(leafletMapInstance);
         }
     },
 
@@ -2052,6 +2186,301 @@ window.app = {
         }
     },
 
+    autoGeocodeLookup: function(event) {
+        if (event) event.preventDefault();
+        var country = document.getElementById('f-country').value.trim();
+        var location = document.getElementById('f-location').value.trim();
+        var formation = document.getElementById('f-formation').value.trim();
+        
+        if (!country && !location && !formation) {
+            window.app.showToast('Please enter Country, Precise Location, or Formation first.', 'warning');
+            return;
+        }
+        
+        var queries = getSmartGeocodeQueries(location, formation, country);
+        if (queries.length === 0) {
+            window.app.showToast('Could not formulate a geocoding query.', 'warning');
+            return;
+        }
+        
+        window.app.showToast('Searching coordinates...', 'info');
+        
+        trySmartGeocode(queries, 0, function(result, matchedQuery) {
+            var lat = parseFloat(result.lat);
+            var lon = parseFloat(result.lon);
+            document.getElementById('f-lat').value = lat.toFixed(6);
+            document.getElementById('f-lng').value = lon.toFixed(6);
+            window.app.showToast('Found coordinates via: "' + matchedQuery + '"', 'success');
+        }, function() {
+            window.app.showToast('Could not automatically geocode this specimen.', 'error');
+        });
+    },
+
+    toggleFossilMap: function() {
+        isFossilMapOpen = !isFossilMapOpen;
+        if (isFossilMapOpen) {
+            isDataInsightsOpen = false;
+            isTreemapOpen = false;
+            isEarthHistoryOpen = false;
+        }
+
+        var btnCharts = document.getElementById('btn-toggle-charts');
+        var btnMap = document.getElementById('btn-toggle-map');
+        var btnTreemap = document.getElementById('btn-toggle-treemap');
+        var btnEarth = document.getElementById('btn-toggle-earth-history');
+        var btnData = document.getElementById('btn-toggle-data');
+
+        if (btnMap) btnMap.classList.toggle('active', isFossilMapOpen);
+        if (btnCharts) btnCharts.classList.toggle('active', !isFossilMapOpen);
+        if (btnTreemap) btnTreemap.classList.remove('active');
+        if (btnEarth) btnEarth.classList.remove('active');
+        if (btnData) btnData.classList.remove('active');
+
+        var chartsContainer = document.getElementById('stats-charts-container');
+        var dataContainer = document.getElementById('data-insights-container');
+        var treemapContainer = document.getElementById('treemap-container');
+        var earthContainer = document.getElementById('earth-history-container');
+        var mapContainer = document.getElementById('fossil-map-container');
+
+        if (isFossilMapOpen) {
+            if (chartsContainer) chartsContainer.style.display = 'none';
+            if (dataContainer) dataContainer.style.display = 'none';
+            if (treemapContainer) treemapContainer.style.display = 'none';
+            if (earthContainer) earthContainer.style.display = 'none';
+            if (mapContainer) mapContainer.style.display = 'block';
+            
+            window.app.initFossilMap();
+        } else {
+            if (chartsContainer) chartsContainer.style.display = 'flex';
+            if (mapContainer) mapContainer.style.display = 'none';
+        }
+
+        if (isStatsOpen) {
+            window.app.renderFossils();
+        }
+    },
+
+    initFossilMap: function() {
+        var container = document.getElementById('fossil-map-container');
+        if (!container) return;
+
+        if (!leafletMapInstance) {
+            var isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+            var tileUrl = isDark ? 
+                'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png' :
+                'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png';
+            var attribution = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>';
+
+            leafletMapInstance = L.map('fossil-map-container', {
+                center: [20, 0],
+                zoom: 2,
+                minZoom: 1.5,
+                maxZoom: 18,
+                zoomControl: true
+            });
+
+            leafletActiveTileLayer = L.tileLayer(tileUrl, {
+                attribution: attribution,
+                maxZoom: 20
+            });
+            leafletActiveTileLayer.addTo(leafletMapInstance);
+
+            leafletMarkerGroup = L.layerGroup().addTo(leafletMapInstance);
+        }
+
+        setTimeout(function() {
+            if (leafletMapInstance) {
+                leafletMapInstance.invalidateSize();
+            }
+        }, 100);
+    },
+
+    drawMapMarkers: function() {
+        if (!leafletMapInstance || !leafletMarkerGroup) return;
+        
+        leafletMarkerGroup.clearLayers();
+        
+        var mapFossils = lightboxFilteredList.filter(function(f) { 
+            return f.lat !== undefined && f.lat !== null && !isNaN(f.lat) &&
+                   f.lng !== undefined && f.lng !== null && !isNaN(f.lng); 
+        });
+
+        var coordGroups = {};
+        mapFossils.forEach(function(f) {
+            var key = parseFloat(f.lat).toFixed(5) + ',' + parseFloat(f.lng).toFixed(5);
+            if (!coordGroups[key]) coordGroups[key] = [];
+            coordGroups[key].push(f);
+        });
+        
+        var container = document.getElementById('fossil-map-container');
+        if (container) {
+            var pill = document.getElementById('map-locations-pill');
+            if (!pill) {
+                var pillHtml = '<div id="map-locations-pill" style="position: absolute; top: 10px; right: 10px; background: var(--bg-surface-glass, rgba(255, 255, 255, 0.85)); backdrop-filter: blur(12px) saturate(180%); -webkit-backdrop-filter: blur(12px) saturate(180%); border: 1px solid var(--border-color); border-radius: 1.5rem; padding: 0.4rem 1rem; box-shadow: var(--shadow-sm); z-index: 1000; font-size: 0.75rem; font-weight: 700; color: var(--text-primary); display: flex; align-items: center; gap: 0.35rem; pointer-events: none; transition: all 0.25s ease; opacity: 0;">' +
+                                    '📍 <span id="map-locations-count">0 Specimens Pinned</span>' +
+                               '</div>';
+                container.insertAdjacentHTML('beforeend', pillHtml);
+                pill = document.getElementById('map-locations-pill');
+            }
+            
+            var pillCount = document.getElementById('map-locations-count');
+            if (pillCount) {
+                var uniqueLocations = Object.keys(coordGroups).length;
+                if (mapFossils.length > 0) {
+                    pillCount.innerHTML = 'Showing <strong>' + mapFossils.length + '</strong> Specimens (' + uniqueLocations + ' Locations)';
+                    pill.style.opacity = '1';
+                } else {
+                    pillCount.innerHTML = 'No specimens pinned';
+                    pill.style.opacity = '0.6';
+                }
+            }
+        }
+        
+        if (mapFossils.length === 0) return;
+        
+        for (var key in coordGroups) {
+            var group = coordGroups[key];
+            var isMultiple = group.length > 1;
+            
+            group.forEach(function(f, index) {
+                var markerLat = parseFloat(f.lat);
+                var markerLng = parseFloat(f.lng);
+                
+                if (isMultiple) {
+                    var angle = (index / group.length) * 2 * Math.PI;
+                    var radius = 0.015 + (index * 0.008); 
+                    markerLat += Math.sin(angle) * radius;
+                    markerLng += Math.cos(angle) * radius;
+                }
+                
+                var markerIcon;
+                var color = getEraColor(f.geologicalPeriod);
+                
+                if (f.isSelfFound) {
+                    var svgTeardrop = '<svg xmlns="http://www.w3.org/2000/svg" width="30" height="40" viewBox="0 0 30 40" class="fossil-marker-teardrop">' +
+                        '<path d="M15 0C6.7 0 0 6.7 0 15c0 10.5 15 25 15 25s15-14.5 15-25c0-8.3-6.7-15-15-15z" fill="' + color + '" stroke="#fff" stroke-width="1.5"/>' +
+                        '<circle cx="15" cy="15" r="5" fill="#fff"/>' +
+                        '</svg>';
+                    markerIcon = L.divIcon({
+                        className: 'custom-fossil-teardrop-icon',
+                        html: svgTeardrop,
+                        iconSize: [30, 40],
+                        iconAnchor: [15, 40],
+                        popupAnchor: [0, -35]
+                    });
+                } else {
+                    var svgRadar = '<div class="radar-marker" style="background: ' + color + '; border: 2px solid #fff; box-shadow: 0 0 8px ' + color + ';">' +
+                        '<div class="radar-pulse" style="border: 2px solid ' + color + ';"></div>' +
+                        '</div>';
+                    markerIcon = L.divIcon({
+                        className: 'custom-fossil-radar-icon',
+                        html: svgRadar,
+                        iconSize: [20, 20],
+                        iconAnchor: [10, 10],
+                        popupAnchor: [0, -10]
+                    });
+                }
+                
+                var popupHtml = '<div class="fossil-popup-container">';
+                
+                if (!isMultiple) {
+                    var flag = getFlagHtml(f.country);
+                    var imageHtml = (f.images && f.images.length > 0) ? 
+                        '<div class="popup-img-wrapper"><img src="' + f.images[0] + '" class="popup-img"></div>' : '';
+                    
+                    popupHtml += imageHtml +
+                        '<div class="popup-content">' +
+                            '<span class="popup-era-badge" style="background: ' + color + '; color: #fff;">' + (f.geologicalPeriod || 'Unknown') + '</span>' +
+                            '<h3 class="popup-title">' + (f.specimen || 'Unnamed Specimen') + '</h3>' +
+                            '<p class="popup-subtitle">' + (f.anatomy ? f.anatomy : 'Specimen') + '</p>' +
+                            '<div class="popup-meta-row">📍 ' + (f.formation ? f.formation + ', ' : '') + (f.location ? f.location + ', ' : '') + flag + ' ' + (f.country || 'Unknown') + '</div>' +
+                            '<div class="popup-meta-row">⏳ ' + (f.ageMa ? f.ageMa + ' Ma' : 'Unknown Age') + '</div>' +
+                            '<div class="popup-actions">' +
+                                '<button class="popup-btn" onclick="app.openLightbox(\'' + f.id + '\', 0)">🔬 Inspect Specimen</button>' +
+                            '</div>' +
+                        '</div>';
+                } else {
+                    popupHtml += '<div class="popup-stacked-header">' +
+                                    '<h4>📍 ' + group.length + ' Specimens at this region</h4>' +
+                                 '</div>' +
+                                 '<div class="popup-stacked-list">';
+                    
+                    var orderedGroup = [f].concat(group.filter(function(x) { return x.id !== f.id; }));
+                    
+                    orderedGroup.forEach(function(item, idx) {
+                        var itemColor = getEraColor(item.geologicalPeriod);
+                        var imgThumb = (item.images && item.images.length > 0) ? 
+                            '<img src="' + item.images[0] + '" class="popup-stacked-thumb">' : 
+                            '<div class="popup-stacked-thumb-placeholder" style="background: ' + itemColor + ';">🧬</div>';
+                        var highlightStyle = idx === 0 ? 'background: var(--bg-warm); border-left: 3px solid var(--accent);' : '';
+                            
+                        popupHtml += '<div class="popup-stacked-item" style="' + highlightStyle + '">' +
+                                        imgThumb +
+                                        '<div class="popup-stacked-item-info">' +
+                                            '<span class="popup-stacked-item-title" style="font-weight: ' + (idx === 0 ? '700' : '500') + ';">' + (item.specimen || 'Unnamed') + '</span>' +
+                                            '<span class="popup-stacked-item-sub">' + (item.geologicalPeriod || 'Unknown') + ' · ' + (item.anatomy || 'Specimen') + '</span>' +
+                                        '</div>' +
+                                        '<button class="popup-stacked-btn" onclick="app.openLightbox(\'' + item.id + '\', 0)" title="Inspect">🔬</button>' +
+                                     '</div>';
+                    });
+                    
+                    popupHtml += '</div>';
+                }
+                
+                popupHtml += '</div>';
+                
+                var marker = L.marker([markerLat, markerLng], { icon: markerIcon }).addTo(leafletMarkerGroup);
+                marker.bindPopup(popupHtml, {
+                    maxWidth: 250,
+                    minWidth: 220,
+                    className: 'fossil-custom-popup'
+                });
+            });
+        }
+        
+        if (mapFossils.length > 0 && leafletMapInstance) {
+            var groupBounds = L.latLngBounds(mapFossils.map(function(f) { return [f.lat, f.lng]; }));
+            leafletMapInstance.fitBounds(groupBounds, { padding: [40, 40], maxZoom: 8 });
+        }
+    },
+
+    showBatchProgress: function(text, current, total) {
+        var banner = document.getElementById('batch-progress-banner');
+        if (!banner) {
+            var html = '<div id="batch-progress-banner" style="display: none; position: fixed; top: 1.5rem; left: 50%; transform: translateX(-50%) translateY(-20px); background: var(--bg-surface-glass, rgba(255, 255, 255, 0.85)); backdrop-filter: blur(12px) saturate(180%); -webkit-backdrop-filter: blur(12px) saturate(180%); border: 1px solid var(--border-color); border-radius: 2rem; padding: 0.6rem 1.5rem; box-shadow: var(--shadow-md); z-index: 9999; align-items: center; gap: 0.75rem; transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1); opacity: 0; pointer-events: none;">' +
+                            '<div class="batch-spinner" style="width: 16px; height: 16px; border: 2px solid var(--accent); border-top-color: transparent; border-radius: 50%; animation: spin 1s linear infinite;"></div>' +
+                            '<span id="batch-progress-text" style="font-size: 0.85rem; font-weight: 600; color: var(--text-primary);">Processing...</span>' +
+                            '<div style="width: 80px; height: 6px; background: var(--border-color); border-radius: 3px; overflow: hidden; margin-left: 0.25rem;">' +
+                                '<div id="batch-progress-bar" style="width: 0%; height: 100%; background: var(--accent); border-radius: 3px; transition: width 0.2s ease;"></div>' +
+                            '</div>' +
+                        '</div>';
+            document.body.insertAdjacentHTML('beforeend', html);
+            banner = document.getElementById('batch-progress-banner');
+        }
+        
+        banner.style.display = 'flex';
+        banner.offsetHeight;
+        banner.style.opacity = '1';
+        banner.style.transform = 'translateX(-50%) translateY(0)';
+        banner.style.pointerEvents = 'auto';
+        
+        var pct = Math.round((current / total) * 100);
+        document.getElementById('batch-progress-text').textContent = text + ' (' + current + '/' + total + ')';
+        document.getElementById('batch-progress-bar').style.width = pct + '%';
+    },
+
+    hideBatchProgress: function() {
+        var banner = document.getElementById('batch-progress-banner');
+        if (banner) {
+            banner.style.opacity = '0';
+            banner.style.transform = 'translateX(-50%) translateY(-20px)';
+            banner.style.pointerEvents = 'none';
+            setTimeout(function() {
+                banner.style.display = 'none';
+            }, 300);
+        }
+    },
+
     renderEarthHistory: function(selectedPeriodName) {
         var container = document.getElementById('earth-history-container');
         if (!container) return;
@@ -2486,6 +2915,8 @@ window.app = {
                 window.app.updateModalFlag();
                 document.getElementById('f-location').value = f.location || '';
                 document.getElementById('f-formation').value = f.formation || '';
+                document.getElementById('f-lat').value = f.lat !== undefined && f.lat !== null ? f.lat : '';
+                document.getElementById('f-lng').value = f.lng !== undefined && f.lng !== null ? f.lng : '';
                 document.getElementById('f-size').value = f.size || '';
                 document.getElementById('f-size-unit').value = f.sizeUnit || 'cm';
                 document.getElementById('f-weight').value = f.weight || '';
@@ -2517,6 +2948,8 @@ window.app = {
             document.getElementById('f-link').value = '';
             document.getElementById('f-etymology').value = '';
             document.getElementById('f-tags').value = '';
+            document.getElementById('f-lat').value = '';
+            document.getElementById('f-lng').value = '';
 
             // Auto-load last used geography/geology for batch logging
             document.getElementById('f-country').value = localStorage.getItem('last_country') || '';
@@ -3001,6 +3434,8 @@ window.app = {
             country: document.getElementById('f-country').value,
             location: document.getElementById('f-location').value,
             formation: document.getElementById('f-formation').value,
+            lat: (document.getElementById('f-lat').value.trim() !== '' && !isNaN(parseFloat(document.getElementById('f-lat').value))) ? parseFloat(document.getElementById('f-lat').value) : null,
+            lng: (document.getElementById('f-lng').value.trim() !== '' && !isNaN(parseFloat(document.getElementById('f-lng').value))) ? parseFloat(document.getElementById('f-lng').value) : null,
             size: parseFloat(document.getElementById('f-size').value) || null,
             sizeUnit: document.getElementById('f-size-unit').value,
             weight: parseFloat(document.getElementById('f-weight').value) || null,
@@ -3032,6 +3467,12 @@ window.app = {
 
         var action = isEditing ? updateFossil(fossil) : addFossil(fossil);
         action.then(function() {
+            if (!isEditing) {
+                newlyAddedFossilId = fossil.id;
+                setTimeout(function() {
+                    newlyAddedFossilId = null;
+                }, 4000);
+            }
             window.app.closeModal();
             window.app.renderFossils();
         });
@@ -3269,7 +3710,12 @@ window.app = {
         if (!confirm('Attempt to fetch etymologies for ' + missing.length + ' specimens from Wikipedia? This may take a minute.')) return;
         
         var count = 0;
+        var i = 0;
+        window.app.showBatchProgress('📖 Fetching Etymologies', 0, missing.length);
+
         for (var f of missing) {
+            i++;
+            window.app.showBatchProgress('📖 Fetching Etymologies', i, missing.length);
             var genus = (f.specimen || '').split(' ')[0];
             if (!genus) continue;
             
@@ -3283,7 +3729,78 @@ window.app = {
             await new Promise(function(r) { setTimeout(r, 200); });
         }
         
+        window.app.hideBatchProgress();
         window.app.showToast('Successfully fetched and saved ' + count + ' new etymologies.', 'success');
+        window.app.renderFossils();
+    },
+
+    batchFetchCoordinates: async function() {
+        var missing = fossils.filter(function(f) { 
+            var hasLocation = (f.country && f.country.trim() !== '') || 
+                              (f.location && f.location.trim() !== '') ||
+                              (f.formation && f.formation.trim() !== '');
+            var lacksCoords = f.lat === undefined || f.lat === null || f.lat === '' ||
+                              f.lng === undefined || f.lng === null || f.lng === '';
+            return hasLocation && lacksCoords;
+        });
+
+        var hasLocationFossils = fossils.filter(function(f) {
+            return (f.country && f.country.trim() !== '') || 
+                   (f.location && f.location.trim() !== '') ||
+                   (f.formation && f.formation.trim() !== '');
+        });
+
+        if (hasLocationFossils.length === 0) {
+            window.app.showToast('No specimens have country, location, or formation data to geocode!', 'warning');
+            return;
+        }
+
+        if (!confirm('Start batch geocoding from OpenStreetMap?')) {
+            return;
+        }
+
+        var forceAll = false;
+        if (missing.length < hasLocationFossils.length) {
+            forceAll = !confirm(
+                'Only geocode specimens that currently LACK coordinates?\n\n' +
+                '• Click OK to only geocode missing ones (' + missing.length + ' specimens).\n' +
+                '• Click CANCEL to overwrite and re-geocode ALL specimens (' + hasLocationFossils.length + ' specimens).'
+            );
+        } else {
+            // All fossils with location lack coordinates anyway, so just run them
+            forceAll = false;
+        }
+
+        var targets = forceAll ? hasLocationFossils : missing;
+
+        if (targets.length === 0) { 
+            window.app.showToast('No specimens to geocode based on your choice.', 'info'); 
+            return; 
+        }
+
+        var count = 0;
+        var i = 0;
+        window.app.showToast('Starting batch geocoding of ' + targets.length + ' fossils...', 'info');
+        window.app.showBatchProgress('🌍 Geocoding', 0, targets.length);
+
+        for (var f of targets) {
+            i++;
+            window.app.showBatchProgress('🌍 Geocoding', i, targets.length);
+
+            var res = await fetchSmartCoordinates(f.location, f.formation, f.country);
+            if (res) {
+                f.lat = res.lat;
+                f.lng = res.lng;
+                await updateFossil(f);
+                count++;
+            }
+
+            // Await 1.4 seconds to strictly respect Nominatim's 1-second rate limit with buffer
+            await new Promise(function(resolve) { setTimeout(resolve, 1400); });
+        }
+
+        window.app.hideBatchProgress();
+        window.app.showToast('Geocoded and saved coordinates for ' + count + ' specimens!', 'success');
         window.app.renderFossils();
     },
 
@@ -3298,9 +3815,11 @@ window.app = {
         
         var count = 0;
         var i = 0;
+        window.app.showBatchProgress('📏 Fetching Sizes', 0, allSpecimens.length);
+
         for (var f of allSpecimens) {
             i++;
-            if (btn) btn.innerHTML = '<span class="loading-spinner"></span> Updating... ' + i + '/' + allSpecimens.length;
+            window.app.showBatchProgress('📏 Fetching Sizes', i, allSpecimens.length);
             
             var name = (f.specimen || '').trim();
             if (!name) continue;
@@ -3388,6 +3907,7 @@ window.app = {
         }
         
         if (btn) btn.innerHTML = originalHtml;
+        window.app.hideBatchProgress();
         var successRate = Math.round((count / allSpecimens.length) * 100);
         window.app.showToast('Batch update complete! Updated ' + count + ' out of ' + allSpecimens.length + ' specimens (' + successRate + '% success rate).', 'success');
         window.app.renderFossils();
@@ -4304,7 +4824,9 @@ window.app = {
                 if (isStatsOpen) {
                     statsContainer.style.display = 'flex';
                     
-                    if (isDataInsightsOpen) {
+                    if (isFossilMapOpen) {
+                        window.app.drawMapMarkers();
+                    } else if (isDataInsightsOpen) {
                         // Logic is already handled above in the inline section
                     } else if (isTreemapOpen) {
                         window.app.renderMissingSpecimens();
@@ -4468,6 +4990,9 @@ window.app = {
                 } else {
                     // STANDARD COLLECTION CARD VIEW
                     card.className = 'fossil-card';
+                    if (newlyAddedFossilId === f.id) {
+                        card.classList.add('newly-added-pulse');
+                    }
                     if (f.geologicalPeriod) {
                         var pLowCard = f.geologicalPeriod.toLowerCase();
                         if (pLowCard.indexOf('ordovician') !== -1) card.classList.add('period-ordovician');
