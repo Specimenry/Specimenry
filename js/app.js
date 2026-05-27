@@ -823,8 +823,14 @@ function deleteMultipleFossils(ids) {
 }
 
 function exportToJSON() {
-    return getAllFossils().then(function(fossils) {
-        var dataStr = JSON.stringify(fossils, null, 2);
+    return getAllFossils().then(function(fossilsList) {
+        if (!fossilsList || fossilsList.length === 0) {
+            if (window.app && window.app.showToast) {
+                window.app.showToast('No fossil records found to export.', 'warning');
+            }
+            return;
+        }
+        var dataStr = JSON.stringify(fossilsList, null, 2);
         var blob = new Blob([dataStr], { type: 'application/json' });
         var url = URL.createObjectURL(blob);
         var link = document.createElement('a');
@@ -834,6 +840,15 @@ function exportToJSON() {
         link.click();
         document.body.removeChild(link);
         URL.revokeObjectURL(url);
+        
+        if (window.app && window.app.showToast) {
+            window.app.showToast('Backup completed! fossil-archive-backup.json downloaded successfully.', 'success');
+        }
+    }).catch(function(err) {
+        console.error('Export failed:', err);
+        if (window.app && window.app.showToast) {
+            window.app.showToast('Export failed: ' + err.message, 'danger');
+        }
     });
 }
 
@@ -1071,6 +1086,7 @@ var expandedTaxonomyIds = new Set();
 var currentImages = [];
 var currentView = 'false'; // 'false' = Collection, 'true' = Wishlist
 var isStatsOpen = false;
+var isAutoEnhanceActive = localStorage.getItem('photo_auto_enhance') === 'true';
 
 // Debounce utility — delays fn execution until wait ms after the last call
 function debounce(fn, wait) {
@@ -1097,6 +1113,11 @@ var exchangeRates = null;
 var lightboxFossilId = null;
 var lightboxIdx = 0;
 var lightboxFilteredList = []; // The current filtered+sorted fossil list, used for inter-fossil navigation
+var isShowcaseActive = false;
+var showcaseList = [];
+var showcaseIndex = 0;
+var showcaseIntervalId = null;
+var showcasePlayActive = true;
 
 function fetchExchangeRates() {
     var cached = localStorage.getItem('exchangeRates_SEK');
@@ -1132,6 +1153,12 @@ window.addEventListener('DOMContentLoaded', function() {
         }
     }
 
+    // Initialize Auto-Enhance Dropdown Label
+    var enrichLabel = document.getElementById('toggle-enrich-lighting');
+    if (enrichLabel) {
+        enrichLabel.innerHTML = '💡 Auto-Enhance Lighting: ' + (isAutoEnhanceActive ? 'On' : 'Off');
+    }
+
     // Backup Pulse logic
     var lastBackup = localStorage.getItem('last_backup');
     var sevenDaysMs = 7 * 24 * 60 * 60 * 1000;
@@ -1162,10 +1189,54 @@ window.addEventListener('DOMContentLoaded', function() {
             menu.classList.remove('active');
         }
     });
+
+    // Floating Back to Top Button scroll handler
+    var backToTopBtn = document.getElementById('btn-back-to-top');
+    if (backToTopBtn) {
+        window.addEventListener('scroll', function() {
+            if (window.scrollY > 300) {
+                backToTopBtn.style.opacity = '1';
+                backToTopBtn.style.pointerEvents = 'auto';
+                backToTopBtn.style.transform = 'translateY(0)';
+            } else {
+                backToTopBtn.style.opacity = '0';
+                backToTopBtn.style.pointerEvents = 'none';
+                backToTopBtn.style.transform = 'translateY(15px)';
+            }
+        });
+    }
 });
 
-// Lightbox keyboard navigation
+// Global keyboard navigation (Lightbox & Showcase & Zoom)
 document.addEventListener('keydown', function(e) {
+    var zoomOverlay = document.getElementById('zoom-overlay');
+    if (zoomOverlay && zoomOverlay.classList.contains('active')) {
+        if (e.key === 'Escape') {
+            window.app.closeZoomOverlay();
+            e.stopPropagation();
+        }
+        return;
+    }
+    
+    // Showcase mode key binds
+    var showcase = document.getElementById('showcase-mode');
+    if (showcase && showcase.style.display === 'block') {
+        if (e.key === 'Escape') {
+            window.app.exitShowcaseMode();
+            e.preventDefault();
+        } else if (e.key === 'ArrowLeft') {
+            window.app.showcaseNav(-1);
+            e.preventDefault();
+        } else if (e.key === 'ArrowRight') {
+            window.app.showcaseNav(1);
+            e.preventDefault();
+        } else if (e.key === ' ') { // spacebar
+            window.app.toggleShowcasePlay();
+            e.preventDefault();
+        }
+        return;
+    }
+
     var overlay = document.getElementById('lightbox');
     if (!overlay || !overlay.classList.contains('active')) return;
     if (e.key === 'Escape') { window.app.closeLightbox(); }
@@ -1264,6 +1335,18 @@ window.app = {
 
         img.style.display = '';
         img.src = f.images[lightboxIdx];
+        img.style.cursor = 'zoom-in';
+        img.onclick = function() {
+            window.app.openZoomOverlay(img.src);
+        };
+        img.classList.toggle('enhanced-photo', isAutoEnhanceActive);
+
+        var lightboxBtn = document.getElementById('lightbox-auto-enhance');
+        if (lightboxBtn) {
+            lightboxBtn.style.color = isAutoEnhanceActive ? '#e6a817' : 'var(--text-primary)';
+            lightboxBtn.style.textShadow = isAutoEnhanceActive ? '0 0 8px rgba(230,168,23,0.6)' : 'none';
+        }
+
         title.textContent = f.specimen || 'Unknown Specimen';
 
         var detailParts = [];
@@ -1290,6 +1373,109 @@ window.app = {
 
         // Render fossil carousel strip
         window.app._renderLightboxCarousel();
+
+        // Render geological timeline ruler
+        var rulerElem = document.getElementById('lightbox-timeline-ruler');
+        if (rulerElem) {
+            var period = (f.geologicalPeriod || '').trim();
+            if (period && period.toLowerCase() !== 'unknown') {
+                var ERAS = [
+                    { name: 'Precambrian', periods: ['Precambrian'], color: '#4a5568' },
+                    { name: 'Paleozoic', periods: ['Cambrian', 'Ordovician', 'Silurian', 'Devonian', 'Carboniferous', 'Permian'], color: '#2b6cb0' },
+                    { name: 'Mesozoic', periods: ['Triassic', 'Jurassic', 'Cretaceous'], color: '#dd6b20' },
+                    { name: 'Cenozoic', periods: ['Paleogene', 'Neogene', 'Quaternary'], color: '#319795' }
+                ];
+                
+                var activeEraIndex = -1;
+                var activePeriodIndex = -1;
+                for (var e = 0; e < ERAS.length; e++) {
+                    var eraPer = ERAS[e].periods;
+                    for (var p = 0; p < eraPer.length; p++) {
+                        if (eraPer[p].toLowerCase() === period.toLowerCase()) {
+                            activeEraIndex = e;
+                            activePeriodIndex = p;
+                            break;
+                        }
+                    }
+                    if (activeEraIndex !== -1) break;
+                }
+                
+                if (activeEraIndex !== -1) {
+                    var timelineHtml = '<div style="font-size: 0.75rem; font-weight: 800; color: var(--accent); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.75rem; display: flex; align-items: center; gap: 4px;">' +
+                                       '<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="9" x2="20" y2="9"/><line x1="4" y1="15" x2="20" y2="15"/><line x1="10" y1="3" x2="8" y2="21"/><line x1="16" y1="3" x2="14" y2="21"/></svg> Geological Deep-Time Ruler</div>' +
+                                       '<div class="timeline-ruler" style="display: flex; height: 16px; border-radius: 9999px; overflow: hidden; background: var(--bg-warm); border: 1px solid var(--border-color); position: relative;">';
+                    
+                    for (var e = 0; e < ERAS.length; e++) {
+                        var era = ERAS[e];
+                        var isCurrentEra = (e === activeEraIndex);
+                        var eraWeight = era.periods.length;
+                        
+                        timelineHtml += '<div style="flex: ' + eraWeight + '; background: ' + era.color + '; opacity: ' + (isCurrentEra ? '0.9' : '0.25') + '; height: 100%; position: relative;" title="' + era.name + ' Era">';
+                        if (isCurrentEra) {
+                            var stepPercent = Math.round((activePeriodIndex / eraWeight) * 100) + Math.round((0.5 / eraWeight) * 100);
+                            timelineHtml += '<div style="position: absolute; left: ' + stepPercent + '%; top: 50%; transform: translate(-50%, -50%); width: 10px; height: 10px; border-radius: 50%; background: #ffffff; border: 2px solid var(--accent); box-shadow: 0 0 6px rgba(255,255,255,0.8); z-index: 10;"></div>';
+                        }
+                        timelineHtml += '</div>';
+                    }
+                    timelineHtml += '</div>' +
+                                   '<div style="display: flex; justify-content: space-between; font-size: 0.65rem; color: var(--text-secondary); margin-top: 0.4rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;">' +
+                                       '<span>Precambrian</span>' +
+                                       '<span style="color: ' + (activeEraIndex === 1 ? 'var(--text-primary)' : 'inherit') + ';">Paleozoic</span>' +
+                                       '<span style="color: ' + (activeEraIndex === 2 ? 'var(--text-primary)' : 'inherit') + ';">Mesozoic</span>' +
+                                       '<span style="color: ' + (activeEraIndex === 3 ? 'var(--text-primary)' : 'inherit') + ';">Cenozoic</span>' +
+                                   '</div>' +
+                                   '<div style="font-size: 0.75rem; text-align: center; margin-top: 0.5rem; font-weight: 600; color: var(--text-primary);">Geologic Period: <span style="color: var(--accent); font-weight: 800;">' + escapeHtml(period) + '</span> (' + ERAS[activeEraIndex].name + ' Era)</div>';
+                    
+                    rulerElem.innerHTML = timelineHtml;
+                    rulerElem.style.display = '';
+                } else {
+                    rulerElem.style.display = 'none';
+                }
+            } else {
+                rulerElem.style.display = 'none';
+            }
+        }
+
+        // Render prehistoric co-existence finder
+        var coexElem = document.getElementById('lightbox-coexistence');
+        if (coexElem) {
+            var period = (f.geologicalPeriod || '').trim();
+            var coexisting = [];
+            if (period && period.toLowerCase() !== 'unknown') {
+                coexisting = fossils.filter(function(x) {
+                    return x.id !== fossilId && 
+                           !x.isWishlist && 
+                           !x.isSold && 
+                           (x.geologicalPeriod || '').trim().toLowerCase() === period.toLowerCase();
+                });
+            }
+            
+            if (coexisting.length > 0) {
+                var coexHtml = '<div style="font-size: 0.75rem; font-weight: 800; color: var(--accent); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem; display: flex; align-items: center; gap: 4px;">' +
+                               '<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path><path d="M2 12h20"></path></svg> Prehistoric Co-existence Finder</div>' +
+                               '<div style="font-size: 0.8rem; opacity: 0.8; margin-bottom: 0.5rem;">Specimens in your collection from the <strong>' + escapeHtml(period) + '</strong>:</div>' +
+                               '<div style="display: flex; flex-wrap: wrap; gap: 0.5rem; max-height: 80px; overflow-y: auto; padding-right: 0.25rem;">';
+                
+                coexisting.forEach(function(cx) {
+                    var name = escapeHtml(cx.specimen || 'Unknown');
+                    var catEmoji = '🦴';
+                    if (cx.category) {
+                        var catLower = cx.category.toLowerCase();
+                        if (catLower.indexOf('tooth') !== -1 || catLower.indexOf('teeth') !== -1) catEmoji = '🦷';
+                        else if (catLower.indexOf('dinosaur') !== -1 || catLower.indexOf('reptile') !== -1) catEmoji = '🦖';
+                        else if (catLower.indexOf('plant') !== -1 || catLower.indexOf('flora') !== -1) catEmoji = '🌿';
+                        else if (catLower.indexOf('ammonite') !== -1 || catLower.indexOf('shell') !== -1) catEmoji = '🐚';
+                        else if (catLower.indexOf('fish') !== -1 || catLower.indexOf('shark') !== -1) catEmoji = '🐟';
+                    }
+                    coexHtml += '<span class="tag-pill" style="cursor: pointer; background: var(--bg-surface); border: 1px solid var(--border-color); display: inline-flex; align-items: center; gap: 0.25rem; font-size: 0.75rem; margin: 0; padding: 0.2rem 0.5rem; border-radius: 4px;" onclick="app.openLightbox(\'' + cx.id + '\', 0)">' + catEmoji + ' ' + name + '</span>';
+                });
+                coexHtml += '</div>';
+                coexElem.innerHTML = coexHtml;
+                coexElem.style.display = '';
+            } else {
+                coexElem.style.display = 'none';
+            }
+        }
 
         overlay.classList.add('active');
         document.body.style.overflow = 'hidden';
@@ -1353,7 +1539,8 @@ window.app = {
             var onclick = isCurrent ? '' : 'onclick="app.openLightbox(\'' + fo.id + '\', 0)"';
             html += '<div class="' + cls + '" ' + onclick + ' title="' + escapeHtml(fo.specimen || '') + '">';
             if (thumb) {
-                html += '<img src="' + thumb + '" alt="' + escapeHtml(fo.specimen || '') + '" loading="lazy">';
+                var imgCls = isAutoEnhanceActive ? 'class="enhanced-photo"' : '';
+                html += '<img src="' + thumb + '" ' + imgCls + ' alt="' + escapeHtml(fo.specimen || '') + '" loading="lazy">';
             } else {
                 html += '<div class="lb-strip-placeholder"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg></div>';
             }
@@ -1414,6 +1601,210 @@ window.app = {
         overlay.classList.remove('active');
         document.body.style.overflow = '';
         lightboxFossilId = null;
+    },
+
+    openZoomOverlay: function(src) {
+        var zoomOverlay = document.getElementById('zoom-overlay');
+        var zoomImg = document.getElementById('zoom-overlay-img');
+        if (zoomOverlay && zoomImg) {
+            zoomImg.src = src;
+            zoomOverlay.style.display = 'flex';
+            // Trigger reflow for transition
+            void zoomOverlay.offsetWidth;
+            zoomOverlay.classList.add('active');
+            document.body.style.overflow = 'hidden';
+        }
+    },
+
+    closeZoomOverlay: function() {
+        var zoomOverlay = document.getElementById('zoom-overlay');
+        if (zoomOverlay) {
+            zoomOverlay.classList.remove('active');
+            if (window.app._zoomTimeout) {
+                clearTimeout(window.app._zoomTimeout);
+            }
+            window.app._zoomTimeout = setTimeout(function() {
+                if (!zoomOverlay.classList.contains('active')) {
+                    zoomOverlay.style.display = 'none';
+                }
+            }, 300); // matches transition
+            // Restore hidden body overflow only if lightbox is active
+            var lightbox = document.getElementById('lightbox');
+            if (lightbox && lightbox.classList.contains('active')) {
+                document.body.style.overflow = 'hidden';
+            } else {
+                document.body.style.overflow = '';
+            }
+        }
+    },
+
+    enterShowcaseMode: function() {
+        if (!lightboxFilteredList || lightboxFilteredList.length === 0) {
+            window.app.showToast('No specimens in the current view to showcase.', 'warning');
+            return;
+        }
+        
+        var menu = document.getElementById('enrich-dropdown');
+        if (menu) menu.style.display = 'none';
+
+        isShowcaseActive = true;
+        showcaseList = lightboxFilteredList.slice();
+        showcaseIndex = 0;
+        showcasePlayActive = true;
+
+        var overlay = document.getElementById('showcase-mode');
+        if (overlay) {
+            overlay.style.display = 'block';
+            document.body.style.overflow = 'hidden';
+            
+            // Close other overlays just in case
+            var lightbox = document.getElementById('lightbox');
+            if (lightbox) lightbox.classList.remove('active');
+            var modal = document.getElementById('fossil-modal');
+            if (modal) modal.close();
+            var zoomOverlay = document.getElementById('zoom-overlay');
+            if (zoomOverlay) zoomOverlay.classList.remove('active');
+
+            window.app.renderShowcaseSpecimen();
+        }
+    },
+
+    exitShowcaseMode: function() {
+        isShowcaseActive = false;
+        if (showcaseIntervalId) {
+            clearInterval(showcaseIntervalId);
+            showcaseIntervalId = null;
+        }
+        var overlay = document.getElementById('showcase-mode');
+        if (overlay) {
+            overlay.style.display = 'none';
+        }
+        document.body.style.overflow = '';
+    },
+
+    renderShowcaseSpecimen: function() {
+        if (!showcaseList || showcaseList.length === 0) return;
+        var f = showcaseList[showcaseIndex];
+        if (!f) return;
+
+        var img = document.getElementById('showcase-img');
+        var title = document.getElementById('showcase-title');
+        var catTag = document.getElementById('showcase-category-tag');
+        var subtitles = document.getElementById('showcase-subtitles');
+        var indexText = document.getElementById('showcase-index-text');
+        
+        var metaPeriod = document.getElementById('showcase-meta-period');
+        var metaOrigin = document.getElementById('showcase-meta-origin');
+        var metaAnatomy = document.getElementById('showcase-meta-anatomy');
+        var metaNotes = document.getElementById('showcase-meta-notes');
+
+        // Populate Image (with fallback)
+        if (img) {
+            img.style.opacity = '0';
+            setTimeout(function() {
+                img.src = (f.images && f.images.length > 0) ? f.images[0] : 'img/placeholder.png'; // fallback or placeholder
+                img.classList.toggle('enhanced-photo', isAutoEnhanceActive);
+                img.style.opacity = '1';
+            }, 150);
+        }
+
+        // Title & Category Badge
+        if (title) title.textContent = f.specimen || 'Unknown Specimen';
+        if (catTag) {
+            catTag.textContent = f.category || 'Specimen';
+            catTag.className = 'showcase-info-badge ' + (f.category ? f.category.toLowerCase().replace(/[\s()]/g, '-') : '');
+        }
+
+        // Subtitles (Epoch, Age, Part)
+        if (subtitles) {
+            var subParts = [];
+            if (f.epoch) subParts.push(f.epoch);
+            if (f.ageMa) subParts.push('~' + f.ageMa + ' Ma');
+            if (f.anatomy) subParts.push(f.anatomy);
+            subtitles.textContent = subParts.join(' · ');
+        }
+
+        // Counter (Index)
+        if (indexText) {
+            indexText.textContent = 'Specimen ' + (showcaseIndex + 1) + ' of ' + showcaseList.length;
+        }
+
+        // Geological Timeline
+        if (metaPeriod) {
+            var timelineParts = [];
+            if (f.geologicalPeriod) timelineParts.push(f.geologicalPeriod);
+            metaPeriod.textContent = timelineParts.length > 0 ? timelineParts.join(', ') : 'Unknown Era / Period';
+        }
+
+        // Formation / Origin
+        if (metaOrigin) {
+            var originParts = [];
+            if (f.formation) originParts.push(f.formation);
+            if (f.country) originParts.push((f.location ? f.location + ', ' : '') + f.country);
+            metaOrigin.innerHTML = originParts.length > 0 ? '📍 ' + originParts.join(' · ') : 'Unknown Locality / Formation';
+        }
+
+        // Dimensions
+        if (metaAnatomy) {
+            var dimParts = [];
+            if (f.size) dimParts.push('Size: ' + f.size + (f.sizeUnit || 'cm'));
+            if (f.weight) dimParts.push('Weight: ' + f.weight + 'g');
+            metaAnatomy.textContent = dimParts.length > 0 ? dimParts.join(' · ') : 'Dimensions not recorded';
+        }
+
+        // Notes
+        if (metaNotes) {
+            metaNotes.textContent = f.notes ? f.notes : 'No curatorial notes recorded for this specimen.';
+        }
+
+        // Trigger Auto-Play progress bar
+        window.app._runShowcaseProgressBar();
+    },
+
+    showcaseNav: function(dir) {
+        if (!showcaseList || showcaseList.length <= 1) return;
+        showcaseIndex = (showcaseIndex + dir + showcaseList.length) % showcaseList.length;
+        window.app.renderShowcaseSpecimen();
+    },
+
+    toggleShowcasePlay: function() {
+        showcasePlayActive = !showcasePlayActive;
+        var btn = document.getElementById('showcase-play-btn');
+        if (btn) {
+            btn.innerHTML = showcasePlayActive ? '⏸️ Pause' : '▶️ Play';
+            btn.className = 'showcase-action-btn play-btn' + (showcasePlayActive ? '' : ' paused');
+        }
+        window.app._runShowcaseProgressBar();
+    },
+
+    _runShowcaseProgressBar: function() {
+        if (showcaseIntervalId) {
+            clearInterval(showcaseIntervalId);
+            showcaseIntervalId = null;
+        }
+
+        var bar = document.getElementById('showcase-progress-bar');
+        if (!bar) return;
+
+        // Reset transition and width
+        bar.style.transition = 'none';
+        bar.style.width = '0%';
+
+        if (!showcasePlayActive || showcaseList.length <= 1) {
+            return;
+        }
+
+        // Trigger reflow
+        void bar.offsetWidth;
+
+        // Animate width to 100% over 6 seconds
+        bar.style.transition = 'width 6000ms linear';
+        bar.style.width = '100%';
+
+        // Set interval to navigate next after 6 seconds
+        showcaseIntervalId = setInterval(function() {
+            window.app.showcaseNav(1);
+        }, 6000);
     },
 
     lightboxNav: function(dir) {
@@ -2664,15 +3055,81 @@ window.app = {
     },
 
     updateMassDeleteButton: function() {
+        var selectionBar = document.getElementById('selection-bar');
+        var selectionCountText = document.getElementById('selection-count-text');
+        
         var btnDelete = document.getElementById('btn-mass-delete');
         var btnTag = document.getElementById('btn-mass-tag');
+        var btnPrint = document.getElementById('btn-mass-print');
+        var btnSelectAll = document.getElementById('btn-mass-select-all');
+        var btnDeselect = document.getElementById('btn-mass-deselect');
+        
         var count = selectedFossils.size;
         
-        btnDelete.style.display = count > 0 ? 'inline-flex' : 'none';
-        btnDelete.innerText = 'Delete Selected (' + count + ')';
+        if (selectionBar) {
+            if (count > 0) {
+                selectionBar.style.display = 'block';
+                // Trigger a reflow for CSS transition
+                void selectionBar.offsetWidth;
+                selectionBar.classList.add('active');
+            } else {
+                selectionBar.classList.remove('active');
+                if (window.app._selectionBarTimeout) {
+                    clearTimeout(window.app._selectionBarTimeout);
+                }
+                window.app._selectionBarTimeout = setTimeout(function() {
+                    if (!selectionBar.classList.contains('active')) {
+                        selectionBar.style.display = 'none';
+                    }
+                }, 400); // matches CSS transition
+            }
+        }
         
-        btnTag.style.display = count > 0 ? 'inline-flex' : 'none';
-        btnTag.innerText = 'Tag Selected (' + count + ')';
+        if (selectionCountText) {
+            selectionCountText.textContent = count + (count === 1 ? ' fossil selected' : ' fossils selected');
+        }
+        
+        if (btnDelete) {
+            btnDelete.style.display = count > 0 ? 'inline-flex' : 'none';
+            btnDelete.innerText = '🗑️ Delete (' + count + ')';
+        }
+        
+        if (btnTag) {
+            btnTag.style.display = count > 0 ? 'inline-flex' : 'none';
+            btnTag.innerText = '🏷️ Tag (' + count + ')';
+        }
+
+        if (btnPrint) {
+            btnPrint.style.display = count > 0 ? 'inline-flex' : 'none';
+            btnPrint.innerText = '🖨️ Print (' + count + ')';
+        }
+        if (btnSelectAll) {
+            btnSelectAll.style.display = (count < lightboxFilteredList.length) ? 'inline-flex' : 'none';
+        }
+        if (btnDeselect) {
+            btnDeselect.style.display = count > 0 ? 'inline-flex' : 'none';
+        }
+    },
+
+    deselectAllSelected: function() {
+        selectedFossils.clear();
+        window.app.updateMassDeleteButton();
+        var checkboxes = document.querySelectorAll('.checkbox-container input[type="checkbox"]');
+        checkboxes.forEach(function(cb) {
+            cb.checked = false;
+        });
+    },
+
+    selectAllVisible: function() {
+        if (!lightboxFilteredList || lightboxFilteredList.length === 0) return;
+        lightboxFilteredList.forEach(function(f) {
+            selectedFossils.add(f.id);
+        });
+        window.app.updateMassDeleteButton();
+        var checkboxes = document.querySelectorAll('.checkbox-container input[type="checkbox"]');
+        checkboxes.forEach(function(cb) {
+            cb.checked = true;
+        });
     },
 
     massTagSelected: function() {
@@ -2729,6 +3186,80 @@ window.app = {
         if (menu) {
             menu.classList.toggle('active');
         }
+    },
+
+    toggleAutoEnhance: function() {
+        isAutoEnhanceActive = !isAutoEnhanceActive;
+        localStorage.setItem('photo_auto_enhance', isAutoEnhanceActive ? 'true' : 'false');
+        
+        // Update Utilities Dropdown label
+        var enrichLabel = document.getElementById('toggle-enrich-lighting');
+        if (enrichLabel) {
+            enrichLabel.innerHTML = '💡 Auto-Enhance Lighting: ' + (isAutoEnhanceActive ? 'On' : 'Off');
+        }
+        
+        // Update Lightbox button styling if active
+        var lightboxBtn = document.getElementById('lightbox-auto-enhance');
+        if (lightboxBtn) {
+            lightboxBtn.style.color = isAutoEnhanceActive ? '#e6a817' : 'var(--text-primary)';
+            lightboxBtn.style.textShadow = isAutoEnhanceActive ? '0 0 8px rgba(230,168,23,0.6)' : 'none';
+        }
+        
+        // Toggle CSS class on active images
+        var gridImages = document.querySelectorAll('.fossil-card img, .lightbox-inner img, .lb-strip-slot img');
+        gridImages.forEach(function(img) {
+            img.classList.toggle('enhanced-photo', isAutoEnhanceActive);
+        });
+        
+        window.app.showToast(isAutoEnhanceActive ? 'Museum spot-lighting enhancement active! 💡' : 'Photo lighting restored to original.', 'info');
+    },
+
+    updateFilterBadges: function() {
+        var badgesContainer = document.getElementById('active-filter-badges');
+        if (!badgesContainer) return;
+        
+        var searchInput = document.getElementById('search');
+        var catSelect = document.getElementById('filter-category');
+        var periodSelect = document.getElementById('filter-period');
+        
+        var searchVal = searchInput ? searchInput.value.trim() : '';
+        var catVal = catSelect ? catSelect.value : '';
+        var periodVal = periodSelect ? periodSelect.value : '';
+        
+        var html = '';
+        
+        if (searchVal) {
+            html += '<span class="filter-badge-pill" onclick="document.getElementById(\'search\').value=\'\'; app.renderFossils();" title="Clear search query">' +
+                    '🔍 ' + escapeHtml(searchVal) + ' <span class="clear-cross">&times;</span></span>';
+        }
+        if (catVal) {
+            html += '<span class="filter-badge-pill" onclick="document.getElementById(\'filter-category\').value=\'\'; app.renderFossils();" title="Clear category filter">' +
+                    '📂 ' + escapeHtml(catVal) + ' <span class="clear-cross">&times;</span></span>';
+        }
+        if (periodVal) {
+            html += '<span class="filter-badge-pill" onclick="document.getElementById(\'filter-period\').value=\'\'; app.renderFossils();" title="Clear period filter">' +
+                    '⏳ ' + escapeHtml(periodVal) + ' <span class="clear-cross">&times;</span></span>';
+        }
+        
+        if (html) {
+            html += '<span class="filter-badge-pill" onclick="app.resetFiltersOnly();" style="background: rgba(186, 58, 58, 0.1); color: var(--danger); border-color: rgba(186, 58, 58, 0.2);" title="Clear all filters">' +
+                    '🗑️ Clear All <span class="clear-cross">&times;</span></span>';
+            badgesContainer.innerHTML = html;
+            badgesContainer.style.display = 'flex';
+        } else {
+            badgesContainer.innerHTML = '';
+            badgesContainer.style.display = 'none';
+        }
+    },
+
+    resetFiltersOnly: function() {
+        var searchInput = document.getElementById('search');
+        var catSelect = document.getElementById('filter-category');
+        var periodSelect = document.getElementById('filter-period');
+        if (searchInput) searchInput.value = '';
+        if (catSelect) catSelect.value = '';
+        if (periodSelect) periodSelect.value = '';
+        window.app.renderFossils();
     },
 
     batchFetchEtymologies: async function() {
@@ -3005,10 +3536,229 @@ window.app = {
         }
     },
 
+    printLabelsSelected: function() {
+        if (selectedFossils.size === 0) return;
+        var ids = Array.from(selectedFossils);
+        var labelCardsHtml = '';
+        
+        var eraColors = {
+            'Cenozoic': '#319795',
+            'Mesozoic': '#dd6b20',
+            'Paleozoic': '#2b6cb0',
+            'Precambrian': '#4a5568'
+        };
+
+        ids.forEach(function(id) {
+            var f = fossils.find(function(x) { return x.id === id; });
+            if (!f) return;
+            
+            var specimen = f.specimen || 'Unknown Specimen';
+            
+            // Format Scientific Name: wrap first two words in <em> tags if they look like a species binomial name
+            var formattedName = escapeHtml(specimen);
+            var words = specimen.split(/\s+/);
+            if (words.length >= 2 && /^[A-Z][a-z]+$/.test(words[0]) && /^[a-z]+$/.test(words[1])) {
+                var genus = words[0];
+                var species = words[1];
+                var rest = words.slice(2).join(' ');
+                formattedName = '<em>' + escapeHtml(genus) + ' ' + escapeHtml(species) + '</em>' + (rest ? ' ' + escapeHtml(rest) : '');
+            } else if (words.length >= 1 && /^[A-Z][a-z]+$/.test(words[0])) {
+                formattedName = '<em>' + escapeHtml(words[0]) + '</em>' + (words.length > 1 ? ' ' + escapeHtml(words.slice(1).join(' ')) : '');
+            }
+
+            // Custom Museum-style Registration ID
+            var fossilYear = f.createdAt ? new Date(f.createdAt).getFullYear() : 2026;
+            var fossilIdx = fossils.indexOf(f) + 1;
+            var paddedIdx = String(fossilIdx).padStart(4, '0');
+            var customCatalogId = 'FA-' + fossilYear + '-' + paddedIdx;
+
+            var category = f.category || '';
+            var anatomy = f.anatomy || '';
+            var period = f.geologicalPeriod || '';
+            var epoch = f.epoch || '';
+            var stratAge = f.stratAge || '';
+            var ageMa = f.ageMa ? '~' + f.ageMa + ' Ma' : '';
+            var country = f.country || '';
+            var location = f.location || '';
+            var formation = f.formation || '';
+
+            // Get Era Color
+            var fossilEra = 'Precambrian';
+            if (period) {
+                var cleanPeriod = period.trim();
+                for (var era in PERIODS_AND_EPOCHS) {
+                    if (PERIODS_AND_EPOCHS[era][cleanPeriod]) {
+                        fossilEra = era.replace(' Era', '');
+                        break;
+                    }
+                }
+            }
+            var eraColor = eraColors[fossilEra] || '#718096';
+
+            // FlagsCDN helper
+            var flagHtml = '';
+            if (country) {
+                var cleanCountry = country.toLowerCase().trim();
+                var code = COUNTRY_TO_ISO[cleanCountry];
+                if (!code) {
+                    if (cleanCountry.indexOf('united states') !== -1 || cleanCountry === 'usa') code = 'us';
+                    else if (cleanCountry.indexOf('united kingdom') !== -1 || cleanCountry === 'uk') code = 'gb';
+                    else if (cleanCountry.indexOf('morocco') !== -1) code = 'ma';
+                    else if (cleanCountry.indexOf('netherlands') !== -1) code = 'nl';
+                    else if (cleanCountry.indexOf('germany') !== -1) code = 'de';
+                    else if (cleanCountry.indexOf('france') !== -1) code = 'fr';
+                }
+                if (!code && cleanCountry.length === 2) code = cleanCountry;
+                if (code) {
+                    flagHtml = '<img class="flag-icon" src="https://flagcdn.com/w20/' + code.toLowerCase() + '.png" alt="' + escapeHtml(country) + '" />';
+                }
+            }
+
+            var geoLine = [period, epoch, stratAge].filter(Boolean).join(' · ');
+            var locLine = [location, country].filter(Boolean).join(', ');
+            if (formation) locLine += locLine ? ' (' + formation + ')' : formation;
+            var detailParts = [category, anatomy].filter(Boolean).join(' — ');
+
+            // Wikipedia QR URL
+            var qrGenus = words[0] || 'Fossil';
+            var qrUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=' + encodeURIComponent('https://en.wikipedia.org/wiki/' + qrGenus);
+
+            labelCardsHtml += '<div class="label-card">' +
+                '<div class="label-top">' +
+                    '<div class="specimen-name">' + formattedName + '</div>' +
+                    (detailParts ? '<div class="specimen-detail">' + escapeHtml(detailParts) + '</div>' : '') +
+                '</div>' +
+                '<div class="label-mid">' +
+                    (geoLine ? '<div class="label-row"><span class="label-key">Age</span><span class="label-val">' + escapeHtml(geoLine) + (ageMa ? ' · ' + ageMa : '') + '</span></div>' : '') +
+                    (locLine ? '<div class="label-row"><span class="label-key">Locality</span><span class="label-val">' + flagHtml + escapeHtml(locLine) + '</span></div>' : '') +
+                '</div>' +
+                '<div class="label-bottom">' +
+                    '<div class="label-bottom-left">' +
+                        '<span class="catalog-id">' + escapeHtml(customCatalogId) + '</span>' +
+                        '<span class="label-archive">Fossil Archive</span>' +
+                    '</div>' +
+                    '<div class="label-bottom-right">' +
+                        '<img class="label-qr" src="' + qrUrl + '" alt="QR code" />' +
+                    '</div>' +
+                '</div>' +
+                '<div class="era-indicator" style="background: ' + eraColor + ';" title="' + fossilEra + ' Era"></div>' +
+            '</div>';
+        });
+
+        var printHtml = '<!DOCTYPE html><html><head><title>Batch Specimen Labels — Fossil Archive</title>' +
+            '<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,600;0,700;1,600;1,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">' +
+            '<style>' +
+            '*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }' +
+            'body { background: #f4f1ea; font-family: "Inter", sans-serif; padding: 2rem; display: flex; flex-direction: column; align-items: center; min-height: 100vh; }' +
+            '.no-print-header { width: 100%; max-width: 6.8in; background: #fff; border-radius: 12px; padding: 1.25rem 1.75rem; display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.05), 0 8px 10px -6px rgba(0,0,0,0.05); border: 1px solid #e2dddb; }' +
+            '.no-print-header h1 { font-family: "Playfair Display", serif; font-size: 1.4rem; color: #1a1510; font-weight: 700; }' +
+            '.no-print-header p { font-size: 0.8rem; color: #736b63; margin-top: 0.25rem; font-weight: 500; }' +
+            '.no-print-header button { font-family: "Inter", sans-serif; padding: 0.65rem 1.75rem; background: #1a1510; color: #fff; border: none; border-radius: 9999px; font-size: 0.875rem; font-weight: 700; cursor: pointer; transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1); box-shadow: 0 4px 12px rgba(0,0,0,0.15); }' +
+            '.no-print-header button:hover { background: var(--accent, #4ca1a3); transform: translateY(-1px); }' +
+            '.labels-grid { display: grid; grid-template-columns: repeat(2, 3in); gap: 0.4in; justify-content: center; }' +
+            '.label-card { width: 3in; height: 2in; border: 1pt solid #1a1510; outline: 0.5pt solid rgba(0,0,0,0.15); outline-offset: -3pt; padding: 0.16in 0.18in; display: flex; flex-direction: column; justify-content: space-between; background: #fff; position: relative; overflow: hidden; page-break-inside: avoid; }' +
+            '.era-indicator { position: absolute; top: 0; left: 0; right: 0; height: 4px; }' +
+            '.label-top { display: flex; flex-direction: column; gap: 1px; }' +
+            '.specimen-name { font-family: "Playfair Display", Georgia, serif; font-size: 11pt; font-weight: 700; color: #1a1510; line-height: 1.15; letter-spacing: -0.01em; }' +
+            '.specimen-name em { font-style: italic; }' +
+            '.specimen-detail { font-size: 6pt; color: #736b63; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; margin-top: 1px; }' +
+            '.label-mid { display: flex; flex-direction: column; gap: 2px; border-top: 0.5pt solid #eae5e3; padding-top: 4px; margin-top: 2px; }' +
+            '.label-row { display: flex; align-items: baseline; gap: 4px; }' +
+            '.label-key { font-size: 5pt; font-weight: 700; color: #8c837b; text-transform: uppercase; letter-spacing: 0.08em; min-width: 38px; flex-shrink: 0; }' +
+            '.label-val { font-size: 6.5pt; color: #1a1510; font-weight: 600; display: flex; align-items: center; gap: 3px; }' +
+            '.flag-icon { width: 11px; height: auto; border-radius: 1px; border: 0.2pt solid rgba(0,0,0,0.1); }' +
+            '.label-bottom { display: flex; justify-content: space-between; align-items: flex-end; border-top: 0.5pt solid #eae5e3; padding-top: 3px; }' +
+            '.label-bottom-left { display: flex; flex-direction: column; gap: 1px; }' +
+            '.catalog-id { font-size: 6.5pt; font-weight: 800; color: #1a1510; letter-spacing: 0.05em; text-transform: uppercase; }' +
+            '.label-archive { font-size: 4.5pt; color: #a69e97; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; }' +
+            '.label-bottom-right { width: 0.35in; height: 0.35in; display: flex; align-items: center; justify-content: center; }' +
+            '.label-qr { width: 100%; height: 100%; object-fit: contain; }' +
+            '@media print {' +
+            '  body { background: #fff; padding: 0; }' +
+            '  .no-print-header { display: none !important; }' +
+            '  .labels-grid { gap: 0.3in 0.4in; grid-template-columns: repeat(2, 3in); margin: 0.5in auto; }' +
+            '  .label-card { border: 1.2pt solid #000; border-radius: 0; box-shadow: none; outline: 0.5pt solid #000; outline-offset: -3pt; }' +
+            '  @page { size: portrait; margin: 0.5in; }' +
+            '}' +
+            '</style></head><body>' +
+            '<div class="no-print-header">' +
+            '<div>' +
+            '<h1>Museum Exhibition Labels</h1>' +
+            '<p>Selected samlingsobjekt: <strong>' + ids.length + '</strong>. Utskriftsstorlek: 3&times;2 tum (passar i monterfack).</p>' +
+            '</div>' +
+            '<button onclick="window.print()">Skriv ut etikettark</button>' +
+            '</div>' +
+            '<div class="labels-grid">' +
+            labelCardsHtml +
+            '</div>' +
+            '</body></html>';
+
+        var printWindow = window.open('', '_blank', 'width=850,height=650,menubar=no,toolbar=no,location=no,status=no');
+        if (printWindow) {
+            printWindow.document.write(printHtml);
+            printWindow.document.close();
+        }
+    },
+
     // --- Render ---
     renderFossils: function() {
         return getAllFossils().then(function(allFossils) {
             fossils = allFossils;
+            
+            // --- UPDATE DROPDOWN OPTIONS WITH COUNTS ---
+            // Tally all specimens in active collection view (owned, sold, or wishlist)
+            var activeCollectionFossils = fossils.filter(function(f) { 
+                if (currentView === 'sold') return !!f.isSold;
+                if (currentView === 'true') return !!f.isWishlist && !f.isSold;
+                return !f.isWishlist && !f.isSold;
+            });
+            
+            var catTallies = {};
+            var periodTallies = {};
+            activeCollectionFossils.forEach(function(f) {
+                if (f.category) catTallies[f.category] = (catTallies[f.category] || 0) + 1;
+                if (f.geologicalPeriod) periodTallies[f.geologicalPeriod] = (periodTallies[f.geologicalPeriod] || 0) + 1;
+            });
+            
+            // Category filter dropdown options update
+            var catSelect = document.getElementById('filter-category');
+            if (catSelect) {
+                var selectedVal = catSelect.value;
+                catSelect.innerHTML = '<option value="">All Categories (' + activeCollectionFossils.length + ')</option>';
+                CATEGORIES.forEach(function(cat) {
+                    var count = catTallies[cat] || 0;
+                    var opt = document.createElement('option');
+                    opt.value = cat;
+                    opt.textContent = cat + ' (' + count + ')';
+                    catSelect.appendChild(opt);
+                });
+                catSelect.value = selectedVal;
+            }
+            
+            // Period filter dropdown options update
+            var periodSelect = document.getElementById('filter-period');
+            if (periodSelect) {
+                var selectedVal = periodSelect.value;
+                periodSelect.innerHTML = '<option value="">All Periods (' + activeCollectionFossils.length + ')</option>';
+                var groups = getPeriodsGrouped();
+                groups.forEach(function(group) {
+                    var og = document.createElement('optgroup');
+                    og.label = group.era;
+                    group.periods.forEach(function(per) {
+                        var count = periodTallies[per] || 0;
+                        var opt = document.createElement('option');
+                        opt.value = per;
+                        opt.textContent = per + ' (' + count + ')';
+                        og.appendChild(opt);
+                    });
+                    periodSelect.appendChild(og);
+                });
+                periodSelect.value = selectedVal;
+            }
+            
+            // Update filter badges
+            window.app.updateFilterBadges();
+
             var grid = document.getElementById('fossil-grid');
             grid.innerHTML = '';
 
@@ -3455,6 +4205,31 @@ window.app = {
                             .sort(function(a, b) { return b[1] - a[1]; })
                             .slice(0, 8);
 
+                        // --- CALCULATE FIELD DISCOVERY SCORE ---
+                        var overallOwned = fossils.filter(function(f) { return !f.isWishlist && !f.isSold; });
+                        var ownedCount = overallOwned.length;
+                        var selfFoundCount = overallOwned.filter(function(f) { return !!f.isSelfFound; }).length;
+                        var selfFoundPercent = ownedCount > 0 ? Math.round((selfFoundCount / ownedCount) * 100) : 0;
+                        
+                        var rankTitle = 'Curator';
+                        var rankEmoji = '🏛️';
+                        if (selfFoundCount >= 25) {
+                            rankTitle = 'Veteran Prospector';
+                            rankEmoji = '🦖';
+                        } else if (selfFoundCount >= 10) {
+                            rankTitle = 'Field Paleontologist';
+                            rankEmoji = '⚒️';
+                        } else if (selfFoundCount >= 3) {
+                            rankTitle = 'Fossil Hunter';
+                            rankEmoji = '🥾';
+                        } else if (selfFoundCount >= 1) {
+                            rankTitle = 'Novice Explorer';
+                            rankEmoji = '🧭';
+                        } else {
+                            rankTitle = 'Museum Curator';
+                            rankEmoji = '🏛️';
+                        }
+
                         dataHtml = '<div class="data-insights-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.5rem; padding: 1rem 0;">' +
                                         // Weight Card
                                         '<div class="data-card" style="background: var(--bg-warm); padding: 1.5rem; border-radius: 1rem; border: 1px solid var(--border-color); text-align: center; box-shadow: var(--shadow-sm);">' +
@@ -3502,6 +4277,21 @@ window.app = {
                                             }
 
                         dataHtml +=         '</div>' +
+                                        '</div>' +
+                                        // Paleontological Field Score Card
+                                        '<div class="data-card" style="background: var(--bg-warm); padding: 1.5rem; border-radius: 1rem; border: 1px solid var(--border-color); text-align: center; box-shadow: var(--shadow-sm); display: flex; flex-direction: column; justify-content: space-between;">' +
+                                            '<div>' +
+                                                '<div style="color: #e6a817; margin-bottom: 0.5rem;"><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"></polygon></svg></div>' +
+                                                '<div style="font-size: 0.9rem; opacity: 0.7; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;">Field Discovery Score</div>' +
+                                                '<div style="font-size: 2.25rem; font-weight: 800; color: var(--text-main); margin-top: 0.5rem;">' + selfFoundPercent + '%</div>' +
+                                                '<div class="badge" style="display: inline-flex; align-items: center; gap: 0.25rem; background: var(--bg-surface); border: 1px solid var(--border-color); color: #e6a817; font-weight: 700; font-size: 0.85rem; padding: 0.25rem 0.75rem; border-radius: 2rem; margin-top: 0.5rem; text-transform: uppercase; letter-spacing: 0.03em;">' + rankEmoji + ' ' + rankTitle + '</div>' +
+                                            '</div>' +
+                                            '<div>' +
+                                                '<div style="background: var(--border-color); border-radius: 9999px; height: 8px; margin-top: 1.25rem; overflow: hidden; position: relative;" title="' + selfFoundPercent + '% field discoveries">' +
+                                                    '<div style="background: linear-gradient(90deg, #e6a817, #f7d070); height: 100%; width: ' + selfFoundPercent + '%; border-radius: 9999px; transition: width 0.6s ease;"></div>' +
+                                                '</div>' +
+                                                '<div style="font-size: 0.8rem; opacity: 0.6; margin-top: 0.75rem;">You collected ' + selfFoundCount + ' of your ' + ownedCount + ' active specimens personally in the field.</div>' +
+                                            '</div>' +
                                         '</div>' +
                                        '</div>';
                     }
@@ -3668,6 +4458,7 @@ window.app = {
                         '</div>' +
                         '<div class="wishlist-actions">' +
                             linkHtml +
+                            '<button class="btn-primary btn-sm" onclick="app.acquireWishlistFossil(\'' + f.id + '\')" style="white-space: nowrap; font-size: 0.75rem; padding: 0.4rem 0.7rem; border-radius: 2rem; background: #10b981; border-color: #10b981; color: white; cursor: pointer; transition: all 0.2s;" title="Acquire Specimen and Add to Collection">🚀 Acquire</button>' +
                         '</div>' +
                         '<div class="card-actions">' +
                             '<button class="btn-copy" title="Copy Specimen Name" onclick="app.copySpecimenName(&quot;' + escapeHtml(f.specimen).replace(/"/g, '&quot;') + '&quot;)"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>' +
@@ -3697,7 +4488,8 @@ window.app = {
                     
                     var imgHtml = '';
                     if (hasImage) {
-                        imgHtml = '<img src="' + f.images[0] + '" alt="' + escapeHtml(f.specimen) + ' photograph" loading="lazy" style="cursor: zoom-in;" onclick="event.stopPropagation(); var idx = parseInt(this.parentElement.getAttribute(\'data-current-index\') || 0); app.openLightbox(\'' + f.id + '\', idx);" />';
+                        var imgCls = isAutoEnhanceActive ? 'enhanced-photo' : '';
+                        imgHtml = '<img src="' + f.images[0] + '" class="' + imgCls + '" alt="' + escapeHtml(f.specimen) + ' photograph" loading="lazy" style="cursor: zoom-in;" onclick="event.stopPropagation(); var idx = parseInt(this.parentElement.getAttribute(\'data-current-index\') || 0); app.openLightbox(\'' + f.id + '\', idx);" />';
                         if (multipleImages) {
                             imgHtml += '<button class="carousel-btn prev" onclick="event.stopPropagation(); app.changeImage(\'' + f.id + '\', -1)">&#10094;</button>' +
                                        '<button class="carousel-btn next" onclick="event.stopPropagation(); app.changeImage(\'' + f.id + '\', 1)">&#10095;</button>' +
@@ -3914,6 +4706,35 @@ window.app = {
         }
     },
 
+    acquireWishlistFossil: function(id) {
+        var f = fossils.find(function(x) { return x.id === id; });
+        if (!f) return;
+        
+        var name = f.specimen || 'this specimen';
+        var costInput = prompt('Enter acquisition cost for "' + name + '" (leave blank if unknown):');
+        if (costInput === null) return; // user cancelled
+        
+        var cost = parseFloat(costInput) || null;
+        var currency = 'USD';
+        if (cost !== null) {
+            var currInput = prompt('Enter currency (USD, EUR, SEK):', 'USD');
+            if (currInput) currency = currInput.toUpperCase();
+        }
+        
+        f.isWishlist = false;
+        if (cost !== null) {
+            f.price = cost;
+            f.currency = currency;
+        }
+        
+        updateFossil(f).then(function() {
+            if (window.app.showToast) {
+                window.app.showToast('🚀 "' + name + '" is now part of your Physical Collection!', 'success');
+            }
+            window.app.renderFossils();
+        });
+    },
+
     renderStratigraphicColumn: function(currentFossils) {
         var stratContainer = document.getElementById('strat-column-container');
         if (!stratContainer) return;
@@ -3977,14 +4798,10 @@ window.app = {
     // --- Export / Import ---
     exportData: function() {
         try {
-            localStorage.setItem('fossils', JSON.stringify(fossils));
+            localStorage.setItem('last_backup', Date.now().toString());
         } catch (e) {
-            console.error('LocalStorage quota exceeded!', e);
-            if (window.app && window.app.showToast) {
-                window.app.showToast('Storage limit reached! Some data might not be saved. Try removing some photos.', 5000);
-            }
+            console.error('LocalStorage error:', e);
         }
-        localStorage.setItem('last_backup', Date.now());
         var pd = document.querySelector('#btn-export .pulse-dot');
         if (pd) pd.remove();
         exportToJSON(); 

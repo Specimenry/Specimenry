@@ -48,16 +48,16 @@
                         <a href="#" onclick="app.batchFetchEtymologies(); return false;" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.6rem 1rem; font-size: 0.8rem; color: var(--text-primary); text-decoration: none; transition: background 0.15s;" onmouseover="this.style.background='var(--bg-warm)'" onmouseout="this.style.background='transparent'">
                             📖 Fetch Etymologies (Missing)
                         </a>
+                        <a href="#" onclick="app.enterShowcaseMode(); return false;" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.6rem 1rem; font-size: 0.8rem; color: var(--text-primary); text-decoration: none; transition: background 0.15s; border-top: 1px solid var(--border-color);" onmouseover="this.style.background='var(--bg-warm)'" onmouseout="this.style.background='transparent'">
+                            🏛️ Museum Showcase Mode
+                        </a>
+                        <a href="#" id="toggle-enrich-lighting" onclick="app.toggleAutoEnhance(); return false;" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.6rem 1rem; font-size: 0.8rem; color: var(--text-primary); text-decoration: none; transition: background 0.15s; border-top: 1px solid var(--border-color);" onmouseover="this.style.background='var(--bg-warm)'" onmouseout="this.style.background='transparent'">
+                            💡 Auto-Enhance Lighting: Off
+                        </a>
                     </div>
                 </div>
 
-                <button id="btn-mass-tag" class="btn-secondary" style="display:none;" onclick="app.massTagSelected()">
-                    Tag Selected
-                </button>
 
-                <button id="btn-mass-delete" class="btn-danger" style="display:none;" onclick="app.deleteSelected()">
-                    Delete Selected
-                </button>
 
                 <button class="btn-primary desktop-only" onclick="app.openModal()">
                     + Add Fossil
@@ -128,29 +128,33 @@
                 </div>
             </div>
             
+            <!-- Row 3: Active Badges -->
+            <div id="active-filter-badges" class="active-filter-badges" style="display: none; padding-top: 0.25rem;"></div>
+            
             </div>
         </div>
     </nav>
 
     <main>
         <div id="stats-summary" class="stats-summary" aria-live="polite">
-            <div class="stats-header" style="display: flex; justify-content: space-between; align-items: flex-start; width: 100%; margin-bottom: 1rem;">
+            <div class="stats-header" style="display: flex; justify-content: space-between; align-items: flex-start; width: 100%; border-bottom: 1px solid var(--border-color); padding-bottom: 1rem; margin-bottom: 1rem;">
                 <div id="stats-summary-text" class="stats-text" style="flex: 1;"></div>
-                <div class="stats-actions" style="display: flex; flex-direction: column; gap: 0.5rem; align-items: flex-end; margin-left: 1rem;">
-                    <button type="button" id="btn-toggle-charts" class="btn-secondary active" onclick="app.showMainCharts()" style="white-space: nowrap; font-size: 0.8rem; padding: 0.35rem 0.75rem; width: 100%; display: flex; align-items: center; justify-content: center; gap: 0.25rem;">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="9" y1="3" x2="9" y2="21"/><line x1="15" y1="3" x2="15" y2="21"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/></svg> Charts Dashboard
-                    </button>
-
-                    <button type="button" id="btn-toggle-treemap" class="btn-secondary" onclick="app.toggleTreemap()" style="white-space: nowrap; font-size: 0.8rem; padding: 0.35rem 0.75rem; width: 100%; display: flex; align-items: center; justify-content: center; gap: 0.25rem;">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg> Missing Specimens
-                    </button>
-                    <button type="button" id="btn-toggle-earth-history" class="btn-secondary" onclick="app.toggleEarthHistory()" style="white-space: nowrap; font-size: 0.8rem; padding: 0.35rem 0.75rem; width: 100%; display: flex; align-items: center; justify-content: center; gap: 0.25rem;">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg> Earth History
-                    </button>
-                    <button type="button" id="btn-toggle-data" class="btn-secondary" onclick="app.toggleData()" style="white-space: nowrap; font-size: 0.8rem; padding: 0.35rem 0.75rem; width: 100%; display: flex; align-items: center; justify-content: center; gap: 0.25rem;">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/><path d="M3 20h18"/></svg> Data
-                    </button>
-                </div>
+                <button type="button" class="btn-secondary" onclick="app.toggleStats()" title="Close Dashboard" style="border: none; background: transparent; padding: 0.25rem 0.5rem; font-size: 1.25rem; cursor: pointer; color: var(--text-secondary); line-height: 1; margin-left: 1rem; display: flex; align-items: center; justify-content: center; height: 32px; width: 32px; border-radius: 50%;" onmouseover="this.style.background='var(--bg-warm)'; this.style.color='var(--text-primary)'" onmouseout="this.style.background='transparent'; this.style.color='var(--text-secondary)'">&times;</button>
+            </div>
+            
+            <div class="stats-segmented-control">
+                <button type="button" id="btn-toggle-charts" class="active" onclick="app.showMainCharts()">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="9" y1="3" x2="9" y2="21"/><line x1="15" y1="3" x2="15" y2="21"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/></svg> Charts Dashboard
+                </button>
+                <button type="button" id="btn-toggle-treemap" onclick="app.toggleTreemap()">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg> Missing Specimens
+                </button>
+                <button type="button" id="btn-toggle-earth-history" onclick="app.toggleEarthHistory()">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg> Earth History
+                </button>
+                <button type="button" id="btn-toggle-data" onclick="app.toggleData()">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/><path d="M3 20h18"/></svg> Data Insights
+                </button>
             </div>
             
             <div id="stats-charts-container" class="stats-charts">
@@ -384,6 +388,7 @@
     <!-- Lightbox Overlay -->
     <div id="lightbox" class="lightbox-overlay" onclick="if(event.target===this) app.closeLightbox();">
         <div class="lightbox-inner">
+            <button id="lightbox-auto-enhance" onclick="app.toggleAutoEnhance()" title="Toggle Auto-Enhance Lighting" style="position: absolute; top: -40px; right: 40px; background: none; border: none; color: var(--text-primary); font-size: 1.25rem; cursor: pointer; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; border-radius: 50%; transition: background 0.2s ease;" onmouseover="this.style.background='rgba(0,0,0,0.05)'" onmouseout="this.style.background='transparent'">💡</button>
             <button class="lightbox-close" onclick="app.closeLightbox()" title="Close (Esc)">&times;</button>
 
             <!-- Image row: arrows are flex siblings of the image, always visible -->
@@ -399,6 +404,8 @@
                 <p id="lightbox-detail"></p>
                 <p id="lightbox-location"></p>
                 <div class="lightbox-counter" id="lightbox-counter"></div>
+                <div id="lightbox-timeline-ruler" style="margin-top: 1.25rem; border-top: 1px solid var(--border-color); padding-top: 1rem; display: none;"></div>
+                <div id="lightbox-coexistence" style="margin-top: 1.25rem; border-top: 1px solid var(--border-color); padding-top: 1rem; display: none;"></div>
             </div>
 
             <!-- Inter-fossil carousel -->
@@ -425,6 +432,94 @@
             <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
             <span class="fab-text">Add Fossil</span>
         </button>
+    </div>
+
+    <!-- Floating Back to Top Button -->
+    <button type="button" id="btn-back-to-top" onclick="window.scrollTo({ top: 0, behavior: 'smooth' })" title="Back to Top" style="position: fixed; bottom: 85px; right: 2rem; width: 44px; height: 44px; border-radius: 50%; background: var(--bg-surface); border: 1px solid var(--border-color); color: var(--text-primary); cursor: pointer; display: flex; align-items: center; justify-content: center; box-shadow: var(--shadow-md); z-index: 99; opacity: 0; pointer-events: none; transform: translateY(15px); transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);">
+        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"/></svg>
+    </button>
+
+    <!-- Floating Selection Actions Bar -->
+    <div id="selection-bar" class="selection-bar" style="display: none;">
+        <div class="selection-bar-inner">
+            <span id="selection-count-text" class="selection-count-text">0 selected</span>
+            <div class="selection-actions-group">
+                <button id="btn-mass-tag" class="btn-primary" onclick="app.massTagSelected()">🏷️ Tag</button>
+                <button id="btn-mass-print" class="btn-secondary" onclick="app.printLabelsSelected()">🖨️ Print Labels</button>
+                <button id="btn-mass-select-all" class="btn-secondary" onclick="app.selectAllVisible()">🔒 Select All</button>
+                <button id="btn-mass-deselect" class="btn-secondary" onclick="app.deselectAllSelected()">🔓 Deselect All</button>
+                <button id="btn-mass-delete" class="btn-danger" onclick="app.deleteSelected()">🗑️ Delete</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Immersive Photo Zoom Overlay -->
+    <div id="zoom-overlay" class="zoom-overlay" onclick="app.closeZoomOverlay()" title="Click anywhere to exit zoom">
+        <img id="zoom-overlay-img" src="" alt="Specimen ultra zoom" />
+        <div class="zoom-overlay-close">&times;</div>
+    </div>
+
+    <!-- Museum Showcase Overlay -->
+    <div id="showcase-mode" class="showcase-mode" style="display: none;">
+        <!-- Showcase Header -->
+        <div class="showcase-header">
+            <div class="showcase-brand">
+                <span class="showcase-badge">🏛️ Museum Presentation</span>
+                <span id="showcase-index-text" class="showcase-index-text">Specimen 1 of 12</span>
+            </div>
+            <div class="showcase-header-actions">
+                <button id="showcase-play-btn" onclick="app.toggleShowcasePlay()" class="showcase-action-btn play-btn" title="Toggle Auto-Play (Space)">⏸️ Pause</button>
+                <button onclick="app.exitShowcaseMode()" class="showcase-action-btn exit-btn" title="Exit Presentation (Esc)">&times; Exit</button>
+            </div>
+        </div>
+
+        <!-- Animated Progress Tracker -->
+        <div class="showcase-progress-container">
+            <div id="showcase-progress-bar" class="showcase-progress-bar"></div>
+        </div>
+
+        <!-- Specimen Canvas -->
+        <div class="showcase-canvas">
+            <!-- Left: Large Image Container -->
+            <div class="showcase-img-pane">
+                <div class="showcase-img-wrapper">
+                    <img id="showcase-img" src="" alt="Specimen showcase photo" onclick="app.openZoomOverlay(this.src)" title="Click to view ultra zoom" />
+                    <button class="showcase-nav-arrow prev" onclick="app.showcaseNav(-1)" title="Previous specimen (←)">&#10094;</button>
+                    <button class="showcase-nav-arrow next" onclick="app.showcaseNav(1)" title="Next specimen (→)">&#10095;</button>
+                </div>
+            </div>
+
+            <!-- Right: Museum Curation Card -->
+            <div class="showcase-info-pane">
+                <div class="showcase-info-card">
+                    <div class="showcase-info-header">
+                        <span id="showcase-category-tag" class="showcase-info-badge">Vertebrate</span>
+                        <h1 id="showcase-title">Tyrannosaurus Rex Tooth</h1>
+                        <p id="showcase-subtitles" class="showcase-subtitles">Late Cretaceous · ~66.0 Ma</p>
+                    </div>
+
+                    <div class="showcase-meta-grid">
+                        <div class="showcase-meta-item">
+                            <span class="meta-label">Geological Timeline</span>
+                            <span id="showcase-meta-period" class="meta-val">Mesozoic Era, Cretaceous Period</span>
+                        </div>
+                        <div class="showcase-meta-item">
+                            <span class="meta-label">Formation / Origin</span>
+                            <span id="showcase-meta-origin" class="meta-val">📍 Hell Creek Formation, Montana, USA</span>
+                        </div>
+                        <div class="showcase-meta-item">
+                            <span class="meta-label">Dimensions & Anatomy</span>
+                            <span id="showcase-meta-anatomy" class="meta-val">Anterior Premaxillary Tooth</span>
+                        </div>
+                    </div>
+
+                    <div class="showcase-notes-container">
+                        <span class="meta-label">Curation Notes & Scientific Context</span>
+                        <p id="showcase-meta-notes" class="showcase-notes">Exhibits beautiful serrations along the posterior carina...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 
     <script src="js/app.js"></script>
