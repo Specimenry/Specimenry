@@ -59,11 +59,17 @@
                         <a href="#" id="toggle-enrich-lighting" onclick="app.toggleAutoEnhance(); return false;" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.6rem 1rem; font-size: 0.8rem; color: var(--text-primary); text-decoration: none; transition: background 0.15s; border-top: 1px solid var(--border-color);" onmouseover="this.style.background='var(--bg-warm)'" onmouseout="this.style.background='transparent'">
                             💡 Auto-Enhance Lighting: Off
                         </a>
+                        <a href="#" id="link-compare-picker" onclick="app.toggleComparePickerMode(); return false;" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.6rem 1rem; font-size: 0.8rem; color: var(--text-primary); text-decoration: none; transition: background 0.15s; border-top: 1px solid var(--border-color);" onmouseover="this.style.background='var(--bg-warm)'" onmouseout="this.style.background='transparent'">
+                            ⚖️ Compare Mode: Off
+                        </a>
                     </div>
                 </div>
 
 
 
+                <button id="btn-toggle-compare-picker" class="btn-secondary desktop-only" onclick="app.toggleComparePickerMode()" title="Interactive Compare Selector Mode" style="margin-right: 0.5rem;">
+                    ⚖️ Compare
+                </button>
                 <button class="btn-primary desktop-only" onclick="app.openModal()">
                     + Add Fossil
                 </button>
@@ -210,197 +216,262 @@
                 </button>
             </div>
 
+            <!-- Tab Navigation (Fixed at top of dialog body) -->
+            <div class="modal-tabs" style="display: flex; gap: 0.25rem; padding: 0 1.5rem; border-bottom: 1px solid var(--border-color); background: var(--bg-surface); z-index: 10;">
+                <button type="button" class="modal-tab-btn active" onclick="app.setModalTab('classification')" id="tab-btn-classification" style="background: none; border: none; border-bottom: 2px solid var(--accent); padding: 0.85rem 1rem; font-weight: 600; color: var(--text-primary); cursor: pointer; font-size: 0.8rem; transition: all 0.2s; font-family: inherit;">🔬 Classification</button>
+                <button type="button" class="modal-tab-btn" onclick="app.setModalTab('geology')" id="tab-btn-geology" style="background: none; border: none; border-bottom: 2px solid transparent; padding: 0.85rem 1rem; font-weight: 600; color: var(--text-secondary); cursor: pointer; font-size: 0.8rem; transition: all 0.2s; font-family: inherit;">🌍 Geology & Location</button>
+                <button type="button" class="modal-tab-btn" onclick="app.setModalTab('curator')" id="tab-btn-curator" style="background: none; border: none; border-bottom: 2px solid transparent; padding: 0.85rem 1rem; font-weight: 600; color: var(--text-secondary); cursor: pointer; font-size: 0.8rem; transition: all 0.2s; font-family: inherit;">📐 Curation & Value</button>
+            </div>
+
             <div class="modal-body">
-                <div class="form-grid">
-                    <div class="form-group full-width">
-                        <label for="f-specimen">Specimen Name *</label>
-                        <div style="display: flex; gap: 0.5rem;">
-                            <input type="text" id="f-specimen" required placeholder="e.g. Megalodon" style="flex: 1;" oninput="window.app.autoSizeLookup()">
-                            <button type="button" class="btn-secondary" onclick="window.app.fetchScientificInfo(event)" title="Auto-fetch Taxonomy & Etymology" style="padding: 0.4rem 0.6rem; font-size: 0.75rem;">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg> Fetch info
-                            </button>
+                <!-- Section 1: Classification -->
+                <div id="tab-classification" class="tab-content">
+                    <div class="form-grid">
+                        <div class="form-group full-width">
+                            <label for="f-specimen">Specimen Name *</label>
+                            <div style="display: flex; gap: 0.5rem;">
+                                <input type="text" id="f-specimen" required placeholder="e.g. Megalodon" style="flex: 1;" oninput="window.app.autoSizeLookup()">
+                                <button type="button" class="btn-secondary" onclick="window.app.fetchScientificInfo(event)" title="Auto-fetch Taxonomy & Etymology" style="padding: 0.4rem 0.6rem; font-size: 0.75rem;">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg> Fetch info
+                                </button>
+                            </div>
                         </div>
-                    </div>
 
-                    <div class="form-group full-width">
-                        <label for="f-animal-size">Animal Size (Estimated Meters)</label>
-                        <div style="display: flex; align-items: center; gap: 0.75rem;">
-                            <input type="number" step="0.1" id="f-animal-size" placeholder="e.g. 15.0" style="width: 120px;">
-                            <span class="upload-hint" style="margin:0;">Length or Height of the entire animal.</span>
+                        <div class="form-group full-width">
+                            <label for="f-anatomy">Anatomy / Part</label>
+                            <input type="text" id="f-anatomy" placeholder="e.g. Anterior Tooth, Thoracic Vertebra, Leaf Impression...">
                         </div>
-                    </div>
 
+                        <div class="form-group">
+                            <label for="f-category">Category *</label>
+                            <select id="f-category" required></select>
+                        </div>
 
-                    <div class="form-group full-width">
-                        <label for="f-etymology">Etymology / Translation</label>
-                        <textarea id="f-etymology" rows="2" placeholder="e.g. 'Great tooth' in Greek..."></textarea>
-                    </div>
-
-                    <div class="form-group full-width">
-                        <label for="f-anatomy">Anatomy / Part</label>
-                        <input type="text" id="f-anatomy" placeholder="e.g. Anterior Tooth, Thoracic Vertebra, Leaf Impression...">
-                    </div>
-
-                    <div class="form-group">
-                        <label for="f-category">Category *</label>
-                        <select id="f-category" required></select>
-                    </div>
-
-                    <div class="form-group">
-                        <label for="f-wishlist">Ownership Status</label>
-                        <select id="f-wishlist" onchange="app.toggleSalePriceField()">
-                            <option value="false">Owned</option>
-                            <option value="true">Wishlist</option>
-                            <option value="sold">Sold</option>
-                        </select>
-                    </div>
-
-                    <div class="form-group" id="group-sale-price" style="display: none;">
-                        <label for="f-sale-price">Sale Price</label>
-                        <div class="input-with-select">
-                            <input type="number" step="0.01" id="f-sale-price" class="fossil-input" placeholder="e.g. 250">
-                            <select id="f-sale-currency" class="fossil-input">
-                                <option value="USD">USD</option>
-                                <option value="EUR">EUR</option>
-                                <option value="SEK">SEK</option>
+                        <div class="form-group">
+                            <label for="f-wishlist">Ownership Status</label>
+                            <select id="f-wishlist" onchange="app.toggleSalePriceField()">
+                                <option value="false">Owned</option>
+                                <option value="true">Wishlist</option>
+                                <option value="sold">Sold</option>
                             </select>
                         </div>
-                    </div>
 
-                    <div class="form-group">
-                        <label for="f-period">Geological Period</label>
-                        <select id="f-period" onchange="app.updateEpochs(); app.updateStratAges(); app.updateAgeSlider()"></select>
-                    </div>
-
-                    <div class="form-group">
-                        <label for="f-epoch">Epoch</label>
-                        <select id="f-epoch" onchange="app.updateStratAges()">
-                            <option value="">— Select Period First —</option>
-                        </select>
-                    </div>
-
-                    <div class="form-group">
-                        <label for="f-strat-age">Age (Stage)</label>
-                        <select id="f-strat-age">
-                            <option value="">— Select Epoch First —</option>
-                        </select>
-                    </div>
-
-                    <div class="form-group full-width">
-                        <label for="f-age">Estimated Age (Million Years Ago)</label>
-                        <div style="display: flex; gap: 1rem; align-items: center;">
-                            <input type="number" id="f-age" step="0.01" min="0" value="0" style="width: 120px;" oninput="document.getElementById('f-age-slider').value = Math.min(this.value, 541); app.updateDropdownsFromAge();">
-                            <input type="range" id="f-age-slider" min="0" max="541" value="0" step="0.1" style="flex: 1;" oninput="document.getElementById('f-age').value = this.value; app.updateDropdownsFromAge();">
+                        <div class="form-group full-width" id="group-sale-price" style="display: none;">
+                            <label for="f-sale-price">Sale Price</label>
+                            <div class="input-with-select">
+                                <input type="number" step="0.01" id="f-sale-price" class="fossil-input" placeholder="e.g. 250">
+                                <select id="f-sale-currency" class="fossil-input">
+                                    <option value="USD">USD</option>
+                                    <option value="EUR">EUR</option>
+                                    <option value="SEK">SEK</option>
+                                </select>
+                            </div>
                         </div>
-                        <div class="slider-labels" style="margin-top: 0.25rem;">
-                            <span>Present</span>
-                            <span>541 Ma (Cambrian Base)</span>
+
+                        <div class="form-group full-width">
+                            <label for="f-notes">Curation Notes</label>
+                            <textarea id="f-notes" rows="3" placeholder="Provenance details, preparation context, custom scientific information..."></textarea>
                         </div>
-                    </div>
 
-                    <div class="form-group">
-                        <label for="f-country">Country of Origin</label>
-                        <div style="display: flex; align-items: center; gap: 0.5rem; position: relative;">
-                            <div id="modal-flag-preview" style="min-width: 20px; text-align: center; height: 14px; display: flex; align-items: center;"></div>
-                            <input type="text" id="f-country" placeholder="e.g. Morocco" style="flex: 1;" oninput="app.updateModalFlag()">
+                        <div class="form-group full-width">
+                            <label for="f-tags">Tags (Keywords)</label>
+                            <input type="text" id="f-tags" placeholder="e.g. shark, predator, tooth, fragile">
+                            <span class="upload-hint" style="margin-top: 0.25rem; display: block;">Separate tags with commas or spaces. Use tags like #shark for quick filtering.</span>
                         </div>
-                    </div>
 
-                    <div class="form-group">
-                        <label for="f-location">Precise Location</label>
-                        <input type="text" id="f-location" placeholder="e.g. Kem Kem Beds">
-                    </div>
+                        <div class="form-group full-width">
+                            <label for="f-link">Source Link / URL</label>
+                            <input type="text" id="f-link" class="fossil-input" placeholder="https://www.fossilera.com/fossils/...">
+                        </div>
 
-                    <div class="form-group full-width">
-                        <label for="f-formation">Geological Formation</label>
-                        <input type="text" id="f-formation" placeholder="e.g. Hell Creek Formation">
-                    </div>
-
-                    <div class="form-group">
-                        <label for="f-lat">Latitude</label>
-                        <input type="number" step="any" id="f-lat" placeholder="e.g. 31.25">
-                    </div>
-
-                    <div class="form-group">
-                        <label for="f-lng">Longitude</label>
-                        <div style="display: flex; gap: 0.5rem;">
-                            <input type="number" step="any" id="f-lng" placeholder="e.g. -4.01" style="flex: 1;">
-                            <button type="button" class="btn-secondary" onclick="app.autoGeocodeLookup(event)" title="Auto-lookup coordinates based on Location/Country" style="padding: 0.4rem 0.6rem; font-size: 0.75rem; white-space: nowrap; display: flex; align-items: center; gap: 0.25rem;">
-                                📍 Fetch Coordinates
-                            </button>
+                        <div class="form-group full-width">
+                            <label>Specimen Images</label>
+                            <div class="upload-area" onclick="document.getElementById('f-images').click()" onkeydown="if(event.key==='Enter')document.getElementById('f-images').click()" tabindex="0" role="button" aria-label="Click to upload images">
+                                <input type="file" id="f-images" accept="image/*" multiple onchange="app.handleImageUpload(event)" style="display:none;">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+                                <span class="upload-text">Click to upload images</span>
+                                <span class="upload-hint">JPG, PNG, WEBP · Multiple allowed</span>
+                            </div>
+                            <div id="image-preview" class="img-preview" aria-live="polite"></div>
                         </div>
                     </div>
+                </div>
 
-                    <div class="form-group">
-                        <label for="f-size">Size (Length)</label>
-                        <div class="input-with-select">
-                            <input type="number" step="0.01" id="f-size" placeholder="e.g. 10">
-                            <select id="f-size-unit">
-                                <option value="cm">cm</option>
-                                <option value="inch">inch</option>
+                <!-- Section 2: Geology & Location -->
+                <div id="tab-geology" class="tab-content" style="display: none;">
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label for="f-period">Geological Period</label>
+                            <select id="f-period" onchange="app.updateEpochs(); app.updateStratAges(); app.updateAgeSlider()"></select>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="f-epoch">Epoch</label>
+                            <select id="f-epoch" onchange="app.updateStratAges()">
+                                <option value="">— Select Period First —</option>
                             </select>
                         </div>
-                    </div>
 
-                    <div class="form-group">
-                        <label for="f-weight">Weight (g)</label>
-                        <input type="number" step="0.1" id="f-weight" placeholder="e.g. 500">
-                    </div>
-
-                    <div class="form-group">
-                        <label for="f-price">Purchase Price</label>
-                        <div class="input-with-select">
-                            <input type="number" step="0.01" id="f-price" class="fossil-input" placeholder="e.g. 150">
-                            <select id="f-currency" class="fossil-input">
-                                <option value="USD">USD</option>
-                                <option value="EUR">EUR</option>
-                                <option value="SEK">SEK</option>
+                        <div class="form-group">
+                            <label for="f-strat-age">Age (Stage)</label>
+                            <select id="f-strat-age">
+                                <option value="">— Select Epoch First —</option>
                             </select>
                         </div>
-                    </div>
 
-                    <div class="form-group">
-                        <label for="f-est-value">Estimated Current Value</label>
-                        <div class="input-with-select">
-                            <input type="number" step="0.01" id="f-est-value" class="fossil-input" placeholder="e.g. 200">
-                            <select id="f-est-currency" class="fossil-input">
-                                <option value="USD">USD</option>
-                                <option value="EUR">EUR</option>
-                                <option value="SEK">SEK</option>
-                            </select>
+                        <div class="form-group full-width">
+                            <label for="f-age">Estimated Age (Million Years Ago)</label>
+                            <div style="display: flex; gap: 1rem; align-items: center;">
+                                <input type="number" id="f-age" step="0.01" min="0" value="0" style="width: 120px;" oninput="document.getElementById('f-age-slider').value = Math.min(this.value, 541); app.updateDropdownsFromAge();">
+                                <input type="range" id="f-age-slider" min="0" max="541" value="0" step="0.1" style="flex: 1;" oninput="document.getElementById('f-age').value = this.value; app.updateDropdownsFromAge();">
+                            </div>
+                            <div class="slider-labels" style="margin-top: 0.25rem;">
+                                <span>Present</span>
+                                <span>541 Ma (Cambrian Base)</span>
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="f-country">Country of Origin</label>
+                            <div style="display: flex; align-items: center; gap: 0.5rem; position: relative;">
+                                <div id="modal-flag-preview" style="min-width: 20px; text-align: center; height: 14px; display: flex; align-items: center;"></div>
+                                <input type="text" id="f-country" placeholder="e.g. Morocco" style="flex: 1;" oninput="app.updateModalFlag()">
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="f-location">Precise Location</label>
+                            <input type="text" id="f-location" placeholder="e.g. Kem Kem Beds">
+                        </div>
+
+                        <div class="form-group full-width">
+                            <label for="f-formation">Geological Formation</label>
+                            <input type="text" id="f-formation" placeholder="e.g. Hell Creek Formation">
+                        </div>
+
+                        <div class="form-group">
+                            <label for="f-lat">Latitude</label>
+                            <input type="number" step="any" id="f-lat" placeholder="e.g. 31.25">
+                        </div>
+
+                        <div class="form-group">
+                            <label for="f-lng">Longitude</label>
+                            <div style="display: flex; gap: 0.5rem;">
+                                <input type="number" step="any" id="f-lng" placeholder="e.g. -4.01" style="flex: 1;">
+                                <button type="button" class="btn-secondary" onclick="app.autoGeocodeLookup(event)" title="Auto-lookup coordinates based on Location/Country" style="padding: 0.4rem 0.6rem; font-size: 0.75rem; white-space: nowrap; display: flex; align-items: center; gap: 0.25rem;">
+                                    📍 Fetch Coordinates
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="form-group full-width" style="display: flex; flex-direction: row; align-items: center; gap: 0.65rem; border-top: 1px dashed var(--border-color); padding-top: 1rem; margin-top: 0.5rem;">
+                            <input type="checkbox" id="f-self-found" style="width: 18px; height: 18px; cursor: pointer; accent-color: var(--accent);">
+                            <label for="f-self-found" style="margin: 0; cursor: pointer; white-space: nowrap; font-size: 0.85rem; font-weight: 500;">Field Discovery / Self Found</label>
                         </div>
                     </div>
+                </div>
 
-                    <div class="form-group full-width" style="display: flex; flex-direction: row; align-items: center; gap: 0.65rem; border-top: 1px dashed var(--border-color); padding-top: 1rem; margin-top: 0.5rem;">
-                        <input type="checkbox" id="f-self-found" style="width: 18px; height: 18px; cursor: pointer; accent-color: var(--accent);">
-                        <label for="f-self-found" style="margin: 0; cursor: pointer; white-space: nowrap; font-size: 0.85rem; font-weight: 500;">Field Discovery / Self Found</label>
-                    </div>
-
-                    <div class="form-group full-width">
-                        <label for="f-link">Source Link / URL</label>
-                        <input type="text" id="f-link" class="fossil-input" placeholder="https://www.fossilera.com/fossils/...">
-                    </div>
-
-                    <div class="form-group full-width">
-                        <label for="f-notes">Notes</label>
-                        <textarea id="f-notes" rows="3" placeholder="Condition, preparation details, provenance..."></textarea>
-                    </div>
-
-                    <div class="form-group full-width">
-                        <label for="f-tags">Tags (Keywords)</label>
-                        <input type="text" id="f-tags" placeholder="e.g. shark, predator, tooth, fragile">
-                        <span class="upload-hint" style="margin-top: 0.25rem; display: block;">Separate tags with commas or spaces. Use tags like #shark for quick filtering.</span>
-                    </div>
-
-                    <div class="form-group full-width">
-                        <label>Specimen Images</label>
-                        <div class="upload-area" onclick="document.getElementById('f-images').click()" onkeydown="if(event.key==='Enter')document.getElementById('f-images').click()" tabindex="0" role="button" aria-label="Click to upload images">
-                            <input type="file" id="f-images" accept="image/*" multiple onchange="app.handleImageUpload(event)" style="display:none;">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
-                            <span class="upload-text">Click to upload images</span>
-                            <span class="upload-hint">JPG, PNG, WEBP · Multiple allowed</span>
+                <!-- Section 3: Curation & Value -->
+                <div id="tab-curator" class="tab-content" style="display: none;">
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label for="f-size">Size (Length)</label>
+                            <div class="input-with-select">
+                                <input type="number" step="0.01" id="f-size" placeholder="e.g. 10">
+                                <select id="f-size-unit">
+                                    <option value="cm">cm</option>
+                                    <option value="inch">inch</option>
+                                </select>
+                            </div>
                         </div>
-                        <div id="image-preview" class="img-preview" aria-live="polite"></div>
+
+                        <div class="form-group">
+                            <label for="f-weight">Weight (g)</label>
+                            <input type="number" step="0.1" id="f-weight" placeholder="e.g. 500">
+                        </div>
+
+                        <div class="form-group full-width">
+                            <label for="f-animal-size">Animal Size (Estimated Meters)</label>
+                            <div style="display: flex; align-items: center; gap: 0.75rem;">
+                                <input type="number" step="0.1" id="f-animal-size" placeholder="e.g. 15.0" style="width: 120px;">
+                                <span class="upload-hint" style="margin:0;">Length or Height of the entire animal.</span>
+                            </div>
+                        </div>
+
+                        <div class="form-group full-width">
+                            <label for="f-etymology">Etymology / Translation</label>
+                            <textarea id="f-etymology" rows="2" placeholder="e.g. 'Great tooth' in Greek..."></textarea>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="f-price">Purchase Price</label>
+                            <div class="input-with-select">
+                                <input type="number" step="0.01" id="f-price" class="fossil-input" placeholder="e.g. 150">
+                                <select id="f-currency" class="fossil-input">
+                                    <option value="USD">USD</option>
+                                    <option value="EUR">EUR</option>
+                                    <option value="SEK">SEK</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="f-est-value">Estimated Current Value</label>
+                            <div class="input-with-select">
+                                <input type="number" step="0.01" id="f-est-value" class="fossil-input" placeholder="e.g. 200">
+                                <select id="f-est-currency" class="fossil-input">
+                                    <option value="USD">USD</option>
+                                    <option value="EUR">EUR</option>
+                                    <option value="SEK">SEK</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- Condition Checklist -->
+                        <div class="form-group full-width" style="border-top: 1px dashed var(--border-color); padding-top: 1rem; margin-top: 0.5rem;">
+                            <label style="margin-bottom: 0.5rem; display: block; font-weight: 600;">Specimen Preservation & Condition</label>
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; background: var(--bg-warm); padding: 1rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
+                                <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; font-size: 0.8rem; font-weight: 500;">
+                                    <input type="checkbox" id="cond-stable" class="cond-checkbox" style="width: 16px; height: 16px; accent-color: var(--accent);">
+                                    <span>🟢 Stable (No decay)</span>
+                                </label>
+                                <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; font-size: 0.8rem; font-weight: 500;">
+                                    <input type="checkbox" id="cond-cracking" class="cond-checkbox" style="width: 16px; height: 16px; accent-color: var(--accent);">
+                                    <span>⚡ Cracking / Fracturing</span>
+                                </label>
+                                <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; font-size: 0.8rem; font-weight: 500;">
+                                    <input type="checkbox" id="cond-efflorescence" class="cond-checkbox" style="width: 16px; height: 16px; accent-color: var(--accent);">
+                                    <span>⚪ Efflorescence (White dust)</span>
+                                </label>
+                                <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; font-size: 0.8rem; font-weight: 500;">
+                                    <input type="checkbox" id="cond-pyrite" class="cond-checkbox" style="width: 16px; height: 16px; accent-color: var(--accent);">
+                                    <span>🔥 Pyrite Decay (Sulfide rot)</span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <!-- Treatment Checklist -->
+                        <div class="form-group full-width" style="border-top: 1px dashed var(--border-color); padding-top: 1rem; margin-top: 0.5rem;">
+                            <label style="margin-bottom: 0.5rem; display: block; font-weight: 600;">Preparation & Treatment History</label>
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; background: var(--bg-warm); padding: 1rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
+                                <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; font-size: 0.8rem; font-weight: 500;">
+                                    <input type="checkbox" id="treat-paraloid" class="cond-checkbox" style="width: 16px; height: 16px; accent-color: var(--accent);">
+                                    <span>🧪 Consolidated with Paraloid B-72</span>
+                                </label>
+                                <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; font-size: 0.8rem; font-weight: 500;">
+                                    <input type="checkbox" id="treat-scribe" class="cond-checkbox" style="width: 16px; height: 16px; accent-color: var(--accent);">
+                                    <span>⛏️ Mechanically cleaned (Air scribe / needle)</span>
+                                </label>
+                                <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; font-size: 0.8rem; font-weight: 500;">
+                                    <input type="checkbox" id="treat-cyano" class="cond-checkbox" style="width: 16px; height: 16px; accent-color: var(--accent);">
+                                    <span>💧 Glued with Cyanoacrylate (Superglue)</span>
+                                </label>
+                                <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; font-size: 0.8rem; font-weight: 500;">
+                                    <input type="checkbox" id="treat-water" class="cond-checkbox" style="width: 16px; height: 16px; accent-color: var(--accent);">
+                                    <span>🛡️ Stabilized with Paraloid B-67 / PVA / PEG</span>
+                                </label>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -432,6 +503,7 @@
                 <p id="lightbox-location"></p>
                 <div class="lightbox-counter" id="lightbox-counter"></div>
                 <div id="lightbox-timeline-ruler" style="margin-top: 1.25rem; border-top: 1px solid var(--border-color); padding-top: 1rem; display: none;"></div>
+                <div id="lightbox-curator-details" style="margin-top: 1.25rem; border-top: 1px solid var(--border-color); padding-top: 1rem; display: none;"></div>
                 <div id="lightbox-coexistence" style="margin-top: 1.25rem; border-top: 1px solid var(--border-color); padding-top: 1rem; display: none;"></div>
             </div>
 
@@ -471,10 +543,12 @@
         <div class="selection-bar-inner">
             <span id="selection-count-text" class="selection-count-text">0 selected</span>
             <div class="selection-actions-group">
-                <button id="btn-mass-tag" class="btn-primary" onclick="app.massTagSelected()">🏷️ Tag</button>
+                <button id="btn-mass-compare" class="btn-primary" onclick="app.openCompareSelected()" style="background: var(--accent); color: var(--bg-surface); font-weight: 700; display: none;">⚖️ Compare</button>
+                <button id="btn-mass-tag" class="btn-secondary" onclick="app.massTagSelected()">🏷️ Tag</button>
                 <button id="btn-mass-print" class="btn-secondary" onclick="app.printLabelsSelected()">🖨️ Print Labels</button>
                 <button id="btn-mass-select-all" class="btn-secondary" onclick="app.selectAllVisible()">🔒 Select All</button>
                 <button id="btn-mass-deselect" class="btn-secondary" onclick="app.deselectAllSelected()">🔓 Deselect All</button>
+                <div class="selection-bar-divider"></div>
                 <button id="btn-mass-delete" class="btn-danger" onclick="app.deleteSelected()">🗑️ Delete</button>
             </div>
         </div>
@@ -484,6 +558,31 @@
     <div id="zoom-overlay" class="zoom-overlay" onclick="app.closeZoomOverlay()" title="Click anywhere to exit zoom">
         <img id="zoom-overlay-img" src="" alt="Specimen ultra zoom" />
         <div class="zoom-overlay-close">&times;</div>
+    </div>
+
+    <!-- Compare Picker Top Banner -->
+    <div id="compare-picker-banner" class="compare-picker-banner" style="display: none;">
+        <div class="compare-picker-banner-inner">
+            <span class="compare-picker-banner-text">⚖️ <strong>Compare Mode Active:</strong> Click any 2 or 3 cards below to select them.</span>
+            <div class="compare-picker-banner-actions">
+                <button id="btn-picker-compare" class="btn-primary" onclick="app.openCompareSelected()" style="background: var(--accent); color: var(--bg-surface); font-weight: 700; display: none;">⚖️ Compare Now</button>
+                <button class="btn-secondary" onclick="app.toggleComparePickerMode()" style="color: var(--text-primary); border-radius: 9999px; border: 1px solid var(--border-color); background: var(--bg-surface);">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Specimen Compare Overlay -->
+    <div id="compare-modal" class="compare-modal" style="display: none;">
+        <div class="compare-header">
+            <div class="compare-brand">
+                <span class="compare-badge">⚖️ Curatorial Compare Mode</span>
+                <span class="compare-subtitle">Side-by-side specimen inspection</span>
+            </div>
+            <button onclick="app.closeCompareMode()" class="compare-exit-btn" title="Exit Compare Mode (Esc)">&times; Close</button>
+        </div>
+        <div class="compare-body" id="compare-columns-container">
+            <!-- Rendered dynamically by JS (2 or 3 columns) -->
+        </div>
     </div>
 
     <!-- Museum Showcase Overlay -->
@@ -537,6 +636,10 @@
                         <div class="showcase-meta-item">
                             <span class="meta-label">Dimensions & Anatomy</span>
                             <span id="showcase-meta-anatomy" class="meta-val">Anterior Premaxillary Tooth</span>
+                        </div>
+                        <div class="showcase-meta-item">
+                            <span class="meta-label">Preservation & Condition</span>
+                            <span id="showcase-meta-condition" class="meta-val">🟢 Stable</span>
                         </div>
                     </div>
 

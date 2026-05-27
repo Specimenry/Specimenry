@@ -1087,6 +1087,7 @@ var currentImages = [];
 var currentView = 'false'; // 'false' = Collection, 'true' = Wishlist
 var isStatsOpen = false;
 var isAutoEnhanceActive = localStorage.getItem('photo_auto_enhance') === 'true';
+var comparePickerModeActive = false;
 
 // Debounce utility — delays fn execution until wait ms after the last call
 function debounce(fn, wait) {
@@ -1212,8 +1213,17 @@ window.addEventListener('DOMContentLoaded', function() {
     }
 });
 
-// Global keyboard navigation (Lightbox & Showcase & Zoom)
+// Global keyboard navigation (Lightbox & Showcase & Zoom & Compare)
 document.addEventListener('keydown', function(e) {
+    var compareModal = document.getElementById('compare-modal');
+    if (compareModal && compareModal.style.display === 'flex') {
+        if (e.key === 'Escape') {
+            window.app.closeCompareMode();
+            e.preventDefault();
+            return;
+        }
+    }
+
     var zoomOverlay = document.getElementById('zoom-overlay');
     if (zoomOverlay && zoomOverlay.classList.contains('active')) {
         if (e.key === 'Escape') {
@@ -1284,15 +1294,76 @@ function getSmartGeocodeQueries(location, formation, country) {
     
     var queries = [];
     
+    // Famous formation region injection helper
+    var famousMappings = {
+        'hell creek': { region: 'Montana', country: 'USA' },
+        'kem kem': { region: 'Morocco', country: 'Morocco' },
+        'solnhofen': { region: 'Bavaria', country: 'Germany' },
+        'yixian': { region: 'Liaoning', country: 'China' },
+        'lyme regis': { region: 'Dorset', country: 'UK' },
+        'morrison': { region: 'Colorado', country: 'USA' },
+        'green river': { region: 'Wyoming', country: 'USA' },
+        'brule': { region: 'Nebraska', country: 'USA' },
+        'white river': { region: 'Nebraska', country: 'USA' },
+        'london clay': { region: 'London', country: 'UK' },
+        'liaoning': { region: 'Liaoning', country: 'China' },
+        'jurassic coast': { region: 'Dorset', country: 'UK' }
+    };
+    
+    var injectedRegion = '';
+    var injectedCountry = '';
+    
+    var formLower = cleanForm.toLowerCase();
+    for (var key in famousMappings) {
+        if (formLower.indexOf(key) !== -1) {
+            injectedRegion = famousMappings[key].region;
+            injectedCountry = famousMappings[key].country;
+            break;
+        }
+    }
+    
+    var locLower = cleanLoc.toLowerCase();
+    if (!injectedRegion) {
+        for (var key in famousMappings) {
+            if (locLower.indexOf(key) !== -1) {
+                injectedRegion = famousMappings[key].region;
+                injectedCountry = famousMappings[key].country;
+                break;
+            }
+        }
+    }
+
+    // 1. Precise combinations with injected famous regions (Highest priority)
+    if (cleanForm && injectedRegion && injectedCountry) {
+        queries.push(cleanForm + ', ' + injectedRegion + ', ' + injectedCountry);
+    }
+    if (cleanLoc && injectedRegion && injectedCountry && cleanLoc.toLowerCase() !== injectedRegion.toLowerCase()) {
+        queries.push(cleanLoc + ', ' + injectedRegion + ', ' + injectedCountry);
+    }
+
+    // 2. Standard combinations (Specific before general order)
     if (cleanLoc && cleanForm && cleanCountry) {
+        queries.push(cleanForm + ', ' + cleanLoc + ', ' + cleanCountry);
         queries.push(cleanLoc + ', ' + cleanForm + ', ' + cleanCountry);
     }
+    
+    // 3. Fallbacks using two elements
     if (cleanLoc && cleanCountry) {
         queries.push(cleanLoc + ', ' + cleanCountry);
     }
     if (cleanForm && cleanCountry) {
         queries.push(cleanForm + ', ' + cleanCountry);
     }
+    if (cleanForm && cleanLoc) {
+        queries.push(cleanForm + ', ' + cleanLoc);
+    }
+    
+    // 4. Injected region fallback
+    if (injectedRegion && injectedCountry) {
+        queries.push(injectedRegion + ', ' + injectedCountry);
+    }
+
+    // 5. Individual terms
     if (cleanLoc) {
         queries.push(cleanLoc);
     }
@@ -1370,6 +1441,30 @@ async function fetchSmartCoordinates(location, formation, country) {
 // APP METHODS — attached to window.app for inline HTML handlers
 // =========================================================================
 window.app = {
+
+    // --- Modal Tab Sizing & Switching ---
+    setModalTab: function(tabName) {
+        var tabs = ['classification', 'geology', 'curator'];
+        tabs.forEach(function(t) {
+            var btn = document.getElementById('tab-btn-' + t);
+            var content = document.getElementById('tab-' + t);
+            if (t === tabName) {
+                if (btn) {
+                    btn.classList.add('active');
+                    btn.style.borderBottom = '2px solid var(--accent)';
+                    btn.style.color = 'var(--text-primary)';
+                }
+                if (content) content.style.display = 'block';
+            } else {
+                if (btn) {
+                    btn.classList.remove('active');
+                    btn.style.borderBottom = '2px solid transparent';
+                    btn.style.color = 'var(--text-secondary)';
+                }
+                if (content) content.style.display = 'none';
+            }
+        });
+    },
 
     // --- Notifications ---
     showToast: function(msg, type, duration) {
@@ -1455,6 +1550,19 @@ window.app = {
 
     // --- Lightbox ---
     openLightbox: function(fossilId, imgIndex) {
+        if (comparePickerModeActive) {
+            var cardEl = document.querySelector('.fossil-card[data-id="' + fossilId + '"]');
+            if (cardEl) {
+                var cb = cardEl.querySelector('.checkbox-container input[type="checkbox"]');
+                if (cb) {
+                    cb.checked = !cb.checked;
+                    var evt = document.createEvent('HTMLEvents');
+                    evt.initEvent('change', true, true);
+                    cb.dispatchEvent(evt);
+                }
+            }
+            return;
+        }
         var f = fossils.find(function(x) { return x.id === fossilId; });
         if (!f || !f.images || f.images.length === 0) return;
         lightboxFossilId = fossilId;
@@ -1567,6 +1675,58 @@ window.app = {
                 }
             } else {
                 rulerElem.style.display = 'none';
+            }
+        }
+
+        // Render curatorial details (Size, Weight, Price, Condition, Notes)
+        var curatorElem = document.getElementById('lightbox-curator-details');
+        if (curatorElem) {
+            var curHtml = '';
+            var curParts = [];
+            if (f.size) curParts.push('📏 <strong>Size:</strong> ' + f.size + (f.sizeUnit || 'cm'));
+            if (f.weight) curParts.push('⚖️ <strong>Weight:</strong> ' + f.weight + 'g');
+            if (f.price && !f.isWishlist) curParts.push('💰 <strong>Value:</strong> ' + f.price + ' ' + (f.currency || 'USD'));
+            
+            // Condition mapping
+            var cond = f.condition || {};
+            var condLabels = [];
+            if (cond.stable || (!cond.cracking && !cond.efflorescence && !cond.pyrite)) condLabels.push('🟢 Stable');
+            if (cond.cracking) condLabels.push('⚡ Cracking');
+            if (cond.efflorescence) condLabels.push('⚪ Efflorescence');
+            if (cond.pyrite) condLabels.push('🔥 Pyrite Decay');
+            
+            if (condLabels.length > 0) {
+                curParts.push('🩺 <strong>Condition:</strong> ' + condLabels.join(', '));
+            }
+            
+            // Treatment mapping
+            var treat = f.treatment || {};
+            var treatLabels = [];
+            if (treat.paraloid) treatLabels.push('🧪 Consolidated (Paraloid B-72)');
+            if (treat.scribe) treatLabels.push('⛏️ Cleaned (Air Scribe)');
+            if (treat.cyano) treatLabels.push('💧 Glued (Cyanoacrylate)');
+            if (treat.water) treatLabels.push('🛡️ Stabilized (B-67/PVA/PEG)');
+            
+            if (treatLabels.length > 0) {
+                curParts.push('🛠️ <strong>Treatments Applied:</strong> ' + treatLabels.join(', '));
+            }
+            
+            if (f.notes) {
+                curParts.push('📝 <strong>Curation Notes:</strong> ' + escapeHtml(f.notes));
+            }
+            
+            if (curParts.length > 0) {
+                curHtml = '<div style="font-size: 0.75rem; font-weight: 800; color: var(--accent); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem; display: flex; align-items: center; gap: 4px;">' +
+                           '🔬 Curatorial & Preservation Records</div>' +
+                           '<div style="font-size: 0.8rem; line-height: 1.6; display: flex; flex-direction: column; gap: 0.4rem; color: var(--text-primary);">';
+                curParts.forEach(function(part) {
+                    curHtml += '<div>' + part + '</div>';
+                });
+                curHtml += '</div>';
+                curatorElem.innerHTML = curHtml;
+                curatorElem.style.display = '';
+            } else {
+                curatorElem.style.display = 'none';
             }
         }
 
@@ -1889,6 +2049,33 @@ window.app = {
         // Notes
         if (metaNotes) {
             metaNotes.textContent = f.notes ? f.notes : 'No curatorial notes recorded for this specimen.';
+        }
+
+        // Condition in Showcase
+        var metaCondition = document.getElementById('showcase-meta-condition');
+        if (metaCondition) {
+            var cond = f.condition || {};
+            var condLabels = [];
+            if (cond.stable || (!cond.cracking && !cond.efflorescence && !cond.pyrite)) condLabels.push('🟢 Stable');
+            if (cond.cracking) condLabels.push('⚡ Cracking');
+            if (cond.efflorescence) condLabels.push('⚪ Efflorescence');
+            if (cond.pyrite) condLabels.push('🔥 Pyrite Decay');
+            
+            var condText = condLabels.length > 0 ? condLabels.join(', ') : '🟢 Stable';
+            
+            // Append treatments if present
+            var treat = f.treatment || {};
+            var treatLabels = [];
+            if (treat.paraloid) treatLabels.push('B-72');
+            if (treat.scribe) treatLabels.push('Scribed');
+            if (treat.cyano) treatLabels.push('Glued');
+            if (treat.water) treatLabels.push('Stabilized');
+            
+            if (treatLabels.length > 0) {
+                condText += ' (Prepared: ' + treatLabels.join(', ') + ')';
+            }
+            
+            metaCondition.textContent = condText;
         }
 
         // Trigger Auto-Play progress bar
@@ -2886,6 +3073,9 @@ window.app = {
             document.getElementById('modal-flag-preview').innerHTML = '';
         }
 
+        // Reset active tab to classification
+        window.app.setModalTab('classification');
+
         if (id) {
             var f = fossils.find(function(x) { return x.id === id; });
             if (f) {
@@ -2929,6 +3119,20 @@ window.app = {
                 document.getElementById('f-etymology').value = f.etymology || '';
                 document.getElementById('f-tags').value = (f.tags || []).join(', ');
 
+                // Condition report checkboxes
+                var cond = f.condition || {};
+                document.getElementById('cond-stable').checked = cond.stable !== undefined ? !!cond.stable : true;
+                document.getElementById('cond-cracking').checked = !!cond.cracking;
+                document.getElementById('cond-efflorescence').checked = !!cond.efflorescence;
+                document.getElementById('cond-pyrite').checked = !!cond.pyrite;
+
+                // Treatment history checkboxes
+                var treat = f.treatment || {};
+                document.getElementById('treat-paraloid').checked = !!treat.paraloid;
+                document.getElementById('treat-scribe').checked = !!treat.scribe;
+                document.getElementById('treat-cyano').checked = !!treat.cyano;
+                document.getElementById('treat-water').checked = !!treat.water;
+
                 if (f.images && Array.isArray(f.images)) {
                     currentImages = f.images.slice();
                     window.app.renderImagePreview();
@@ -2950,6 +3154,18 @@ window.app = {
             document.getElementById('f-tags').value = '';
             document.getElementById('f-lat').value = '';
             document.getElementById('f-lng').value = '';
+
+            // Reset condition checkboxes to stable
+            document.getElementById('cond-stable').checked = true;
+            document.getElementById('cond-cracking').checked = false;
+            document.getElementById('cond-efflorescence').checked = false;
+            document.getElementById('cond-pyrite').checked = false;
+
+            // Reset treatment checkboxes
+            document.getElementById('treat-paraloid').checked = false;
+            document.getElementById('treat-scribe').checked = false;
+            document.getElementById('treat-cyano').checked = false;
+            document.getElementById('treat-water').checked = false;
 
             // Auto-load last used geography/geology for batch logging
             document.getElementById('f-country').value = localStorage.getItem('last_country') || '';
@@ -3448,6 +3664,18 @@ window.app = {
             etymology: document.getElementById('f-etymology').value,
             tags: (document.getElementById('f-tags').value || '').split(/[,\s]+/).map(function(t) { return t.trim().toLowerCase().replace(/^#/, ''); }).filter(function(t) { return t.length > 0; }),
             images: currentImages,
+            condition: {
+                stable: document.getElementById('cond-stable').checked,
+                cracking: document.getElementById('cond-cracking').checked,
+                efflorescence: document.getElementById('cond-efflorescence').checked,
+                pyrite: document.getElementById('cond-pyrite').checked
+            },
+            treatment: {
+                paraloid: document.getElementById('treat-paraloid').checked,
+                scribe: document.getElementById('treat-scribe').checked,
+                cyano: document.getElementById('treat-cyano').checked,
+                water: document.getElementById('treat-water').checked
+            },
             createdAt: isEditing ? undefined : Date.now()  // timestamp for sort
         };
 
@@ -3492,6 +3720,13 @@ window.app = {
     toggleSelectFossil: function(event, id) {
         if (event.target.checked) { selectedFossils.add(id); }
         else { selectedFossils.delete(id); }
+        
+        var cardEl = document.querySelector('.fossil-card[data-id="' + id + '"]');
+        if (cardEl) {
+            if (event.target.checked) cardEl.classList.add('picker-selected');
+            else cardEl.classList.remove('picker-selected');
+        }
+        
         window.app.updateMassDeleteButton();
     },
 
@@ -3508,7 +3743,7 @@ window.app = {
         var count = selectedFossils.size;
         
         if (selectionBar) {
-            if (count > 0) {
+            if (count > 0 && !comparePickerModeActive) {
                 selectionBar.style.display = 'block';
                 // Trigger a reflow for CSS transition
                 void selectionBar.offsetWidth;
@@ -3519,7 +3754,7 @@ window.app = {
                     clearTimeout(window.app._selectionBarTimeout);
                 }
                 window.app._selectionBarTimeout = setTimeout(function() {
-                    if (!selectionBar.classList.contains('active')) {
+                    if (!selectionBar.classList.contains('active') || comparePickerModeActive) {
                         selectionBar.style.display = 'none';
                     }
                 }, 400); // matches CSS transition
@@ -3530,6 +3765,15 @@ window.app = {
             selectionCountText.textContent = count + (count === 1 ? ' fossil selected' : ' fossils selected');
         }
         
+        var btnCompare = document.getElementById('btn-mass-compare');
+        if (btnCompare) {
+            btnCompare.style.display = (count === 2 || count === 3) ? 'inline-flex' : 'none';
+        }
+        var btnPickerCompare = document.getElementById('btn-picker-compare');
+        if (btnPickerCompare) {
+            btnPickerCompare.style.display = (count === 2 || count === 3) ? 'inline-flex' : 'none';
+        }
+
         if (btnDelete) {
             btnDelete.style.display = count > 0 ? 'inline-flex' : 'none';
             btnDelete.innerText = '🗑️ Delete (' + count + ')';
@@ -4990,6 +5234,9 @@ window.app = {
                 } else {
                     // STANDARD COLLECTION CARD VIEW
                     card.className = 'fossil-card';
+                    if (selectedFossils.has(f.id)) {
+                        card.classList.add('picker-selected');
+                    }
                     if (newlyAddedFossilId === f.id) {
                         card.classList.add('newly-added-pulse');
                     }
@@ -5123,6 +5370,26 @@ window.app = {
                 }
 
                 card.innerHTML = cardInnerHtml;
+                
+                if (!wlQ) {
+                    card.onclick = function(e) {
+                        if (comparePickerModeActive) {
+                            var action = e.target.closest('.card-actions, .wishlist-actions, a, button, .carousel-btn, .tag-pill, .checkbox-container');
+                            if (!action) {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                var cb = card.querySelector('.checkbox-container input[type="checkbox"]');
+                                if (cb) {
+                                    cb.checked = !cb.checked;
+                                    var evt = document.createEvent('HTMLEvents');
+                                    evt.initEvent('change', true, true);
+                                    cb.dispatchEvent(evt);
+                                }
+                            }
+                        }
+                    };
+                }
+                
                 fragment.appendChild(card);
             });
 
@@ -5628,6 +5895,232 @@ window.app = {
                 });
             }
         });
+    },
+
+    openCompareSelected: function() {
+        var selected = fossils.filter(function(f) {
+            return selectedFossils.has(f.id);
+        });
+        if (selected.length < 2 || selected.length > 3) {
+            window.app.showToast('Please select exactly 2 or 3 specimens to compare side-by-side.', 'warning');
+            return;
+        }
+        window.app.openCompareMode(selected);
+    },
+
+    openCompareMode: function(selectedList) {
+        var modal = document.getElementById('compare-modal');
+        var container = document.getElementById('compare-columns-container');
+        if (!modal || !container) return;
+        
+        // Calculate highlight differences (size, age, weight)
+        // Size normalization: convert inches to cm if sizeUnit === 'inch'
+        var sizes = selectedList.map(function(f) {
+            if (!f.size) return 0;
+            var num = parseFloat(f.size);
+            if (isNaN(num)) return 0;
+            return (f.sizeUnit || 'cm').toLowerCase() === 'inch' ? num * 2.54 : num;
+        });
+        var ages = selectedList.map(function(f) {
+            var num = parseFloat(f.ageMa);
+            return isNaN(num) ? 0 : num;
+        });
+        var weights = selectedList.map(function(f) {
+            var num = parseFloat(f.weight);
+            return isNaN(num) ? 0 : num;
+        });
+        
+        var maxSizeIdx = -1;
+        var maxAgeIdx = -1;
+        var maxWeightIdx = -1;
+
+        if (sizes.some(function(s) { return s > 0; })) {
+            maxSizeIdx = sizes.indexOf(Math.max.apply(null, sizes));
+        }
+        if (ages.some(function(a) { return a > 0; })) {
+            maxAgeIdx = ages.indexOf(Math.max.apply(null, ages));
+        }
+        if (weights.some(function(w) { return w > 0; })) {
+            maxWeightIdx = weights.indexOf(Math.max.apply(null, weights));
+        }
+        
+        var html = '';
+        selectedList.forEach(function(f, idx) {
+            var color = getEraColor(f.geologicalPeriod);
+            
+            // Construct highlight badges
+            var highlightsHtml = '<div class="compare-highlights">';
+            
+            if (idx === maxAgeIdx && ages[idx] > 0 && selectedList.length > 1) {
+                var otherAges = ages.filter(function(x, i) { return i !== idx && x > 0; });
+                if (otherAges.length > 0) {
+                    var ageDiff = (ages[idx] - Math.min.apply(null, otherAges)).toFixed(1);
+                    if (parseFloat(ageDiff) > 0) {
+                        highlightsHtml += '<span class="comp-badge older">⏳ Older (+' + ageDiff + ' Ma)</span>';
+                    }
+                }
+            }
+            if (idx === maxSizeIdx && sizes[idx] > 0 && selectedList.length > 1) {
+                var otherSizes = sizes.filter(function(x, i) { return i !== idx && x > 0; });
+                if (otherSizes.length > 0) {
+                    var sizeDiff = (sizes[idx] - Math.min.apply(null, otherSizes)).toFixed(1);
+                    if (parseFloat(sizeDiff) > 0) {
+                        highlightsHtml += '<span class="comp-badge larger">📐 Larger (+' + sizeDiff + ' cm)</span>';
+                    }
+                }
+            }
+            if (idx === maxWeightIdx && weights[idx] > 0 && selectedList.length > 1) {
+                var otherWeights = weights.filter(function(x, i) { return i !== idx && x > 0; });
+                if (otherWeights.length > 0) {
+                    var weightDiff = (weights[idx] - Math.min.apply(null, otherWeights)).toFixed(1);
+                    if (parseFloat(weightDiff) > 0) {
+                        highlightsHtml += '<span class="comp-badge heavier">⚖️ Heavier (+' + weightDiff + ' g)</span>';
+                    }
+                }
+            }
+            highlightsHtml += '</div>';
+            
+            // Standardize condition and treatments text
+            var cond = f.condition || {};
+            var condLabels = [];
+            if (cond.stable) condLabels.push('🟢 Stable');
+            if (cond.cracking) condLabels.push('⚡ Cracking');
+            if (cond.efflorescence) condLabels.push('⚪ Efflorescence');
+            if (cond.pyrite) condLabels.push('🔥 Pyrite Decay');
+            if (condLabels.length === 0) condLabels.push('🟢 Stable');
+            
+            var treat = f.treatment || {};
+            var treatLabels = [];
+            if (treat.paraloid) treatLabels.push('🧪 B-72');
+            if (treat.scribe) treatLabels.push('⛏️ Air Scribe');
+            if (treat.cyano) treatLabels.push('💧 Glued');
+            if (treat.water) treatLabels.push('🛡️ Stabilized');
+            
+            var imgHtml = '';
+            if (f.images && f.images.length > 0) {
+                imgHtml = '<img src="' + f.images[0] + '" class="compare-img" onclick="window.app.openZoomOverlay(this.src)">';
+            } else {
+                imgHtml = '<div class="compare-img-placeholder" style="display:flex;align-items:center;justify-content:center;height:100%;background:rgba(255,255,255,0.02);color:rgba(255,255,255,0.2);">' +
+                          '<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>' +
+                          '</div>';
+            }
+            
+            var epochStage = [];
+            if (f.epoch) epochStage.push(f.epoch);
+            if (f.stratAge) epochStage.push(f.stratAge);
+            var epochStageText = epochStage.length > 0 ? epochStage.join(' · ') : 'N/A';
+
+            html += '<div class="compare-column-card">' +
+                        '<div class="compare-img-box" style="border-bottom-color: ' + color + ';">' +
+                            imgHtml +
+                        '</div>' +
+                        '<div class="compare-card-body">' +
+                            '<div class="compare-card-header">' +
+                                '<h4 class="compare-card-title">' + escapeHtml(f.specimen || 'Unnamed') + '</h4>' +
+                                '<p class="compare-card-subtitle">' + escapeHtml(f.anatomy || 'Specimen') + '</p>' +
+                            '</div>' +
+                            highlightsHtml +
+                            '<div class="compare-spec-section">' +
+                                '<h5>🧬 Classification & Timeline</h5>' +
+                                '<div class="compare-spec-row"><span class="compare-spec-label">Catalog ID</span><span class="compare-spec-value">' + escapeHtml(f.id || 'N/A') + '</span></div>' +
+                                '<div class="compare-spec-row"><span class="compare-spec-label">Category</span><span class="compare-spec-value">' + escapeHtml(f.category || 'N/A') + '</span></div>' +
+                                '<div class="compare-spec-row"><span class="compare-spec-label">Timeline</span><span class="compare-spec-value">' + escapeHtml(f.geologicalPeriod || 'N/A') + '</span></div>' +
+                                '<div class="compare-spec-row"><span class="compare-spec-label">Epoch / Stage</span><span class="compare-spec-value">' + escapeHtml(epochStageText) + '</span></div>' +
+                                '<div class="compare-spec-row"><span class="compare-spec-label">Est. Age</span><span class="compare-spec-value">' + (f.ageMa ? f.ageMa + ' Ma' : 'N/A') + '</span></div>' +
+                            '</div>' +
+                            '<div class="compare-spec-section">' +
+                                '<h5>📍 Geological Origin</h5>' +
+                                '<div class="compare-spec-row"><span class="compare-spec-label">Formation</span><span class="compare-spec-value">' + escapeHtml(f.formation || 'N/A') + '</span></div>' +
+                                '<div class="compare-spec-row"><span class="compare-spec-label">Location / Site</span><span class="compare-spec-value">' + escapeHtml(f.location || 'N/A') + '</span></div>' +
+                                '<div class="compare-spec-row"><span class="compare-spec-label">Country</span><span class="compare-spec-value">' + escapeHtml(f.country || 'N/A') + '</span></div>' +
+                            '</div>' +
+                            '<div class="compare-spec-section">' +
+                                '<h5>📐 Sizing & Curation</h5>' +
+                                '<div class="compare-spec-row"><span class="compare-spec-label">Specimen Size</span><span class="compare-spec-value">' + (f.size ? f.size + ' ' + (f.sizeUnit || 'cm') : 'N/A') + '</span></div>' +
+                                '<div class="compare-spec-row"><span class="compare-spec-label">Weight</span><span class="compare-spec-value">' + (f.weight ? f.weight + ' g' : 'N/A') + '</span></div>' +
+                                '<div class="compare-spec-row"><span class="compare-spec-label">Est. Animal Size</span><span class="compare-spec-value">' + (f.animalSize ? f.animalSize + ' m' : 'N/A') + '</span></div>' +
+                                '<div class="compare-spec-row"><span class="compare-spec-label">Value</span><span class="compare-spec-value">' + (f.price ? f.price + ' ' + (f.currency || 'USD') : 'N/A') + '</span></div>' +
+                            '</div>' +
+                            '<div class="compare-spec-section">' +
+                                '<h5>🩺 Curation & Preservation</h5>' +
+                                '<div class="compare-spec-row"><span class="compare-spec-label">Condition</span><span class="compare-spec-value">' + escapeHtml(condLabels.join(', ')) + '</span></div>' +
+                                '<div class="compare-spec-row"><span class="compare-spec-label">Treatments</span><span class="compare-spec-value">' + escapeHtml(treatLabels.join(', ') || 'None') + '</span></div>' +
+                            '</div>' +
+                            '<div class="compare-spec-section">' +
+                                '<h5>📝 Curatorial Notes</h5>' +
+                                '<div class="compare-notes-box">' + escapeHtml(f.notes || 'No notes logged.') + '</div>' +
+                            '</div>' +
+                        '</div>' +
+                    '</div>';
+        });
+        
+        container.innerHTML = html;
+        modal.style.display = 'flex';
+        document.body.style.overflow = 'hidden';
+    },
+
+    closeCompareMode: function() {
+        var modal = document.getElementById('compare-modal');
+        if (modal) modal.style.display = 'none';
+        document.body.style.overflow = '';
+    },
+
+    toggleComparePickerMode: function() {
+        comparePickerModeActive = !comparePickerModeActive;
+        
+        var btnToggle = document.getElementById('btn-toggle-compare-picker');
+        var linkToggle = document.getElementById('link-compare-picker');
+        var banner = document.getElementById('compare-picker-banner');
+        var grid = document.getElementById('fossil-grid');
+        
+        if (comparePickerModeActive) {
+            // Enter Mode
+            if (btnToggle) {
+                btnToggle.style.background = 'var(--accent)';
+                btnToggle.style.color = 'var(--bg-surface)';
+                btnToggle.style.borderColor = 'var(--accent)';
+                btnToggle.innerText = '⚖️ Close Compare';
+            }
+            if (linkToggle) {
+                linkToggle.innerHTML = '⚖️ Compare Mode: On';
+                linkToggle.style.fontWeight = 'bold';
+                linkToggle.style.color = 'var(--accent)';
+            }
+            if (banner) {
+                banner.style.display = 'block';
+                // Trigger reflow
+                void banner.offsetWidth;
+                banner.classList.add('active');
+            }
+            if (grid) {
+                grid.classList.add('compare-picker-active');
+            }
+            window.app.showToast('Compare Mode Active! Click any 2 or 3 cards to select.', 'info');
+        } else {
+            // Exit Mode
+            if (btnToggle) {
+                btnToggle.style.background = '';
+                btnToggle.style.color = '';
+                btnToggle.style.borderColor = '';
+                btnToggle.innerText = '⚖️ Compare';
+            }
+            if (linkToggle) {
+                linkToggle.innerHTML = '⚖️ Compare Mode: Off';
+                linkToggle.style.fontWeight = '';
+                linkToggle.style.color = '';
+            }
+            if (banner) {
+                banner.classList.remove('active');
+                setTimeout(function() {
+                    if (!comparePickerModeActive) banner.style.display = 'none';
+                }, 400);
+            }
+            if (grid) {
+                grid.classList.remove('compare-picker-active');
+            }
+        }
+        
+        window.app.updateMassDeleteButton(); // update counts
     }
 };
 
