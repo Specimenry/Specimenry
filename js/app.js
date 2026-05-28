@@ -1111,6 +1111,12 @@ var isFossilMapOpen = false;
 var isDeepDiveOpen = false;
 var activeDeepDiveFossilId = null;
 var isScoreboardOpen = false;
+var isChronoChartOpen = false;
+var isPortfolioOpen = false;
+var isPhylogenyOpen = false;
+var portfolioSortField = 'specimen';
+var portfolioSortAsc = true;
+var activeBaseCurrency = 'USD';
 var leafletMapInstance = null;
 var leafletMarkerGroup = null;
 var leafletActiveTileLayer = null;
@@ -1620,7 +1626,14 @@ window.app = {
         if (f.formation) locParts.push(f.formation);
         loc.textContent = locParts.length > 0 ? '📍 ' + locParts.join(', ') : '';
 
-        counter.textContent = f.images.length > 1 ? 'Photo ' + (lightboxIdx + 1) + ' of ' + f.images.length : '';
+        if (f.images.length > 1) {
+            var label = '';
+            if (lightboxIdx === 0) label = ' (Fossil Specimen)';
+            else if (lightboxIdx === 1) label = ' (Life Reconstruction)';
+            counter.textContent = 'Photo ' + (lightboxIdx + 1) + ' of ' + f.images.length + label;
+        } else {
+            counter.textContent = '';
+        }
 
         // Show/hide within-fossil nav arrows
         var prevBtn = overlay.querySelector('.lightbox-nav.prev');
@@ -2161,7 +2174,10 @@ window.app = {
         if (!f || !f.images || f.images.length <= 1) return;
         lightboxIdx = (lightboxIdx + dir + f.images.length) % f.images.length;
         document.getElementById('lightbox-img').src = f.images[lightboxIdx];
-        document.getElementById('lightbox-counter').textContent = 'Photo ' + (lightboxIdx + 1) + ' of ' + f.images.length;
+        var label = '';
+        if (lightboxIdx === 0) label = ' (Fossil Specimen)';
+        else if (lightboxIdx === 1) label = ' (Life Reconstruction)';
+        document.getElementById('lightbox-counter').textContent = 'Photo ' + (lightboxIdx + 1) + ' of ' + f.images.length + label;
     },
 
     // --- Taxonomy ---
@@ -2265,34 +2281,13 @@ window.app = {
     },
 
     showMainCharts: function() {
-        isDataInsightsOpen = false;
-        isTreemapOpen = false;
-        isEarthHistoryOpen = false;
-        isScoreboardOpen = false;
+        window.app.hideNewVisualContainers();
         
         var btnCharts = document.getElementById('btn-toggle-charts');
-        var btnTreemap = document.getElementById('btn-toggle-treemap');
-        var btnEarth = document.getElementById('btn-toggle-earth-history');
-        var btnData = document.getElementById('btn-toggle-data');
-        var btnScoreboard = document.getElementById('btn-toggle-scoreboard');
-        
         if (btnCharts) btnCharts.classList.add('active');
-        if (btnTreemap) btnTreemap.classList.remove('active');
-        if (btnEarth) btnEarth.classList.remove('active');
-        if (btnData) btnData.classList.remove('active');
-        if (btnScoreboard) btnScoreboard.classList.remove('active');
         
         var chartsContainer = document.getElementById('stats-charts-container');
-        var dataContainer = document.getElementById('data-insights-container');
-        var treemapContainer = document.getElementById('treemap-container');
-        var earthContainer = document.getElementById('earth-history-container');
-        var scoreboardContainer = document.getElementById('scoreboard-container');
-        
         if (chartsContainer) chartsContainer.style.display = 'flex';
-        if (dataContainer) dataContainer.style.display = 'none';
-        if (treemapContainer) treemapContainer.style.display = 'none';
-        if (earthContainer) earthContainer.style.display = 'none';
-        if (scoreboardContainer) scoreboardContainer.style.display = 'none';
         
         if (isStatsOpen) {
             window.app.renderFossils();
@@ -2301,39 +2296,16 @@ window.app = {
 
     toggleData: function() {
         isDataInsightsOpen = !isDataInsightsOpen;
-        if (isDataInsightsOpen) {
-            isTreemapOpen = false;
-            isEarthHistoryOpen = false;
-            isScoreboardOpen = false;
-        }
+        window.app.hideNewVisualContainers('data');
 
         var btnCharts = document.getElementById('btn-toggle-charts');
-        var btnData = document.getElementById('btn-toggle-data');
-        var btnTreemap = document.getElementById('btn-toggle-treemap');
-        var btnEarth = document.getElementById('btn-toggle-earth-history');
-        var btnScoreboard = document.getElementById('btn-toggle-scoreboard');
-        
-        if (btnData) btnData.classList.toggle('active', isDataInsightsOpen);
-        if (btnCharts) btnCharts.classList.toggle('active', !isDataInsightsOpen);
-        if (btnTreemap) btnTreemap.classList.remove('active');
-        if (btnEarth) btnEarth.classList.remove('active');
-        if (btnScoreboard) btnScoreboard.classList.remove('active');
-        
         var chartsContainer = document.getElementById('stats-charts-container');
-        var dataContainer = document.getElementById('data-insights-container');
-        var treemapContainer = document.getElementById('treemap-container');
-        var earthContainer = document.getElementById('earth-history-container');
-        var scoreboardContainer = document.getElementById('scoreboard-container');
-        
+
         if (isDataInsightsOpen) {
-            if (chartsContainer) chartsContainer.style.display = 'none';
-            if (dataContainer) dataContainer.style.display = 'block';
-            if (treemapContainer) treemapContainer.style.display = 'none';
-            if (earthContainer) earthContainer.style.display = 'none';
-            if (scoreboardContainer) scoreboardContainer.style.display = 'none';
+            window.app.renderDataInsights();
         } else {
+            if (btnCharts) btnCharts.classList.add('active');
             if (chartsContainer) chartsContainer.style.display = 'flex';
-            if (dataContainer) dataContainer.style.display = 'none';
         }
         
         if (isStatsOpen) {
@@ -2343,40 +2315,16 @@ window.app = {
 
     toggleTreemap: function() {
         isTreemapOpen = !isTreemapOpen;
-        if (isTreemapOpen) {
-            isDataInsightsOpen = false;
-            isEarthHistoryOpen = false;
-            isScoreboardOpen = false;
-        }
+        window.app.hideNewVisualContainers('treemap');
 
         var btnCharts = document.getElementById('btn-toggle-charts');
-        var btnTreemap = document.getElementById('btn-toggle-treemap');
-        var btnData = document.getElementById('btn-toggle-data');
-        var btnEarth = document.getElementById('btn-toggle-earth-history');
-        var btnScoreboard = document.getElementById('btn-toggle-scoreboard');
-        
-        if (btnTreemap) btnTreemap.classList.toggle('active', isTreemapOpen);
-        if (btnCharts) btnCharts.classList.toggle('active', !isTreemapOpen);
-        if (btnData) btnData.classList.remove('active');
-        if (btnEarth) btnEarth.classList.remove('active');
-        if (btnScoreboard) btnScoreboard.classList.remove('active');
-        
         var chartsContainer = document.getElementById('stats-charts-container');
-        var dataContainer = document.getElementById('data-insights-container');
-        var treemapContainer = document.getElementById('treemap-container');
-        var earthContainer = document.getElementById('earth-history-container');
-        var scoreboardContainer = document.getElementById('scoreboard-container');
-        
+
         if (isTreemapOpen) {
-            if (chartsContainer) chartsContainer.style.display = 'none';
-            if (dataContainer) dataContainer.style.display = 'none';
-            if (earthContainer) earthContainer.style.display = 'none';
-            if (scoreboardContainer) scoreboardContainer.style.display = 'none';
-            if (treemapContainer) treemapContainer.style.display = 'block';
             window.app.renderMissingSpecimens();
         } else {
+            if (btnCharts) btnCharts.classList.add('active');
             if (chartsContainer) chartsContainer.style.display = 'flex';
-            if (treemapContainer) treemapContainer.style.display = 'none';
         }
         
         if (isStatsOpen) {
@@ -2386,40 +2334,16 @@ window.app = {
 
     toggleEarthHistory: function() {
         isEarthHistoryOpen = !isEarthHistoryOpen;
-        if (isEarthHistoryOpen) {
-            isDataInsightsOpen = false;
-            isTreemapOpen = false;
-            isScoreboardOpen = false;
-        }
+        window.app.hideNewVisualContainers('earth');
 
         var btnCharts = document.getElementById('btn-toggle-charts');
-        var btnEarth = document.getElementById('btn-toggle-earth-history');
-        var btnTreemap = document.getElementById('btn-toggle-treemap');
-        var btnData = document.getElementById('btn-toggle-data');
-        var btnScoreboard = document.getElementById('btn-toggle-scoreboard');
-        
-        if (btnEarth) btnEarth.classList.toggle('active', isEarthHistoryOpen);
-        if (btnCharts) btnCharts.classList.toggle('active', !isEarthHistoryOpen);
-        if (btnTreemap) btnTreemap.classList.remove('active');
-        if (btnData) btnData.classList.remove('active');
-        if (btnScoreboard) btnScoreboard.classList.remove('active');
-        
         var chartsContainer = document.getElementById('stats-charts-container');
-        var dataContainer = document.getElementById('data-insights-container');
-        var treemapContainer = document.getElementById('treemap-container');
-        var earthContainer = document.getElementById('earth-history-container');
-        var scoreboardContainer = document.getElementById('scoreboard-container');
-        
+
         if (isEarthHistoryOpen) {
-            if (chartsContainer) chartsContainer.style.display = 'none';
-            if (dataContainer) dataContainer.style.display = 'none';
-            if (treemapContainer) treemapContainer.style.display = 'none';
-            if (scoreboardContainer) scoreboardContainer.style.display = 'none';
-            if (earthContainer) earthContainer.style.display = 'block';
             window.app.renderEarthHistory('Quaternary');
         } else {
+            if (btnCharts) btnCharts.classList.add('active');
             if (chartsContainer) chartsContainer.style.display = 'flex';
-            if (earthContainer) earthContainer.style.display = 'none';
         }
         
         if (isStatsOpen) {
@@ -2459,46 +2383,16 @@ window.app = {
 
     toggleFossilMap: function() {
         isFossilMapOpen = !isFossilMapOpen;
-        if (isFossilMapOpen) {
-            isDataInsightsOpen = false;
-            isTreemapOpen = false;
-            isEarthHistoryOpen = false;
-            isScoreboardOpen = false;
-        }
+        window.app.hideNewVisualContainers('map');
 
         var btnCharts = document.getElementById('btn-toggle-charts');
-        var btnMap = document.getElementById('btn-toggle-map');
-        var btnTreemap = document.getElementById('btn-toggle-treemap');
-        var btnEarth = document.getElementById('btn-toggle-earth-history');
-        var btnData = document.getElementById('btn-toggle-data');
-        var btnScoreboard = document.getElementById('btn-toggle-scoreboard');
-
-        if (btnMap) btnMap.classList.toggle('active', isFossilMapOpen);
-        if (btnCharts) btnCharts.classList.toggle('active', !isFossilMapOpen);
-        if (btnTreemap) btnTreemap.classList.remove('active');
-        if (btnEarth) btnEarth.classList.remove('active');
-        if (btnData) btnData.classList.remove('active');
-        if (btnScoreboard) btnScoreboard.classList.remove('active');
-
         var chartsContainer = document.getElementById('stats-charts-container');
-        var dataContainer = document.getElementById('data-insights-container');
-        var treemapContainer = document.getElementById('treemap-container');
-        var earthContainer = document.getElementById('earth-history-container');
-        var mapContainer = document.getElementById('fossil-map-container');
-        var scoreboardContainer = document.getElementById('scoreboard-container');
 
         if (isFossilMapOpen) {
-            if (chartsContainer) chartsContainer.style.display = 'none';
-            if (dataContainer) dataContainer.style.display = 'none';
-            if (treemapContainer) treemapContainer.style.display = 'none';
-            if (earthContainer) earthContainer.style.display = 'none';
-            if (scoreboardContainer) scoreboardContainer.style.display = 'none';
-            if (mapContainer) mapContainer.style.display = 'block';
-            
             window.app.initFossilMap();
         } else {
+            if (btnCharts) btnCharts.classList.add('active');
             if (chartsContainer) chartsContainer.style.display = 'flex';
-            if (mapContainer) mapContainer.style.display = 'none';
         }
 
         if (isStatsOpen) {
@@ -2508,50 +2402,789 @@ window.app = {
 
     toggleScoreboard: function() {
         isScoreboardOpen = !isScoreboardOpen;
-        if (isScoreboardOpen) {
-            isDataInsightsOpen = false;
-            isTreemapOpen = false;
-            isEarthHistoryOpen = false;
-            isFossilMapOpen = false;
-        }
+        window.app.hideNewVisualContainers('scoreboard');
 
         var btnCharts = document.getElementById('btn-toggle-charts');
-        var btnScoreboard = document.getElementById('btn-toggle-scoreboard');
-        var btnTreemap = document.getElementById('btn-toggle-treemap');
-        var btnEarth = document.getElementById('btn-toggle-earth-history');
-        var btnData = document.getElementById('btn-toggle-data');
-        var btnMap = document.getElementById('btn-toggle-map');
-
-        if (btnScoreboard) btnScoreboard.classList.toggle('active', isScoreboardOpen);
-        if (btnCharts) btnCharts.classList.toggle('active', !isScoreboardOpen);
-        if (btnTreemap) btnTreemap.classList.remove('active');
-        if (btnEarth) btnEarth.classList.remove('active');
-        if (btnData) btnData.classList.remove('active');
-        if (btnMap) btnMap.classList.remove('active');
-
         var chartsContainer = document.getElementById('stats-charts-container');
-        var dataContainer = document.getElementById('data-insights-container');
-        var treemapContainer = document.getElementById('treemap-container');
-        var earthContainer = document.getElementById('earth-history-container');
-        var mapContainer = document.getElementById('fossil-map-container');
-        var scoreboardContainer = document.getElementById('scoreboard-container');
 
         if (isScoreboardOpen) {
-            if (chartsContainer) chartsContainer.style.display = 'none';
-            if (dataContainer) dataContainer.style.display = 'none';
-            if (treemapContainer) treemapContainer.style.display = 'none';
-            if (earthContainer) earthContainer.style.display = 'none';
-            if (mapContainer) mapContainer.style.display = 'none';
-            if (scoreboardContainer) scoreboardContainer.style.display = 'block';
             window.app.renderScoreboard('price');
         } else {
+            if (btnCharts) btnCharts.classList.add('active');
             if (chartsContainer) chartsContainer.style.display = 'flex';
-            if (scoreboardContainer) scoreboardContainer.style.display = 'none';
         }
 
         if (isStatsOpen) {
             window.app.renderFossils();
         }
+    },
+
+    hideNewVisualContainers: function(exceptId) {
+        isChronoChartOpen = exceptId === 'chrono' ? isChronoChartOpen : false;
+        isPortfolioOpen = exceptId === 'portfolio' ? isPortfolioOpen : false;
+        isPhylogenyOpen = exceptId === 'phylogeny' ? isPhylogenyOpen : false;
+        isFossilMapOpen = exceptId === 'map' ? isFossilMapOpen : false;
+        isScoreboardOpen = exceptId === 'scoreboard' ? isScoreboardOpen : false;
+        isTreemapOpen = exceptId === 'treemap' ? isTreemapOpen : false;
+        isEarthHistoryOpen = exceptId === 'earth' ? isEarthHistoryOpen : false;
+        isDataInsightsOpen = exceptId === 'data' ? isDataInsightsOpen : false;
+
+        var anyOpen = isChronoChartOpen || isPortfolioOpen || isPhylogenyOpen || 
+                      isFossilMapOpen || isScoreboardOpen || isTreemapOpen || 
+                      isEarthHistoryOpen || isDataInsightsOpen;
+
+        var chartsContainer = document.getElementById('stats-charts-container');
+        if (chartsContainer) {
+            chartsContainer.style.display = anyOpen ? 'none' : 'flex';
+        }
+
+        var btnCharts = document.getElementById('btn-toggle-charts');
+        if (btnCharts) {
+            btnCharts.classList.toggle('active', !anyOpen);
+        }
+
+        var buttons = [
+            { id: 'btn-toggle-chrono-chart', active: isChronoChartOpen },
+            { id: 'btn-toggle-portfolio', active: isPortfolioOpen },
+            { id: 'btn-toggle-phylogeny', active: isPhylogenyOpen },
+            { id: 'btn-toggle-map', active: isFossilMapOpen },
+            { id: 'btn-toggle-scoreboard', active: isScoreboardOpen },
+            { id: 'btn-toggle-treemap', active: isTreemapOpen },
+            { id: 'btn-toggle-earth-history', active: isEarthHistoryOpen },
+            { id: 'btn-toggle-data', active: isDataInsightsOpen }
+        ];
+
+        buttons.forEach(function(item) {
+            var btn = document.getElementById(item.id);
+            if (btn) {
+                btn.classList.toggle('active', item.active);
+            }
+        });
+
+        var containers = [
+            { id: 'chrono-chart-container', active: isChronoChartOpen },
+            { id: 'portfolio-container', active: isPortfolioOpen },
+            { id: 'phylogeny-container', active: isPhylogenyOpen },
+            { id: 'fossil-map-container', active: isFossilMapOpen },
+            { id: 'scoreboard-container', active: isScoreboardOpen },
+            { id: 'treemap-container', active: isTreemapOpen },
+            { id: 'earth-history-container', active: isEarthHistoryOpen },
+            { id: 'data-insights-container', active: isDataInsightsOpen }
+        ];
+
+        containers.forEach(function(item) {
+            var c = document.getElementById(item.id);
+            if (c) {
+                c.style.display = item.active ? 'block' : 'none';
+            }
+        });
+    },
+
+    toggleChronoChart: function() {
+        isChronoChartOpen = !isChronoChartOpen;
+        window.app.hideNewVisualContainers('chrono');
+
+        var btnCharts = document.getElementById('btn-toggle-charts');
+        var chartsContainer = document.getElementById('stats-charts-container');
+
+        if (isChronoChartOpen) {
+            window.app.renderChronoChart();
+        } else {
+            if (btnCharts) btnCharts.classList.add('active');
+            if (chartsContainer) chartsContainer.style.display = 'flex';
+        }
+
+        if (isStatsOpen) {
+            window.app.renderFossils();
+        }
+    },
+
+    togglePortfolio: function() {
+        isPortfolioOpen = !isPortfolioOpen;
+        window.app.hideNewVisualContainers('portfolio');
+
+        var btnCharts = document.getElementById('btn-toggle-charts');
+        var chartsContainer = document.getElementById('stats-charts-container');
+
+        if (isPortfolioOpen) {
+            window.app.renderPortfolio();
+        } else {
+            if (btnCharts) btnCharts.classList.add('active');
+            if (chartsContainer) chartsContainer.style.display = 'flex';
+        }
+
+        if (isStatsOpen) {
+            window.app.renderFossils();
+        }
+    },
+
+    togglePhylogeny: function() {
+        isPhylogenyOpen = !isPhylogenyOpen;
+        window.app.hideNewVisualContainers('phylogeny');
+
+        var btnCharts = document.getElementById('btn-toggle-charts');
+        var chartsContainer = document.getElementById('stats-charts-container');
+
+        if (isPhylogenyOpen) {
+            window.app.renderPhylogeny();
+        } else {
+            if (btnCharts) btnCharts.classList.add('active');
+            if (chartsContainer) chartsContainer.style.display = 'flex';
+        }
+
+        if (isStatsOpen) {
+            window.app.renderFossils();
+        }
+    },
+
+    _convertCurrency: function(amount, from, to) {
+        if (!amount) return 0;
+        var val = parseFloat(amount);
+        if (isNaN(val)) return 0;
+        if (from === to) return val;
+        
+        // Normalize to SEK
+        var inSek = val;
+        if (from === 'USD') inSek = val * 10.5;
+        else if (from === 'EUR') inSek = val * 11.4;
+        
+        // Convert SEK to target
+        var rate = 1;
+        if (to === 'USD') rate = 1 / 10.5;
+        else if (to === 'EUR') rate = 1 / 11.4;
+        return inSek * rate;
+    },
+
+    _getChronoPeriods: function() {
+        return [
+            {
+                id: 'cenozoic',
+                name: 'Cenozoic Era (Pleistocene)',
+                span: '2.58 Ma – 11.7 ka',
+                epochs: 'Holocene · Pleistocene · Pliocene · Miocene · Oligocene · Eocene · Paleocene',
+                danger: 6,
+                temp: '8°C - 15°C',
+                o2: '100% of Modern (21%)',
+                clm: 'Global Icehouse / Cooling Plains',
+                narration: 'We have stepped out into the grassy Pleistocene plains... massive mammoths graze nearby, but danger lurks in the long grass where the saber-toothed Smilodon hunts.',
+                target: 'Woolly Mammoth Tooth or Saber-Toothed Cat Jaw fragment'
+            },
+            {
+                id: 'cretaceous',
+                name: 'Cretaceous Period',
+                span: '145.0 Ma – 66.0 Ma',
+                epochs: 'Late Cretaceous · Early Cretaceous',
+                danger: 7,
+                temp: '22°C - 24°C',
+                o2: '150% of Modern (30%)',
+                clm: 'Humid Tropical Greenhouse / High Seaways',
+                narration: 'Welcome to the late Cretaceous. It is a humid swamp environment. In the distance, a Tyrannosaurus rex bellows, while massive mosasaurs patrol the warm, shallow coastal waters.',
+                target: 'Tyrannosaurus Rex Tooth or Mosasaur tooth/vertebra'
+            },
+            {
+                id: 'jurassic',
+                name: 'Jurassic Period',
+                span: '201.0 Ma – 145.0 Ma',
+                epochs: 'Late (Malm) · Middle (Dogger) · Early (Lias) Jurassic',
+                danger: 6,
+                temp: '20°C - 22°C',
+                o2: '130% of Modern (26%)',
+                clm: 'Warm Greenhouse / Extensive Conifer Forests',
+                narration: 'Stepping into the late Jurassic conifer forests. The ground trembles beneath the feet of giant Diplodocus herds. Stegosaurs keep their spiked tails ready for Allosaurus encounters.',
+                target: 'Allosaurus sp. tooth or Stegosaurus tail spike'
+            },
+            {
+                id: 'triassic',
+                name: 'Triassic Period',
+                span: '252.0 Ma – 201.0 Ma',
+                epochs: 'Late (Keuper) · Middle (Muschelkalk) · Early (Buntsandstein) Triassic',
+                danger: 5,
+                temp: '23°C - 25°C',
+                o2: '80% of Modern (16%)',
+                clm: 'Arid Megamonsoonal / Red Desert Basin',
+                narration: 'Stepping onto the red sand dunes of the Triassic. Pterosaurs fly overhead, and early dinosaurs like Coelophysis forage along drying lakes.',
+                target: 'Triassic Ceratite ammonite or early dinosaur tooth'
+            },
+            {
+                id: 'permian-carboniferous',
+                name: 'Permian & Carboniferous Periods',
+                span: '359.0 Ma – 252.0 Ma',
+                epochs: 'Lopingian · Guadalupian · Cisuralian (Permian) · Pennsylvanian · Mississippian (Carboniferous)',
+                danger: 4,
+                temp: '14°C - 16°C',
+                o2: '160% of Modern (35%)',
+                clm: 'Humid Swamp Forests / Massive Coal Bogs',
+                narration: 'Diving back into the giant swamp forests. With oxygen levels soaring at 35%, giant Meganeura dragonflies buzz through the humid canopy, and giant amphibians wade through the coal bogs.',
+                target: 'Calamites / Sigillaria leaf fossils or early amphibian trackway'
+            },
+            {
+                id: 'devonian-silurian',
+                name: 'Devonian & Silurian Periods',
+                span: '443.0 Ma – 359.0 Ma',
+                epochs: 'Late/Middle/Early Devonian · Pridoli · Ludlow · Wenlock · Llandovery (Silurian)',
+                danger: 4,
+                temp: '20°C',
+                o2: '75% of Modern (15%)',
+                clm: 'Tropical Coral Reefs / First Land Plants',
+                narration: 'Diving down into the Devonian warm seas. Armor-plated Dunkleosteus sharks swim through the waters, while early plants begin greening the stark landmasses.',
+                target: 'Armor-plated Placoderm fish shield or early Silurian coral'
+            },
+            {
+                id: 'ordovician-cambrian',
+                name: 'Ordovician & Cambrian Periods',
+                span: '541.0 Ma – 443.0 Ma',
+                epochs: 'Late/Middle/Early Ordovician · Furongian · Miaolingian · Series 2 · Terreneuvian (Cambrian)',
+                danger: 3,
+                temp: '22°C',
+                o2: '65% of Modern (13%)',
+                clm: 'Shallow Marine Pools / Epicontinental Seas',
+                narration: 'Submerging into the tropical Ordovician seas. Watch out for Cameroceras, a ten-meter long straight-shelled nautiloid, patrolling the coral reefs next to massive trilobite colonies.',
+                target: 'Elrathia Kingii trilobite or Cameroceras / Orthoceras shell'
+            },
+            {
+                id: 'precambrian',
+                name: 'Precambrian Time (Ediacaran)',
+                span: '4600.0 Ma – 541.0 Ma',
+                epochs: 'Ediacaran · Cryogenian · Tonian (Neoproterozoic) · Mesoproterozoic · Paleoproterozoic · Hadean',
+                danger: 1,
+                temp: '15°C (Fluctuating)',
+                o2: '1% to 15% of Modern (0.2 - 3%)',
+                clm: 'Primordial Cold Oceans / Early Crustal Layers',
+                narration: 'We have reached deep time—the late Precambrian. The ocean is completely silent. Soft-bodied Dickinsonia and Charnia cling to microbial mats along the shallow sandy seafloor.',
+                target: 'Ediacaran Dickinsonia fossil impression or Stromatolite dome'
+            }
+        ];
+    },
+
+    renderChronoChart: function() {
+        var container = document.getElementById('chrono-chart-container');
+        if (!container) return;
+
+        var CHRONO_PERIODS = this._getChronoPeriods();
+
+        // Period grouping helper
+        var getPeriodGroup = function(f) {
+            var p = (f.geologicalPeriod || '').toLowerCase();
+            var n = (f.specimen || '').toLowerCase();
+            
+            if (p.indexOf('precambrian') !== -1 || p.indexOf('ediacaran') !== -1 || p.indexOf('proterozoic') !== -1 || n.indexOf('dickinsonia') !== -1 || n.indexOf('charnia') !== -1 || n.indexOf('stromatolite') !== -1) {
+                return 'precambrian';
+            }
+            if (p.indexOf('cambrian') !== -1 || p.indexOf('ordovician') !== -1 || n.indexOf('anomalocaris') !== -1 || n.indexOf('trilobite') !== -1 || n.indexOf('calymene') !== -1 || n.indexOf('orthoceras') !== -1) {
+                return 'ordovician-cambrian';
+            }
+            if (p.indexOf('devonian') !== -1 || p.indexOf('silurian') !== -1 || n.indexOf('dunkleosteus') !== -1 || n.indexOf('placoderm') !== -1) {
+                return 'devonian-silurian';
+            }
+            if (p.indexOf('permian') !== -1 || p.indexOf('carboniferous') !== -1 || p.indexOf('mississippian') !== -1 || p.indexOf('pennsylvanian') !== -1) {
+                return 'permian-carboniferous';
+            }
+            if (p.indexOf('triassic') !== -1) {
+                return 'triassic';
+            }
+            if (p.indexOf('jurassic') !== -1 || n.indexOf('stegosaurus') !== -1 || n.indexOf('allosaurus') !== -1 || n.indexOf('brachiosaurus') !== -1) {
+                return 'jurassic';
+            }
+            if (p.indexOf('cretaceous') !== -1 || n.indexOf('tyrannosaurus') !== -1 || n.indexOf('triceratops') !== -1 || n.indexOf('spinosaurus') !== -1 || n.indexOf('mosasaur') !== -1 || n.indexOf('ammonite') !== -1) {
+                return 'cretaceous';
+            }
+            if (p.indexOf('quaternary') !== -1 || p.indexOf('neogene') !== -1 || p.indexOf('paleogene') !== -1 || p.indexOf('tertiary') !== -1 || p.indexOf('pleistocene') !== -1 || p.indexOf('miocene') !== -1 || p.indexOf('eocene') !== -1 || p.indexOf('oligocene') !== -1 || p.indexOf('cenozoic') !== -1 || n.indexOf('mammoth') !== -1 || n.indexOf('megalodon') !== -1 || n.indexOf('saber-toothed') !== -1) {
+                return 'cenozoic';
+            }
+            
+            // Age fallback
+            var age = parseFloat(f.ageMa);
+            if (!isNaN(age)) {
+                if (age > 541) return 'precambrian';
+                if (age > 443) return 'ordovician-cambrian';
+                if (age > 359) return 'devonian-silurian';
+                if (age > 252) return 'permian-carboniferous';
+                if (age > 201) return 'triassic';
+                if (age > 145) return 'jurassic';
+                if (age > 66) return 'cretaceous';
+                return 'cenozoic';
+            }
+            return null;
+        };
+
+        var html = '<div class="chrono-dashboard-wrapper">';
+        html += '<div class="chrono-intro-header">' +
+                '<h2>⏳ Geologic Time Drill-Down</h2>' +
+                '<p>Travel back through Deep Time. Check where your fossil specimens reside across stratigraphy layers, and expose missing geological gaps.</p>' +
+                '</div>';
+
+        html += '<div class="chrono-vertical-column">';
+
+        CHRONO_PERIODS.forEach(function(pInfo) {
+            // Find fossils matching this group
+            var periodFossils = fossils.filter(function(f) {
+                return getPeriodGroup(f) === pInfo.id;
+            });
+
+            var count = periodFossils.length;
+            var gapClass = count === 0 ? 'time-gap-exposed' : '';
+            var dangerBars = '';
+            for (var i = 1; i <= 7; i++) {
+                var filled = i <= pInfo.danger ? 'filled' : '';
+                dangerBars += '<span class="danger-bar-tick ' + filled + '"></span>';
+            }
+
+            html += '<div class="chrono-layer-card ' + pInfo.id + ' ' + gapClass + '">' +
+                        '<div class="chrono-layer-bed-texture"></div>' +
+                        '<div class="chrono-layer-header">' +
+                            '<div class="chrono-layer-main-info">' +
+                                '<span class="chrono-badge-era">' + pInfo.span + '</span>' +
+                                '<h3 class="chrono-layer-title">' + escapeHtml(pInfo.name) + '</h3>' +
+                                '<div class="chrono-epochs-strip">' + escapeHtml(pInfo.epochs || '') + '</div>' +
+                                '<div class="chrono-climate-grid">' +
+                                    '<span class="chrono-climate-stat">🌡️ ' + escapeHtml(pInfo.temp) + '</span>' +
+                                    '<span class="chrono-climate-stat">💨 ' + escapeHtml(pInfo.o2) + '</span>' +
+                                    '<span class="chrono-climate-stat-wide">🌍 ' + escapeHtml(pInfo.clm) + '</span>' +
+                                '</div>' +
+                            '</div>' +
+                            '<div class="chrono-danger-container">' +
+                                '<span class="danger-label">⚠️ Prehistoric Hazard: ' + pInfo.danger + '/7</span>' +
+                                '<div class="danger-bar-wrapper">' + dangerBars + '</div>' +
+                            '</div>' +
+                        '</div>' +
+                        '<div class="chrono-narration-box">' +
+                            '<em>&ldquo;' + escapeHtml(pInfo.narration) + '&rdquo;</em>' +
+                        '</div>';
+
+            if (count > 0) {
+                html += '<div class="chrono-specimens-section">' +
+                            '<h4 class="chrono-section-title">🦴 Mapped Specimens (' + count + ')</h4>' +
+                            '<div class="chrono-specimens-shelf">';
+                
+                periodFossils.forEach(function(f) {
+                    var thumbUrl = (f.images && f.images.length > 0) ? f.images[0] : null;
+                    var imgHtml = '';
+                    if (thumbUrl) {
+                        imgHtml = '<img src="' + thumbUrl + '" class="chrono-spec-thumb" alt="">';
+                    } else {
+                        var catEmoji = '🦴';
+                        var cat = (f.category || '').toLowerCase();
+                        if (cat.indexOf('vertebrate') !== -1 && cat.indexOf('invertebrate') === -1) catEmoji = '🦖';
+                        else if (cat.indexOf('invertebrate') !== -1) catEmoji = '🐚';
+                        else if (cat.indexOf('plant') !== -1) catEmoji = '🌿';
+                        else if (cat.indexOf('trace') !== -1) catEmoji = '🐾';
+                        imgHtml = '<div class="chrono-spec-thumb-emoji">' + catEmoji + '</div>';
+                    }
+
+                    var binomial = f.specimen || 'Unnamed';
+                    var words = binomial.split(/\s+/);
+                    if (words.length >= 2 && /^[A-Z][a-z]+$/.test(words[0]) && /^[a-z]+$/.test(words[1])) {
+                        binomial = '<em>' + escapeHtml(words[0]) + ' ' + escapeHtml(words[1]) + '</em>' + (words.slice(2).join(' ') ? ' ' + escapeHtml(words.slice(2).join(' ')) : '');
+                    } else if (words.length >= 1 && /^[A-Z][a-z]+$/.test(words[0])) {
+                        binomial = '<em>' + escapeHtml(words[0]) + '</em>' + (words.length > 1 ? ' ' + escapeHtml(words.slice(1).join(' ')) : '');
+                    }
+
+                    html += '<div class="chrono-spec-pill" onclick="window.app.openLightbox(\'' + f.id + '\', 0)" title="Inspect Curation">' +
+                                imgHtml +
+                                '<div class="chrono-spec-pill-text">' +
+                                    '<span class="chrono-spec-pill-title">' + binomial + '</span>' +
+                                    '<span class="chrono-spec-pill-sub">' + escapeHtml(f.anatomy || 'Specimen') + '</span>' +
+                                '</div>' +
+                            '</div>';
+                });
+
+                html += '</div></div>';
+            } else {
+                html += '<div class="chrono-time-gap-alert">' +
+                            '<div class="gap-glow-bullet"></div>' +
+                            '<div class="gap-text-content">' +
+                                '<h4 class="gap-title">⏳ Geological Time Gap Exposed</h4>' +
+                                '<p class="gap-desc">Your database has no specimens cataloged from this prehistoric period.</p>' +
+                                '<p class="gap-hint">🎯 **Collector\'s Target Hunt:** Add a **' + escapeHtml(pInfo.target) + '** to secure this epoch!</p>' +
+                            '</div>' +
+                        '</div>';
+            }
+
+            html += '</div>'; // Layer card close
+        });
+
+        html += '</div></div>'; // Vertical timeline and wrapper close
+        container.innerHTML = html;
+    },
+
+    renderPortfolio: function() {
+        var container = document.getElementById('portfolio-container');
+        if (!container) return;
+
+        // Base currency sign
+        var baseSign = '$';
+        if (activeBaseCurrency === 'EUR') baseSign = '€';
+        else if (activeBaseCurrency === 'SEK') baseSign = 'kr ';
+
+        var formatVal = function(val) {
+            return baseSign + parseFloat(val).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        };
+
+        // Calculations
+        var totalCost = 0;
+        var totalEstValue = 0;
+        var soldTotalCost = 0;
+        var soldTotalRevenue = 0;
+        var activeCount = 0;
+        var soldCount = 0;
+
+        fossils.forEach(function(f) {
+            var cost = parseFloat(f.price) || 0;
+            var costBase = window.app._convertCurrency(cost, f.currency || 'USD', activeBaseCurrency);
+
+            if (f.isSold) {
+                soldCount++;
+                soldTotalCost += costBase;
+                var salePrice = parseFloat(f.salePrice) || 0;
+                var salePriceBase = window.app._convertCurrency(salePrice, f.currency || 'USD', activeBaseCurrency);
+                soldTotalRevenue += salePriceBase;
+            } else {
+                activeCount++;
+                totalCost += costBase;
+                
+                var est = parseFloat(f.estimatedValue) || parseFloat(f.price) || 0; // fallback est to price
+                var estBase = window.app._convertCurrency(est, f.estimatedCurrency || f.currency || 'USD', activeBaseCurrency);
+                totalEstValue += estBase;
+            }
+        });
+
+        var netAppreciation = totalEstValue - totalCost;
+        var appreciationPct = totalCost > 0 ? (netAppreciation / totalCost) * 100 : 0;
+        var appreciationSign = netAppreciation >= 0 ? '📈' : '📉';
+        var appreciationClass = netAppreciation >= 0 ? 'appreciation-positive' : 'appreciation-negative';
+
+        var soldProfit = soldTotalRevenue - soldTotalCost;
+        var soldProfitPct = soldTotalCost > 0 ? (soldProfit / soldTotalCost) * 100 : 0;
+
+        // Header controls HTML
+        var html = '<div class="portfolio-wrapper">';
+        
+        html += '<div class="portfolio-header-bar">' +
+                    '<div class="portfolio-header-text">' +
+                        '<h2>💼 Acquisition Portfolio & Valuations</h2>' +
+                        '<p>Track capital investments, curatorial appreciation, and liquidation records across currencies.</p>' +
+                    '</div>' +
+                    '<div class="portfolio-header-actions">' +
+                        '<div class="portfolio-currency-picker">' +
+                            '<span class="picker-label">Base Valuation:</span>' +
+                            '<select class="portfolio-select" onchange="window.app.setPortfolioBaseCurrency(this.value)">' +
+                                '<option value="USD" ' + (activeBaseCurrency === 'USD' ? 'selected' : '') + '>USD ($)</option>' +
+                                '<option value="EUR" ' + (activeBaseCurrency === 'EUR' ? 'selected' : '') + '>EUR (€)</option>' +
+                                '<option value="SEK" ' + (activeBaseCurrency === 'SEK' ? 'selected' : '') + '>SEK (kr)</option>' +
+                            '</select>' +
+                        '</div>' +
+                        '<button type="button" class="btn-primary flex-btn" onclick="window.app.generateInsuranceReport()">' +
+                            '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>' +
+                            'Export Insurance Report' +
+                        '</button>' +
+                    '</div>' +
+                '</div>';
+
+        // KPI Dashboard Grid
+        html += '<div class="portfolio-dashboard-grid">' +
+                    '<div class="portfolio-kpi-card">' +
+                        '<span class="kpi-label">Active Capital Invested</span>' +
+                        '<span class="kpi-val">' + formatVal(totalCost) + '</span>' +
+                        '<span class="kpi-sub">' + activeCount + ' active curated specimens</span>' +
+                    '</div>' +
+                    '<div class="portfolio-kpi-card">' +
+                        '<span class="kpi-label">Assessed Portfolio Value</span>' +
+                        '<span class="kpi-val">' + formatVal(totalEstValue) + '</span>' +
+                        '<span class="kpi-sub">Aggregated portfolio value</span>' +
+                    '</div>' +
+                    '<div class="portfolio-kpi-card ' + appreciationClass + '">' +
+                        '<span class="kpi-label">Assessed Appreciation</span>' +
+                        '<span class="kpi-val ' + appreciationClass + '">' + appreciationSign + ' ' + formatVal(netAppreciation) + '</span>' +
+                        '<span class="kpi-sub ' + appreciationClass + '">' + (appreciationPct >= 0 ? '+' : '') + appreciationPct.toFixed(1) + '% Net Return</span>' +
+                    '</div>' +
+                    '<div class="portfolio-kpi-card">' +
+                        '<span class="kpi-label">Liquidation Revenue</span>' +
+                        '<span class="kpi-val">' + formatVal(soldTotalRevenue) + '</span>' +
+                        '<span class="kpi-sub">Sold: ' + soldCount + ' (' + (soldProfit >= 0 ? '+' : '') + soldProfitPct.toFixed(1) + '% profit)</span>' +
+                    '</div>' +
+                '</div>';
+
+        // Sorting arrow indicator helper
+        var getSortArrow = function(field) {
+            if (portfolioSortField !== field) return '';
+            return portfolioSortAsc ? ' <span style="font-size: 0.65rem;">▲</span>' : ' <span style="font-size: 0.65rem;">▼</span>';
+        };
+
+        // Inventory table / list
+        html += '<div class="portfolio-inventory-section">' +
+                    '<h3 class="section-title">📂 Asset Registry Ledger</h3>' +
+                    '<div class="portfolio-table-wrapper">' +
+                        '<table class="portfolio-table">' +
+                            '<thead>' +
+                                '<tr>' +
+                                    '<th onclick="window.app.sortPortfolioBy(\'specimen\')" style="cursor:pointer; user-select:none;">Specimen Fossil' + getSortArrow('specimen') + '</th>' +
+                                    '<th onclick="window.app.sortPortfolioBy(\'category\')" style="cursor:pointer; user-select:none;">Category' + getSortArrow('category') + '</th>' +
+                                    '<th onclick="window.app.sortPortfolioBy(\'period\')" style="cursor:pointer; user-select:none;">Geological Period' + getSortArrow('period') + '</th>' +
+                                    '<th onclick="window.app.sortPortfolioBy(\'stable\')" style="cursor:pointer; user-select:none;">Preservation Stable' + getSortArrow('stable') + '</th>' +
+                                    '<th onclick="window.app.sortPortfolioBy(\'cost\')" style="cursor:pointer; user-select:none;">Acquisition Cost' + getSortArrow('cost') + '</th>' +
+                                    '<th onclick="window.app.sortPortfolioBy(\'value\')" style="cursor:pointer; user-select:none;">Assessed Value' + getSortArrow('value') + '</th>' +
+                                    '<th onclick="window.app.sortPortfolioBy(\'status\')" style="cursor:pointer; user-select:none;">Status' + getSortArrow('status') + '</th>' +
+                                '</tr>' +
+                            '</thead>' +
+                            '<tbody>';
+
+        var sortedFossils = fossils.slice();
+        if (fossils.length === 0) {
+            html += '<tr><td colspan="7" style="text-align: center; color: var(--text-secondary); padding: 2rem;">No specimens in your collection to display in the ledger.</td></tr>';
+        } else {
+            sortedFossils.sort(function(a, b) {
+                var valA = '';
+                var valB = '';
+                
+                if (portfolioSortField === 'specimen') {
+                    valA = (a.specimen || '').toLowerCase();
+                    valB = (b.specimen || '').toLowerCase();
+                } else if (portfolioSortField === 'category') {
+                    valA = (a.category || '').toLowerCase();
+                    valB = (b.category || '').toLowerCase();
+                } else if (portfolioSortField === 'period') {
+                    valA = (a.geologicalPeriod || '').toLowerCase();
+                    valB = (b.geologicalPeriod || '').toLowerCase();
+                } else if (portfolioSortField === 'stable') {
+                    valA = (a.condition && a.condition.stable) ? 'a' : 'b';
+                    valB = (b.condition && b.condition.stable) ? 'a' : 'b';
+                } else if (portfolioSortField === 'cost') {
+                    var priceA = parseFloat(a.price) || 0;
+                    valA = window.app._convertCurrency(priceA, a.currency || 'USD', activeBaseCurrency);
+                    var priceB = parseFloat(b.price) || 0;
+                    valB = window.app._convertCurrency(priceB, b.currency || 'USD', activeBaseCurrency);
+                } else if (portfolioSortField === 'value') {
+                    var estA = parseFloat(a.estimatedValue) || parseFloat(a.price) || 0;
+                    valA = window.app._convertCurrency(estA, a.estimatedCurrency || a.currency || 'USD', activeBaseCurrency);
+                    var estB = parseFloat(b.estimatedValue) || parseFloat(b.price) || 0;
+                    valB = window.app._convertCurrency(estB, b.estimatedCurrency || b.currency || 'USD', activeBaseCurrency);
+                } else if (portfolioSortField === 'status') {
+                    valA = a.isSold ? 'b' : (a.isWishlist ? 'c' : 'a');
+                    valB = b.isSold ? 'b' : (b.isWishlist ? 'c' : 'a');
+                }
+
+                if (valA < valB) return portfolioSortAsc ? -1 : 1;
+                if (valA > valB) return portfolioSortAsc ? 1 : -1;
+                return 0;
+            });
+
+            sortedFossils.forEach(function(f) {
+                var cost = parseFloat(f.price) || 0;
+                var costBase = window.app._convertCurrency(cost, f.currency || 'USD', activeBaseCurrency);
+
+                var est = parseFloat(f.estimatedValue) || parseFloat(f.price) || 0;
+                var estBase = window.app._convertCurrency(est, f.estimatedCurrency || f.currency || 'USD', activeBaseCurrency);
+
+                var statusBadge = f.isSold ? '<span class="status-pill sold">Sold</span>' : '<span class="status-pill active">Curated</span>';
+                
+                // Formatted scientific name
+                var rawName = f.specimen || 'Unnamed';
+                var formattedName = escapeHtml(rawName);
+                var words = rawName.split(/\s+/);
+                if (words.length >= 2 && /^[A-Z][a-z]+$/.test(words[0]) && /^[a-z]+$/.test(words[1])) {
+                    formattedName = '<em>' + escapeHtml(words[0]) + ' ' + escapeHtml(words[1]) + '</em>' + (words.slice(2).join(' ') ? ' ' + escapeHtml(words.slice(2).join(' ')) : '');
+                } else if (words.length >= 1 && /^[A-Z][a-z]+$/.test(words[0])) {
+                    formattedName = '<em>' + escapeHtml(words[0]) + '</em>' + (words.length > 1 ? ' ' + escapeHtml(words.slice(1).join(' ')) : '');
+                }
+
+                // Condition display
+                var cond = f.condition || {};
+                var condStr = '🟢 Stable';
+                if (cond.cracking) condStr = '⚡ Fractured';
+                else if (cond.efflorescence) condStr = '⚪ Efflorescent';
+                else if (cond.pyrite) condStr = '🔥 Pyrite Decay';
+
+                html += '<tr>' +
+                            '<td>' +
+                                '<div class="table-spec-cell">' +
+                                    '<span class="table-spec-name" onclick="window.app.openLightbox(\'' + f.id + '\', 0)">' + formattedName + '</span>' +
+                                    '<span class="table-spec-sub">ID: ' + escapeHtml(f.id.slice(0, 8)) + '</span>' +
+                                '</div>' +
+                            '</td>' +
+                            '<td>' + escapeHtml(f.category || 'N/A') + '</td>' +
+                            '<td>' + escapeHtml(f.geologicalPeriod || 'N/A') + '</td>' +
+                            '<td>' + condStr + '</td>' +
+                            '<td>' + formatVal(costBase) + ' <small style="color:rgba(255,255,255,0.3); font-size:0.65rem;">(' + cost + ' ' + (f.currency || 'USD') + ')</small></td>' +
+                            '<td>' + formatVal(estBase) + '</td>' +
+                            '<td>' + statusBadge + '</td>' +
+                        '</tr>';
+            });
+        }
+
+        html += '</tbody></table></div></div></div>';
+        container.innerHTML = html;
+    },
+
+    generateInsuranceReport: function() {
+        var baseSign = '$';
+        if (activeBaseCurrency === 'EUR') baseSign = '€';
+        else if (activeBaseCurrency === 'SEK') baseSign = 'kr ';
+
+        var formatVal = function(val) {
+            return baseSign + parseFloat(val || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        };
+
+        var printWindow = window.open('', '_blank');
+        if (!printWindow) {
+            window.app.showToast('Please allow popups to export the insurance report.', 'warning');
+            return;
+        }
+
+        var activeFossils = fossils.filter(function(f) { return !f.isWishlist && !f.isSold; });
+        var totalCost = 0;
+        var totalEst = 0;
+        
+        var rowsHtml = '';
+        activeFossils.forEach(function(f, idx) {
+            var cost = parseFloat(f.price) || 0;
+            var costBase = window.app._convertCurrency(cost, f.currency || 'USD', activeBaseCurrency);
+            totalCost += costBase;
+
+            var est = parseFloat(f.estimatedValue) || parseFloat(f.price) || 0;
+            var estBase = window.app._convertCurrency(est, f.estimatedCurrency || f.currency || 'USD', activeBaseCurrency);
+            totalEst += estBase;
+
+            // Formatted scientific name
+            var rawName = f.specimen || 'Unnamed Specimen';
+            var formattedName = escapeHtml(rawName);
+            var words = rawName.split(/\s+/);
+            if (words.length >= 2 && /^[A-Z][a-z]+$/.test(words[0]) && /^[a-z]+$/.test(words[1])) {
+                formattedName = '<em>' + escapeHtml(words[0]) + ' ' + escapeHtml(words[1]) + '</em>' + (words.slice(2).join(' ') ? ' ' + escapeHtml(words.slice(2).join(' ')) : '');
+            } else if (words.length >= 1 && /^[A-Z][a-z]+$/.test(words[0])) {
+                formattedName = '<em>' + escapeHtml(words[0]) + '</em>' + (words.length > 1 ? ' ' + escapeHtml(words.slice(1).join(' ')) : '');
+            }
+
+            var cond = f.condition || {};
+            var condStr = '🟢 Stable';
+            if (cond.cracking) condStr = '⚡ Fractured';
+            else if (cond.efflorescence) condStr = '⚪ Efflorescent';
+            else if (cond.pyrite) condStr = '🔥 Pyrite Decay';
+
+            var treat = f.treatment || {};
+            var treatList = [];
+            if (treat.paraloid) treatList.push('Paraloid B-72');
+            if (treat.scribe) treatList.push('Air Scribed');
+            if (treat.cyano) treatList.push('Glued');
+            if (treat.water) treatList.push('Stabilized');
+            var treatStr = treatList.length > 0 ? treatList.join(', ') : 'None';
+
+            var originParts = [];
+            if (f.formation) originParts.push(f.formation);
+            if (f.location) originParts.push(f.location);
+            if (f.country) originParts.push(f.country);
+            var origin = originParts.join(', ') || 'N/A';
+
+            var sizeText = f.size ? f.size + ' ' + (f.sizeUnit || 'cm') : 'N/A';
+            if (f.weight) sizeText += ' / ' + f.weight + ' g';
+
+            var thumbUrl = (f.images && f.images.length > 0) ? f.images[0] : '';
+            var thumbHtml = thumbUrl ? '<img src="' + thumbUrl + '" style="width: 50px; height: 50px; object-fit: cover; border-radius: 4px; border: 1px solid #ddd;">' : '<div style="width:50px; height:50px; display:flex; align-items:center; justify-content:center; background:#eee; color:#aaa; font-size:1.5rem; border-radius:4px;">🦴</div>';
+
+            var fossilYear = f.createdAt ? new Date(f.createdAt).getFullYear() : 2026;
+            var customCatalogId = 'FA-' + fossilYear + '-' + String(idx + 1).padStart(4, '0');
+
+            rowsHtml += '<tr>' +
+                            '<td><strong>' + customCatalogId + '</strong></td>' +
+                            '<td>' + thumbHtml + '</td>' +
+                            '<td>' + formattedName + '<br><small style="color:#666;">Category: ' + escapeHtml(f.category || 'N/A') + '</small></td>' +
+                            '<td>' + escapeHtml(f.geologicalPeriod || 'N/A') + '<br><small style="color:#666;">' + escapeHtml(origin) + '</small></td>' +
+                            '<td>' + escapeHtml(sizeText) + '</td>' +
+                            '<td>' + condStr + '<br><small style="color:#666;">Prep: ' + escapeHtml(treatStr) + '</small></td>' +
+                            '<td>' + formatVal(costBase) + '</td>' +
+                            '<td><strong>' + formatVal(estBase) + '</strong></td>' +
+                        '</tr>';
+        });
+
+        var appreciation = totalEst - totalCost;
+        var appPct = totalCost > 0 ? (appreciation / totalCost) * 100 : 0;
+
+        var html = '<!DOCTYPE html>' +
+            '<html>' +
+            '<head>' +
+            '<title>Smithsonian-Grade Fossil Insurance Inventory</title>' +
+            '<style>' +
+                'body { font-family: "Georgia", "Times New Roman", serif; padding: 2rem; color: #111; line-height: 1.4; }' +
+                '.header { text-align: center; border-bottom: 3px double #111; padding-bottom: 1.5rem; margin-bottom: 2rem; }' +
+                '.header h1 { font-family: "Times New Roman", serif; font-size: 1.8rem; text-transform: uppercase; letter-spacing: 0.1em; margin: 0; }' +
+                '.header p { font-size: 0.85rem; color: #555; text-transform: uppercase; letter-spacing: 0.05em; margin: 0.5rem 0 0 0; }' +
+                '.summary-table { width: 100%; border-collapse: collapse; margin-bottom: 2rem; font-size: 0.9rem; }' +
+                '.summary-table th, .summary-table td { border: 1px solid #ccc; padding: 0.6rem 1rem; text-align: left; }' +
+                '.summary-table th { background: #f5f5f5; font-weight: bold; }' +
+                '.inventory-table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }' +
+                '.inventory-table th, .inventory-table td { border: 1px solid #aaa; padding: 0.5rem; text-align: left; vertical-align: top; }' +
+                '.inventory-table th { background: #e0e0e0; font-weight: bold; text-transform: uppercase; font-size: 0.72rem; }' +
+                '.footer-signatures { display: flex; justify-content: space-between; margin-top: 4rem; padding-top: 2rem; border-top: 1px solid #ccc; font-size: 0.85rem; }' +
+                '.signature-line { width: 250px; border-top: 1px solid #111; text-align: center; padding-top: 0.5rem; margin-top: 3rem; }' +
+                '@media print { ' +
+                    'body { padding: 0; }' +
+                    '.no-print { display: none; }' +
+                '}' +
+            '</style>' +
+            '</head>' +
+            '<body>' +
+            '<div class="header">' +
+                '<h1>Fossil Archive Collection Register</h1>' +
+                '<p>Official Curation Valuation Index & Insurance Inventory</p>' +
+                '<p style="font-size:0.7rem; color:#888; margin-top:0.25rem;">Date Generated: ' + new Date().toLocaleDateString() + ' · Base Currency: ' + activeBaseCurrency + '</p>' +
+            '</div>' +
+            
+            '<table class="summary-table">' +
+                '<thead>' +
+                    '<tr>' +
+                        '<th>Total Specimens Curated</th>' +
+                        '<th>Capital Invested (Cost)</th>' +
+                        '<th>Assessed Assessed Value</th>' +
+                        '<th>Net Portfolio Return</th>' +
+                    '</tr>' +
+                '</thead>' +
+                '<tbody>' +
+                    '<tr>' +
+                        '<td><strong>' + activeFossils.length + ' specimens</strong></td>' +
+                        '<td>' + formatVal(totalCost) + '</td>' +
+                        '<td><strong>' + formatVal(totalEst) + '</strong></td>' +
+                        '<td><strong>' + (appreciation >= 0 ? '+' : '') + formatVal(appreciation) + ' (' + (appreciation >= 0 ? '+' : '') + appPct.toFixed(1) + '%)</strong></td>' +
+                    '</tr>' +
+                '</tbody>' +
+            '</table>' +
+
+            '<table class="inventory-table">' +
+                '<thead>' +
+                    '<tr>' +
+                        '<th>Catalog ID</th>' +
+                        '<th>Image</th>' +
+                        '<th>Taxon / Description</th>' +
+                        '<th>Stratigraphy / Locality</th>' +
+                        '<th>Dimensions</th>' +
+                        '<th>Preservation & Prep</th>' +
+                        '<th>Acq. Cost</th>' +
+                        '<th>Assessed Value</th>' +
+                    '</tr>' +
+                '</thead>' +
+                '<tbody>' +
+                    rowsHtml +
+                '</tbody>' +
+            '</table>' +
+
+            '<div class="footer-signatures">' +
+                '<div>' +
+                    '<p><strong>Curator Declaration:</strong></p>' +
+                    '<p style="color:#444; max-width:400px; font-size:0.75rem; line-height:1.4;">I hereby certify that the specimens listed in this registry represent authentic paleobiological entities present in this curated cabinet, stabilized and preserved in accordance with the prep logs herein.</p>' +
+                    '<div class="signature-line">Lead Curator Signature</div>' +
+                '</div>' +
+                '<div>' +
+                    '<div class="signature-line" style="margin-top:5.35rem;">Assessing Inspector Signature & Date</div>' +
+                '</div>' +
+            '</div>' +
+            '</body>' +
+            '</html>';
+
+        printWindow.document.write(html);
+        printWindow.document.close();
+        
+        // Wait for images to load before printing
+        printWindow.onload = function() {
+            printWindow.print();
+        };
     },
 
     renderScoreboard: function(criteria) {
@@ -6294,7 +6927,10 @@ window.app = {
             
             var imgHtml = '';
             if (f.images && f.images.length > 0) {
-                imgHtml = '<img src="' + f.images[0] + '" class="compare-img" onclick="window.app.openZoomOverlay(this.src)">';
+                imgHtml = '<img id="compare-img-' + f.id + '" src="' + f.images[0] + '" class="compare-img" onclick="window.app.openZoomOverlay(this.src)">';
+                if (f.images.length > 1) {
+                    imgHtml += '<button type="button" class="compare-img-toggle-btn" onclick="window.app.toggleCompareImage(\'' + f.id + '\')" title="Toggle Fossil vs Life Reconstruction">🦴 Fossil View</button>';
+                }
             } else {
                 imgHtml = '<div class="compare-img-placeholder" style="display:flex;align-items:center;justify-content:center;height:100%;background:rgba(255,255,255,0.02);color:rgba(255,255,255,0.2);">' +
                           '<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>' +
@@ -6787,7 +7423,7 @@ window.app = {
         
         if (photoCircle) {
             if (f.images && f.images.length > 0) {
-                photoCircle.innerHTML = '<img src="' + f.images[0] + '" alt="' + escapeHtml(f.specimen) + '" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%; border: 3px solid rgba(255,255,255,0.15);">';
+                photoCircle.innerHTML = '<img src="' + f.images[0] + '" alt="' + escapeHtml(f.specimen) + ' fossil specimen" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%; border: 3px solid rgba(255,255,255,0.15); cursor: zoom-in;" onclick="window.app.openZoomOverlay(this.src)">';
             } else {
                 var catEmoji = '🦴';
                 if (f.category) {
@@ -6799,6 +7435,34 @@ window.app = {
                     else if (cat.indexOf('microfossil') !== -1) catEmoji = '🔬';
                 }
                 photoCircle.innerHTML = '<div style="font-size: 3rem; display: flex; align-items: center; justify-content: center; height: 100%; width: 100%; background: rgba(255,255,255,0.05); color: #fff; border-radius: 50%; border: 3px solid rgba(255,255,255,0.1);">' + catEmoji + '</div>';
+            }
+        }
+        
+        var lifeCircle = document.getElementById('deep-dive-life-circle');
+        if (lifeCircle) {
+            if (f.images && f.images.length > 1) {
+                lifeCircle.innerHTML = '<img src="' + f.images[1] + '" alt="' + escapeHtml(f.specimen) + ' life reconstruction" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%; border: 3px solid rgba(255,255,255,0.15); cursor: zoom-in;" onclick="window.app.openZoomOverlay(this.src)">';
+            } else {
+                var nameClean = (f.specimen || '').trim();
+                var genus = nameClean.split(' ')[0];
+                genus = genus.replace(/\([^)]*\)/g, '').replace(/\b(?:cf\.|sp\.|\?)\b/g, '').replace(/[^a-zA-Z]/g, '');
+                if (genus) {
+                    window.app.fetchWikipediaLifeImage(genus, f);
+                } else {
+                    var catEmoji = '🦖';
+                    if (f.category) {
+                        var cat = f.category.toLowerCase();
+                        if (cat.indexOf('vertebrate') !== -1 && cat.indexOf('invertebrate') === -1) catEmoji = '🦖';
+                        else if (cat.indexOf('invertebrate') !== -1) catEmoji = '🐚';
+                        else if (cat.indexOf('plant') !== -1) catEmoji = '🌿';
+                        else if (cat.indexOf('trace') !== -1) catEmoji = '🐾';
+                        else if (cat.indexOf('microfossil') !== -1) catEmoji = '🔬';
+                    }
+                    lifeCircle.innerHTML = '<div style="font-size: 2.2rem; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; width: 100%; background: rgba(255,255,255,0.04); color: #cbd5e0; border-radius: 50%; border: 3px solid rgba(255,255,255,0.1); line-height: 1.2; text-align: center; padding: 0.2rem;">' +
+                                           '<span>' + catEmoji + '</span>' +
+                                           '<span style="font-size: 0.52rem; font-weight: bold; text-transform: uppercase; letter-spacing: 0.05em; color: #a0aec0; margin-top: 0.2rem;">No Image</span>' +
+                                           '</div>';
+                }
             }
         }
         
@@ -7150,6 +7814,104 @@ window.app = {
             if (wikiContent) {
                 wikiContent.innerHTML = '<div style="padding: 1rem; color: #edf2f7; text-align: center;">No scientific article found for ' + escapeHtml(genus) + '. Showing specimen description:</div>' +
                                        '<div style="font-size: 0.85rem; padding: 0.5rem; background: rgba(255,255,255,0.02); border-radius: 4px; line-height: 1.5; text-align: justify; color: #f7fafc;">' + escapeHtml(f.notes || f.description || 'No curation details available.') + '</div>';
+            }
+        }
+    },
+
+    fetchWikipediaLifeImage: function(genus, f) {
+        var lifeCircle = document.getElementById('deep-dive-life-circle');
+        if (!lifeCircle) return;
+
+        // Show a premium glassmorphic loader spinner in the life circle
+        lifeCircle.innerHTML = '<div class="wiki-loader-spinner" style="display: flex; align-items: center; justify-content: center; height: 100%; width: 100%; font-size: 0.55rem; color: #cbd5e0; flex-direction: column; text-align: center; padding: 0.2rem; background: rgba(255, 255, 255, 0.03); border-radius: 50%;">' +
+                               '<div class="spinner" style="width: 20px; height: 20px; border: 2px solid rgba(255,255,255,0.1); border-top-color: #4fd1c5; border-radius: 50%; animation: spin 1s linear infinite; margin-bottom: 0.3rem;"></div>' +
+                               '<span>Loading...</span></div>';
+
+        var wikiTitle = genus.charAt(0).toUpperCase() + genus.slice(1).toLowerCase();
+        var wikiHeaders = { 'Api-User-Agent': 'FossilArchiveApp/1.0 (contact@fossilarchive.app) MediaWiki/1.3' };
+
+        // Tier 1: Try exact Genus page first for the PageImage
+        var exactUrl = 'https://en.wikipedia.org/w/api.php?action=query&prop=pageimages&format=json&piprop=thumbnail&pithumbsize=400&origin=*&titles=' + encodeURIComponent(wikiTitle);
+
+        fetch(exactUrl, { headers: wikiHeaders })
+            .then(function(res) { return res.json(); })
+            .then(function(data) {
+                var pages = data.query.pages;
+                var pageId = Object.keys(pages)[0];
+                if (pageId !== "-1" && pages[pageId].thumbnail && pages[pageId].thumbnail.source) {
+                    renderImage(pages[pageId].thumbnail.source);
+                } else {
+                    // Tier 2: Search fallback
+                    var searchUrl = 'https://en.wikipedia.org/w/api.php?action=query&list=search&format=json&origin=*&srsearch=' + encodeURIComponent(genus + ' (fossil OR paleobiology OR dinosaur OR extinct)');
+                    fetch(searchUrl, { headers: wikiHeaders })
+                        .then(function(res) { return res.json(); })
+                        .then(function(sData) {
+                            var title = wikiTitle;
+                            if (sData.query && sData.query.search && sData.query.search.length > 0) {
+                                title = sData.query.search[0].title;
+                            }
+                            var fetchUrl = 'https://en.wikipedia.org/w/api.php?action=query&prop=pageimages&format=json&piprop=thumbnail&pithumbsize=400&origin=*&titles=' + encodeURIComponent(title);
+                            return fetch(fetchUrl, { headers: wikiHeaders });
+                        })
+                        .then(function(res) { return res.json(); })
+                        .then(function(fData) {
+                            var pages = fData.query.pages;
+                            var pageId = Object.keys(pages)[0];
+                            if (pageId !== "-1" && pages[pageId].thumbnail && pages[pageId].thumbnail.source) {
+                                renderImage(pages[pageId].thumbnail.source);
+                            } else {
+                                renderFallback();
+                            }
+                        })
+                        .catch(function() {
+                            renderFallback();
+                        });
+                }
+            })
+            .catch(function(err) {
+                console.error('Wikipedia PageImage query error:', err);
+                renderFallback();
+            });
+
+        function renderImage(imgUrl) {
+            lifeCircle.innerHTML = '<img src="' + imgUrl + '" alt="' + escapeHtml(genus) + ' life reconstruction" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%; border: 3px solid rgba(255,255,255,0.15); cursor: zoom-in;" onclick="window.app.openZoomOverlay(this.src)">';
+        }
+
+        function renderFallback() {
+            var catEmoji = '🦖';
+            if (f.category) {
+                var cat = f.category.toLowerCase();
+                if (cat.indexOf('vertebrate') !== -1 && cat.indexOf('invertebrate') === -1) catEmoji = '🦖';
+                else if (cat.indexOf('invertebrate') !== -1) catEmoji = '🐚';
+                else if (cat.indexOf('plant') !== -1) catEmoji = '🌿';
+                else if (cat.indexOf('trace') !== -1) catEmoji = '🐾';
+                else if (cat.indexOf('microfossil') !== -1) catEmoji = '🔬';
+            }
+            lifeCircle.innerHTML = '<div style="font-size: 2.2rem; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; width: 100%; background: rgba(255,255,255,0.04); color: #cbd5e0; border-radius: 50%; border: 3px solid rgba(255,255,255,0.1); line-height: 1.2; text-align: center; padding: 0.2rem;">' +
+                                   '<span>' + catEmoji + '</span>' +
+                                   '<span style="font-size: 0.52rem; font-weight: bold; text-transform: uppercase; letter-spacing: 0.05em; color: #a0aec0; margin-top: 0.2rem;">No Image</span>' +
+                                   '</div>';
+        }
+    },
+
+    toggleCompareImage: function(fossilId) {
+        var f = fossils.find(function(x) { return x.id === fossilId; });
+        if (!f || !f.images || f.images.length <= 1) return;
+        var img = document.getElementById('compare-img-' + fossilId);
+        if (img) {
+            var currentSrc = img.getAttribute('src');
+            var newSrc = (currentSrc === f.images[0]) ? f.images[1] : f.images[0];
+            img.setAttribute('src', newSrc);
+            
+            var btn = img.parentElement.querySelector('.compare-img-toggle-btn');
+            if (btn) {
+                if (newSrc === f.images[1]) {
+                    btn.innerHTML = '🎨 Life View';
+                    btn.classList.add('active');
+                } else {
+                    btn.innerHTML = '🦴 Fossil View';
+                    btn.classList.remove('active');
+                }
             }
         }
     }

@@ -175,6 +175,12 @@
                 <button type="button" id="btn-toggle-data" onclick="app.toggleData()">
                     <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/><path d="M3 20h18"/></svg> Data Insights
                 </button>
+                <button type="button" id="btn-toggle-chrono-chart" onclick="app.toggleChronoChart()">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> Deep Time
+                </button>
+                <button type="button" id="btn-toggle-portfolio" onclick="app.togglePortfolio()">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg> Portfolio
+                </button>
             </div>
             
             <div id="stats-charts-container" class="stats-charts">
@@ -207,6 +213,14 @@
 
             <div id="scoreboard-container" class="dashboard-visual-container" style="display: none;">
                 <!-- Leaderboard dynamically rendered by JS -->
+            </div>
+
+            <div id="chrono-chart-container" class="dashboard-visual-container" style="display: none;">
+                <!-- Chrono-Chart dynamically rendered by JS -->
+            </div>
+
+            <div id="portfolio-container" class="dashboard-visual-container" style="display: none;">
+                <!-- Portfolio dynamically rendered by JS -->
             </div>
         </div>
         <div id="fossil-grid" class="fossil-grid" aria-live="polite">
@@ -684,8 +698,15 @@
                 <div class="deep-dive-scenic-stage" id="deep-dive-scenic-stage">
                     <div class="scenic-backdrop-glow"></div>
                     <div class="scenic-content-wrapper">
-                        <div class="scenic-photo-circle" id="deep-dive-photo-circle">
-                            <!-- Circular Specimen photo rendered by JS -->
+                        <div class="scenic-circles-container">
+                            <div class="scenic-circle-wrapper" title="Raw Fossil Specimen">
+                                <span class="circle-label">🦴 Specimen</span>
+                                <div class="scenic-photo-circle" id="deep-dive-photo-circle"></div>
+                            </div>
+                            <div class="scenic-circle-wrapper" title="Prehistoric Life Reconstruction">
+                                <span class="circle-label">🦖 Life Portrait</span>
+                                <div class="scenic-life-circle" id="deep-dive-life-circle"></div>
+                            </div>
                         </div>
                         <div class="scenic-specimen-details">
                             <span id="deep-dive-era-tag" class="scenic-badge">Mesozoic</span>
