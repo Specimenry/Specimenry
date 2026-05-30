@@ -3497,6 +3497,8 @@ window.app = {
 
             if (criteria === 'price') {
                 return f.price !== undefined && f.price !== null && !isNaN(parseFloat(f.price)) && parseFloat(f.price) > 0;
+            } else if (criteria === 'conditionTier') {
+                return f.conditionTier !== undefined && f.conditionTier !== null && f.conditionTier !== '';
             } else if (criteria === 'animalSize') {
                 return f.animalSize !== undefined && f.animalSize !== null && !isNaN(parseFloat(f.animalSize)) && parseFloat(f.animalSize) > 0;
             } else if (criteria === 'size') {
@@ -3510,6 +3512,15 @@ window.app = {
         // 2. Sort Descending (Price uses normalized toSEK values)
         rankedFossils.sort(function(a, b) {
             if (criteria === 'price') {
+                return toSEK(b) - toSEK(a);
+            } else if (criteria === 'conditionTier') {
+                var tierOrder = { 'S': 5, 'A': 4, 'B': 3, 'C': 2, 'D': 1 };
+                var rankA = tierOrder[a.conditionTier] || 0;
+                var rankB = tierOrder[b.conditionTier] || 0;
+                if (rankB !== rankA) {
+                    return rankB - rankA;
+                }
+                // Tie-breaker: sub-sort by financial value (SEK) descending
                 return toSEK(b) - toSEK(a);
             } else if (criteria === 'animalSize') {
                 return parseFloat(b.animalSize) - parseFloat(a.animalSize);
@@ -3530,6 +3541,9 @@ window.app = {
                 '<button type="button" class="' + (criteria === 'price' ? 'active' : '') + '" onclick="app.renderScoreboard(\'price\')">' +
                     '💰 Value Leaderboard' +
                 '</button>' +
+                '<button type="button" class="' + (criteria === 'conditionTier' ? 'active' : '') + '" onclick="app.renderScoreboard(\'conditionTier\')">' +
+                    '🩺 Preservation Tier' +
+                '</button>' +
                 '<button type="button" class="' + (criteria === 'animalSize' ? 'active' : '') + '" onclick="app.renderScoreboard(\'animalSize\')">' +
                     '📐 Largest Animals' +
                 '</button>' +
@@ -3547,18 +3561,21 @@ window.app = {
             // Render beautiful zero state
             var criteriaNames = {
                 price: 'financial value',
+                conditionTier: 'preservation grade tier',
                 animalSize: 'estimated whole-animal size',
                 size: 'physical fossil dimension',
                 weight: 'specimen weight'
             };
             var criteriaFields = {
                 price: 'Purchase Price (Curation & Value tab)',
+                conditionTier: 'Preservation Grade Tier (Curation & Value tab)',
                 animalSize: 'Est. Animal Size (Geology & Location tab)',
                 size: 'Fossil Size (Curation & Value tab)',
                 weight: 'Fossil Weight (Curation & Value tab)'
             };
             var zeroIcons = {
                 price: '💎',
+                conditionTier: '🩺',
                 animalSize: '🦕',
                 size: '📐',
                 weight: '⚖️'
@@ -3612,6 +3629,8 @@ window.app = {
                     } else {
                         metricText = '💰 ' + origPrice;
                     }
+                } else if (criteria === 'conditionTier') {
+                    metricText = getConditionTierBadgeHtml(f.conditionTier, false);
                 } else if (criteria === 'animalSize') {
                     metricText = '🦕 ' + parseFloat(f.animalSize) + ' m (' + window.app.getScaleDescription(f.animalSize) + ')';
                 } else if (criteria === 'size') {
@@ -4579,10 +4598,99 @@ window.app = {
         }
     },
 
+    autoPopulateCategoryAndType: function() {
+        var nameElem = document.getElementById('f-specimen');
+        var catSelect = document.getElementById('f-category');
+        var typeSelect = document.getElementById('f-type');
+        
+        if (!nameElem || !catSelect || !typeSelect) return;
+        var name = nameElem.value.trim().toLowerCase();
+        if (!name) return;
+
+        // Extensive high-fidelity taxonomic keyword dictionary
+        var mappings = [
+            {
+                keywords: ['trilobite', 'elrathia', 'phacops', 'flexicalymene', 'calymene', 'asaphus', 'paradoxides', 'metacanthina', 'drotops', 'ceraurus', 'greenops', 'trilobita', 'acastoides', 'proetus'],
+                category: 'Invertebrate',
+                fossilType: 'Trilobite'
+            },
+            {
+                keywords: ['ammonite', 'cleoniceras', 'perisphinctes', 'dactylioceras', 'hoplites', 'douvilleiceras', 'desmoceras', 'baculites', 'scaphites', 'placenticeras', 'ammonoidea'],
+                category: 'Invertebrate',
+                fossilType: 'Ammonite'
+            },
+            {
+                keywords: ['shell', 'brachiopod', 'bivalve', 'belemnite', 'sea urchin', 'coral', 'gastropod', 'snail', 'crinoid', 'orthoceras', 'sea scorpion', 'eurypterus', 'starfish', 'lobster', 'crab', 'insect', 'meganeura', 'invertebrate'],
+                category: 'Invertebrate',
+                fossilType: 'Invertebrate (Other)'
+            },
+            {
+                keywords: ['tyrannosaurus', 't-rex', 'triceratops', 'velociraptor', 'spinosaurus', 'allosaurus', 'stegosaurus', 'brachiosaurus', 'diplodocus', 'edmontosaurus', 'hadrosaur', 'ankylosaurus', 'theropod', 'sauropod', 'dromaeosaur', 'ceratopsian', 'carcharodontosaurus', 'albertosaurus', 'dinosaur', 'dino', 'alicosaurus', 'tylosaurus'],
+                category: 'Vertebrate',
+                fossilType: 'Dinosaur'
+            },
+            {
+                keywords: ['megalodon', 'otodus', 'carcharocles', 'shark', 'squalicorax', 'cretoxyrhina', 'isurus', 'mako', 'hemipristis', 'galeocerdo', 'tiger shark', 'sand tiger', 'ptychodus', 'elasmobranch'],
+                category: 'Vertebrate',
+                fossilType: 'Shark'
+            },
+            {
+                keywords: ['fish', 'knightia', 'diplomystus', 'priscacara', 'mioplosus', 'phareodus', 'enchodus', 'lepisosteus', 'gar', 'xiphactinus', 'coelacanth', 'acanthodian', 'bony fish'],
+                category: 'Vertebrate',
+                fossilType: 'Fish'
+            },
+            {
+                keywords: ['mosasaur', 'plesiosaur', 'ichthyosaur', 'pliosaur', 'turtle', 'crocodile', 'alligator', 'frog', 'salamander', 'reptile', 'lizard', 'snake', 'keichousaurus', 'captorhinus'],
+                category: 'Vertebrate',
+                fossilType: 'Reptile / Amphibian'
+            },
+            {
+                keywords: ['mammoth', 'mastodon', 'smilodon', 'saber-toothed', 'mammal', 'horse', 'equus', 'glyptodon', 'megatherium', 'sloth', 'whale', 'dolphin', 'basilosaurus', 'deer', 'bear', 'dire wolf', 'canis', 'felis', 'entelodont', 'camel', 'bison', 'rhino'],
+                category: 'Vertebrate',
+                fossilType: 'Mammal'
+            },
+            {
+                keywords: ['bird', 'archaeopteryx', 'confuciusornis', 'avian', 'feather', 'gastornis'],
+                category: 'Vertebrate',
+                fossilType: 'Bird'
+            },
+            {
+                keywords: ['plant', 'leaf', 'fern', 'metasequoia', 'annularia', 'pecopteris', 'neuropteris', 'ginkgo', 'wood', 'petrified wood', 'flora', 'tree', 'pine', 'cone', 'branch', 'glossopteris', 'calamites'],
+                category: 'Plant',
+                fossilType: 'Plant / Flora'
+            },
+            {
+                keywords: ['coprolite'],
+                category: 'Trace (Ichnofossil)',
+                fossilType: 'Other'
+            },
+            {
+                keywords: ['footprint', 'trackway', 'track', 'burrow', 'boring', 'trace', 'ichnofossil'],
+                category: 'Trace (Ichnofossil)',
+                fossilType: 'Other'
+            }
+        ];
+
+        for (var i = 0; i < mappings.length; i++) {
+            var map = mappings[i];
+            for (var k = 0; k < map.keywords.length; k++) {
+                var kw = map.keywords[k];
+                if (name.indexOf(kw) !== -1) {
+                    if (!catSelect.value) catSelect.value = map.category;
+                    if (!typeSelect.value) typeSelect.value = map.fossilType;
+                    return;
+                }
+            }
+        }
+    },
+
     autoSizeLookup: function() {
         var nameElem = document.getElementById('f-specimen');
         var sizeElem = document.getElementById('f-animal-size');
         if (!nameElem || !sizeElem) return null;
+
+        // Trigger dynamic Category and Type auto-population
+        window.app.autoPopulateCategoryAndType();
 
         var name = nameElem.value;
         if (!name) return null;
@@ -4944,6 +5052,7 @@ window.app = {
         currentImages.forEach(function(imgSrc, index) {
             var imgContainer = document.createElement('div');
             imgContainer.className = 'img-preview-item-wrapper';
+            imgContainer.style.position = 'relative';
             
             var mediaEl;
             var isVideo = imgSrc.startsWith('data:video/') || imgSrc.toLowerCase().endsWith('.mp4') || imgSrc.toLowerCase().endsWith('.webm') || imgSrc.toLowerCase().endsWith('.mov');
@@ -4962,20 +5071,38 @@ window.app = {
                 mediaEl.className = 'img-preview-item';
                 mediaEl.alt = 'Media ' + (index + 1);
             }
-            mediaEl.title = 'Click to remove';
             
-            mediaEl.onclick = function() {
+            imgContainer.appendChild(mediaEl);
+            
+            // Dedicated glowing close/remove cross button (resolves accidental click deletions)
+            var removeBtn = document.createElement('button');
+            removeBtn.type = 'button';
+            removeBtn.innerHTML = '&times;';
+            removeBtn.title = 'Remove media';
+            removeBtn.style.cssText = 'position:absolute; top:-6px; right:-6px; width:20px; height:20px; border-radius:50%; background:#ff4757; color:#fff; border:1px solid rgba(255,255,255,0.4); font-size:14px; font-weight:bold; display:flex; align-items:center; justify-content:center; cursor:pointer; z-index:15; box-shadow:0 2px 5px rgba(0,0,0,0.3); transition:transform 0.15s ease, background 0.15s ease; line-height:1; padding:0;';
+            
+            removeBtn.onmouseover = function() {
+                this.style.transform = 'scale(1.15)';
+                this.style.background = '#ff6b81';
+            };
+            removeBtn.onmouseout = function() {
+                this.style.transform = 'scale(1)';
+                this.style.background = '#ff4757';
+            };
+            
+            removeBtn.onclick = function(e) {
+                e.stopPropagation();
                 currentImages.splice(index, 1);
                 window.app.renderImagePreview();
             };
             
-            imgContainer.appendChild(mediaEl);
+            imgContainer.appendChild(removeBtn);
             
             if (index > 0) {
                 var coverBtn = document.createElement('button');
                 coverBtn.type = 'button';
                 coverBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"/></svg> Cover';
-                coverBtn.style.cssText = 'position:absolute; top:4px; right:4px; background:rgba(0,0,0,0.65); color:#fff; border:none; padding:3px 6px; font-size:9px; border-radius:4px; z-index:10; cursor:pointer; font-weight:700; text-transform:uppercase; letter-spacing:0.05em; display:flex; align-items:center; opacity:0.8; transition:opacity 0.2s;';
+                coverBtn.style.cssText = 'position:absolute; bottom:4px; right:4px; background:rgba(0,0,0,0.65); color:#fff; border:none; padding:3px 6px; font-size:9px; border-radius:4px; z-index:10; cursor:pointer; font-weight:700; text-transform:uppercase; letter-spacing:0.05em; display:flex; align-items:center; opacity:0.8; transition:opacity 0.2s;';
                 coverBtn.onmouseover = function() { this.style.opacity = '1'; };
                 coverBtn.onmouseout = function() { this.style.opacity = '0.8'; };
                 coverBtn.onclick = function(e) {
@@ -4984,7 +5111,6 @@ window.app = {
                     currentImages.unshift(clickedImg);
                     window.app.renderImagePreview();
                 };
-                imgContainer.style.position = 'relative';
                 imgContainer.appendChild(coverBtn);
             }
             
@@ -4995,6 +5121,25 @@ window.app = {
     // --- Save ---
     saveFossil: function(event) {
         event.preventDefault();
+
+        // 1. Manual Form Validation with smart tab-switching (resolves hidden validation blockers)
+        var specElem = document.getElementById('f-specimen');
+        var catElem = document.getElementById('f-category');
+
+        if (!specElem.value.trim()) {
+            window.app.setModalTab('classification');
+            specElem.focus();
+            window.app.showToast('Please enter a Specimen Name.', 'warning');
+            return;
+        }
+
+        if (!catElem.value) {
+            window.app.setModalTab('classification');
+            catElem.focus();
+            window.app.showToast('Please select a Category.', 'warning');
+            return;
+        }
+
         var idVal = document.getElementById('fossil-id').value;
         var isEditing = !!idVal;
 
@@ -5077,6 +5222,9 @@ window.app = {
             }
             window.app.closeModal();
             window.app.renderFossils();
+        }).catch(function(err) {
+            console.error('Failed to write fossil record:', err);
+            window.app.showToast('Error saving fossil: ' + (err.message || 'Database write error'), 'error');
         });
     },
 
@@ -5169,6 +5317,8 @@ window.app = {
         
         var btnDelete = document.getElementById('btn-mass-delete');
         var btnTag = document.getElementById('btn-mass-tag');
+        var btnUntag = document.getElementById('btn-mass-untag');
+        var btnType = document.getElementById('btn-mass-type');
         var btnPrint = document.getElementById('btn-mass-print');
         var btnSelectAll = document.getElementById('btn-mass-select-all');
         var btnDeselect = document.getElementById('btn-mass-deselect');
@@ -5215,6 +5365,16 @@ window.app = {
         if (btnTag) {
             btnTag.style.display = count > 0 ? 'inline-flex' : 'none';
             btnTag.innerText = '🏷️ Tag (' + count + ')';
+        }
+
+        if (btnUntag) {
+            btnUntag.style.display = count > 0 ? 'inline-flex' : 'none';
+            btnUntag.innerText = '🏷️ Untag (' + count + ')';
+        }
+
+        if (btnType) {
+            btnType.style.display = count > 0 ? 'inline-flex' : 'none';
+            btnType.innerText = '🦕 Set Type (' + count + ')';
         }
 
         if (btnPrint) {
@@ -5284,6 +5444,181 @@ window.app = {
             selectedFossils.clear();
             window.app.updateMassDeleteButton();
             window.app.renderFossils();
+        });
+    },
+
+    massUntagSelected: function() {
+        if (selectedFossils.size === 0) return;
+        var tagInput = prompt('Enter tags to remove (comma or space separated, or type "*" to remove all tags):');
+        if (tagInput === null) return; // Cancelled
+        
+        var removeAll = tagInput.trim() === '*';
+        var tagsToRemove = tagInput.split(/[,\s]+/).map(function(t) { 
+            return t.trim().toLowerCase().replace(/^#/, ''); 
+        }).filter(function(t) { return t.length > 0; });
+        
+        if (!removeAll && tagsToRemove.length === 0) return;
+
+        var ids = Array.from(selectedFossils);
+        var chain = Promise.resolve();
+        
+        ids.forEach(function(id) {
+            chain = chain.then(function() {
+                var f = fossils.find(function(x) { return x.id === id; });
+                if (f) {
+                    if (removeAll) {
+                        f.tags = [];
+                    } else {
+                        var currentTags = f.tags || [];
+                        f.tags = currentTags.filter(function(t) {
+                            return tagsToRemove.indexOf(t.toLowerCase()) === -1;
+                        });
+                    }
+                    return updateFossil(f);
+                }
+            });
+        });
+
+        chain.then(function() {
+            selectedFossils.clear();
+            window.app.updateMassDeleteButton();
+            window.app.renderFossils();
+            window.app.showToast('Successfully untagged selected specimens.', 'success');
+        });
+    },
+
+    massChangeFossilTypeSelected: function() {
+        if (selectedFossils.size === 0) return;
+        
+        // Gather unique existing fossil types as well as standard types
+        var standardTypes = FOSSIL_TYPES;
+        var existingTypes = [];
+        fossils.forEach(function(f) {
+            if (f.fossilType && existingTypes.indexOf(f.fossilType) === -1) {
+                existingTypes.push(f.fossilType);
+            }
+        });
+        
+        // Merge and deduplicate
+        var allTypes = standardTypes.slice();
+        existingTypes.forEach(function(t) {
+            if (allTypes.indexOf(t) === -1) {
+                allTypes.push(t);
+            }
+        });
+        allTypes.sort();
+
+        // Create overlay and dialog container
+        var overlay = document.createElement('div');
+        overlay.id = 'mass-type-modal';
+        overlay.style.position = 'fixed';
+        overlay.style.top = '0';
+        overlay.style.left = '0';
+        overlay.style.width = '100vw';
+        overlay.style.height = '100vh';
+        overlay.style.background = 'rgba(10, 11, 14, 0.7)';
+        overlay.style.backdropFilter = 'blur(15px)';
+        overlay.style.webkitBackdropFilter = 'blur(15px)';
+        overlay.style.zIndex = '30000';
+        overlay.style.display = 'flex';
+        overlay.style.alignItems = 'center';
+        overlay.style.justifyContent = 'center';
+        overlay.style.opacity = '0';
+        overlay.style.transition = 'opacity 0.25s ease';
+
+        var contentHtml = 
+            '<div class="curator-modal-card" style="background: var(--bg-surface); border: 1px solid var(--border-color); padding: 2rem; border-radius: var(--radius-lg); box-shadow: var(--shadow-lg); max-width: 420px; width: 90vw; transform: scale(0.95); transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1); box-sizing: border-box;">' +
+                '<h3 style="font-family: \'Outfit\', sans-serif; font-weight: 700; margin-top: 0; margin-bottom: 0.5rem; color: var(--text-primary); display: flex; align-items: center; gap: 0.5rem;">🦕 Mass Change Fossil Type</h3>' +
+                '<p style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 1.5rem; line-height: 1.4;">Select a new Fossil Type for the <strong>' + selectedFossils.size + '</strong> selected specimens. You can pick an existing type, enter a custom one, or clear the value.</p>' +
+                
+                '<div class="form-group" style="margin-bottom: 1.25rem;">' +
+                    '<label for="mass-type-select" style="display: block; font-size: 0.75rem; font-weight: 700; margin-bottom: 0.4rem; color: var(--text-secondary); text-transform: uppercase;">Select Type</label>' +
+                    '<select id="mass-type-select" style="width: 100%; padding: 0.6rem 0.8rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color); background: var(--bg-warm); color: var(--text-primary); font-family: inherit; font-size: 0.85rem; font-weight: 600; box-sizing: border-box;">' +
+                        '<option value="">-- Clear Fossil Type --</option>' +
+                        '<option value="__custom__">-- Type Custom Value --</option>' +
+                        allTypes.map(function(t) { return '<option value="' + escapeHtml(t) + '">' + escapeHtml(t) + '</option>'; }).join('') +
+                    '</select>' +
+                '</div>' +
+
+                '<div id="mass-type-custom-container" class="form-group" style="margin-bottom: 1.5rem; display: none;">' +
+                    '<label for="mass-type-custom" style="display: block; font-size: 0.75rem; font-weight: 700; margin-bottom: 0.4rem; color: var(--text-secondary); text-transform: uppercase;">Custom Fossil Type</label>' +
+                    '<input type="text" id="mass-type-custom" placeholder="e.g. Coprolite, Gastropod, Leaf" style="width: 100%; padding: 0.6rem 0.8rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color); background: var(--bg-warm); color: var(--text-primary); font-family: inherit; font-size: 0.85rem; box-sizing: border-box;">' +
+                '</div>' +
+
+                '<div style="display: flex; justify-content: flex-end; gap: 0.75rem;">' +
+                    '<button id="mass-type-cancel" class="btn-secondary" style="padding: 0.5rem 1.2rem; border-radius: 99px; cursor: pointer; font-weight: 700; font-size: 0.78rem;">Cancel</button>' +
+                    '<button id="mass-type-submit" class="btn-primary" style="padding: 0.5rem 1.4rem; border-radius: 99px; cursor: pointer; font-weight: 700; font-size: 0.78rem; background: var(--accent); color: var(--bg-surface); border: none;">Apply</button>' +
+                '</div>' +
+            '</div>';
+
+        overlay.innerHTML = contentHtml;
+        document.body.appendChild(overlay);
+
+        var card = overlay.querySelector('.curator-modal-card');
+        var select = overlay.querySelector('#mass-type-select');
+        var customContainer = overlay.querySelector('#mass-type-custom-container');
+        var customInput = overlay.querySelector('#mass-type-custom');
+        var cancelBtn = overlay.querySelector('#mass-type-cancel');
+        var submitBtn = overlay.querySelector('#mass-type-submit');
+
+        // Show transitions
+        setTimeout(function() {
+            overlay.style.opacity = '1';
+            card.style.transform = 'scale(1)';
+        }, 10);
+
+        // Toggle custom input field
+        select.addEventListener('change', function() {
+            if (select.value === '__custom__') {
+                customContainer.style.display = 'block';
+                customInput.focus();
+            } else {
+                customContainer.style.display = 'none';
+            }
+        });
+
+        // Close function
+        var closeModal = function() {
+            overlay.style.opacity = '0';
+            card.style.transform = 'scale(0.95)';
+            setTimeout(function() {
+                document.body.removeChild(overlay);
+            }, 250);
+        };
+
+        cancelBtn.addEventListener('click', closeModal);
+        overlay.addEventListener('click', function(e) {
+            if (e.target === overlay) closeModal();
+        });
+
+        // Submit action
+        submitBtn.addEventListener('click', function() {
+            var selectedType = select.value;
+            if (selectedType === '__custom__') {
+                selectedType = customInput.value.trim();
+            }
+            var newType = selectedType.length > 0 ? selectedType : null;
+
+            var ids = Array.from(selectedFossils);
+            var chain = Promise.resolve();
+            
+            ids.forEach(function(id) {
+                chain = chain.then(function() {
+                    var f = fossils.find(function(x) { return x.id === id; });
+                    if (f) {
+                        f.fossilType = newType;
+                        return updateFossil(f);
+                    }
+                });
+            });
+
+            chain.then(function() {
+                selectedFossils.clear();
+                window.app.updateMassDeleteButton();
+                window.app.renderFossils();
+                window.app.showToast('Successfully updated Fossil Type for selected specimens.', 'success');
+                closeModal();
+            });
         });
     },
 
@@ -6309,6 +6644,18 @@ window.app = {
                         case 'age-desc':   return (b.ageMa || 0) - (a.ageMa || 0);
                         case 'price-asc':  return toSEK(a) - toSEK(b);
                         case 'price-desc': return toSEK(b) - toSEK(a);
+                        case 'tier-desc':
+                            var tierOrder = { 'S': 5, 'A': 4, 'B': 3, 'C': 2, 'D': 1 };
+                            var rankA = tierOrder[a.conditionTier] || 0;
+                            var rankB = tierOrder[b.conditionTier] || 0;
+                            if (rankB !== rankA) return rankB - rankA;
+                            return (b.createdAt || 0) - (a.createdAt || 0); // Tie breaker: newest first
+                        case 'tier-asc':
+                            var tierOrder = { 'S': 5, 'A': 4, 'B': 3, 'C': 2, 'D': 1 };
+                            var rankA = tierOrder[a.conditionTier] || 0;
+                            var rankB = tierOrder[b.conditionTier] || 0;
+                            if (rankB !== rankA) return rankA - rankB;
+                            return (b.createdAt || 0) - (a.createdAt || 0); // Tie breaker: newest first
                         case 'oldest':     return (a.createdAt || 0) - (b.createdAt || 0);
                         case 'newest':
                         default:           return (b.createdAt || 0) - (a.createdAt || 0);
@@ -6509,7 +6856,7 @@ window.app = {
                             var percentGain = Math.round((totalAppreciation / totalCostSEK) * 100);
                             statsHtml += '<div class="stats-pill" style="display: flex; align-items: center; gap: 0.5rem; background: rgba(67, 151, 117, 0.1); color: #439775; padding: 0.4rem 0.85rem; border-radius: 2rem; border: 1px solid rgba(67, 151, 117, 0.2); font-size: 0.85rem; font-weight: 700;">' +
                                             '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>' +
-                                            '<span>Appreciation: +' + Math.round(totalAppreciation).toLocaleString() + ' SEK (â†‘' + percentGain + '%)</span>' +
+                                            '<span>Appreciation: +' + Math.round(totalAppreciation).toLocaleString() + ' SEK (\u2191' + percentGain + '%)</span>' +
                                           '</div>';
                         }
                     }
@@ -9300,6 +9647,25 @@ function populateDropdowns() {
         FOSSIL_TYPES.forEach(function(type) {
             typeForm.appendChild(makeOption(type, type));
             typeFilter.appendChild(makeOption(type, type));
+        });
+
+        // Auto-select Category based on Fossil Type for a frictionless experience
+        typeForm.addEventListener('change', function() {
+            var val = typeForm.value;
+            var catSelect = document.getElementById('f-category');
+            if (!catSelect || !val) return;
+            
+            var vertTypes = ["Dinosaur", "Shark", "Fish", "Reptile / Amphibian", "Mammal", "Bird"];
+            var invertTypes = ["Trilobite", "Ammonite", "Invertebrate (Other)", "Shell", "Claw", "Jaw", "Skull", "Trilobite", "Ammonite"];
+            var plantTypes = ["Plant / Flora", "Wood"];
+            
+            if (vertTypes.indexOf(val) !== -1) {
+                catSelect.value = "Vertebrate";
+            } else if (invertTypes.indexOf(val) !== -1) {
+                catSelect.value = "Invertebrate";
+            } else if (plantTypes.indexOf(val) !== -1) {
+                catSelect.value = "Plant";
+            }
         });
     }
 

@@ -216,6 +216,8 @@
                         <option value="age-desc">Age (Oldest)</option>
                         <option value="price-asc">Value (Low–High)</option>
                         <option value="price-desc">Value (High–Low)</option>
+                        <option value="tier-desc">Preservation Tier (S to D)</option>
+                        <option value="tier-asc">Preservation Tier (D to S)</option>
                     </select>
                 </div>
             </div>
@@ -684,6 +686,8 @@
             <div class="selection-actions-group">
                 <button id="btn-mass-compare" class="btn-primary" onclick="app.openCompareSelected()" style="background: var(--accent); color: var(--bg-surface); font-weight: 700; display: none;">⚖️ Compare</button>
                 <button id="btn-mass-tag" class="btn-secondary" onclick="app.massTagSelected()">🏷️ Tag</button>
+                <button id="btn-mass-untag" class="btn-secondary" onclick="app.massUntagSelected()">🏷️ Untag</button>
+                <button id="btn-mass-type" class="btn-secondary" onclick="app.massChangeFossilTypeSelected()">🦕 Set Type</button>
                 <button id="btn-mass-print" class="btn-secondary" onclick="app.printLabelsSelected()">🖨️ Print Labels</button>
                 <button id="btn-mass-select-all" class="btn-secondary" onclick="app.selectAllVisible()">🔒 Select All</button>
                 <button id="btn-mass-deselect" class="btn-secondary" onclick="app.deselectAllSelected()">🔓 Deselect All</button>
