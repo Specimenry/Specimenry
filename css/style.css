@@ -59,6 +59,11 @@
     padding: 0;
 }
 
+html, body {
+    max-width: 100%;
+    overflow-x: hidden !important;
+}
+
 body {
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
     background-color: var(--bg-base);
@@ -273,7 +278,7 @@ button:focus-visible {
 .filter-row {
     display: flex;
     gap: 1rem;
-    align-items: center;
+    align-items: flex-end;
     flex-wrap: wrap;
 }
 
@@ -778,16 +783,19 @@ main {
     border: 1px solid var(--border-color);
     border-radius: var(--radius-md);
     position: relative;
-    transition: transform 0.6s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.6s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+    transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.22s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.22s cubic-bezier(0.16, 1, 0.3, 1);
     box-shadow: var(--shadow-sm);
     display: flex;
     flex-direction: column;
-    animation: cardAppear 0.4s cubic-bezier(0.16, 1, 0.3, 1) backwards;
+    animation: cardAppear 0.22s cubic-bezier(0.16, 1, 0.3, 1) backwards;
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
+    transform: translateZ(0);
 }
 
 @keyframes cardAppear {
-    from { opacity: 0; transform: translateY(20px) scale(0.96); }
-    to { opacity: 1; transform: translateY(0) scale(1); }
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
 }
 
 /* Sea Monsters: Water Tints for Cards */
@@ -835,7 +843,7 @@ main {
 }
 
 .fossil-card:hover {
-    transform: translateY(-8px) scale(1.02);
+    transform: translateY(-8px) translateZ(0);
     box-shadow: 0 22px 40px rgba(0, 0, 0, 0.15);
     border-color: var(--accent);
 }
@@ -860,7 +868,7 @@ main {
 .card-video {
     width: 100%;
     height: 100%;
-    object-fit: cover;
+    object-fit: cover !important; /* Keep the original full bleed fit */
     transition: transform 0.4s ease;
 }
 
@@ -1041,6 +1049,9 @@ main {
     font-size: 1.15rem;
     color: var(--text-primary);
     margin-bottom: 0.5rem;
+    word-wrap: break-word;
+    word-break: break-word;
+    overflow-wrap: break-word;
 }
 
 .etym-hint {
@@ -1212,6 +1223,31 @@ main {
     background: var(--bg-warm);
     transform: scale(1.08);
     box-shadow: var(--shadow-lg);
+}
+
+#lightbox-auto-enhance {
+    position: fixed !important;
+    top: 1.5rem !important;
+    right: 5rem !important;
+    background: var(--bg-surface) !important;
+    border: 1px solid var(--border-color) !important;
+    width: 44px !important;
+    height: 44px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    border-radius: 50% !important;
+    box-shadow: var(--shadow-md) !important;
+    z-index: 10005 !important;
+    color: var(--text-primary) !important;
+    transition: all 0.2s ease !important;
+    cursor: pointer !important;
+}
+
+#lightbox-auto-enhance:hover {
+    background: var(--bg-warm) !important;
+    transform: scale(1.08) !important;
+    box-shadow: var(--shadow-lg) !important;
 }
 
 /* Photo nav arrows — absolute floating hover over left/right edges of image */
@@ -1408,6 +1444,10 @@ main {
     display: flex;
     align-items: center;
     gap: 0.4rem;
+    flex-wrap: wrap;
+    word-wrap: break-word;
+    word-break: break-word;
+    overflow-wrap: break-word;
 }
 
 .card-meta svg {
@@ -1756,9 +1796,8 @@ dialog::backdrop {
     border-width: 0;
 }
 
-/* --- FAB Container (Mobile Only) --- */
-.fab-container {
-    display: none; /* Hidden on desktop */
+.mobile-only {
+    display: none !important;
 }
 
 /* --- Responsive Overhaul --- */
@@ -1767,80 +1806,340 @@ dialog::backdrop {
         display: none !important;
     }
 
-    .fab-container {
-        display: flex;
-        flex-direction: column;
-        gap: 0.75rem;
-        position: fixed;
-        bottom: 1.5rem;
-        right: 1.5rem;
-        z-index: 1000;
-        pointer-events: none;
-    }
-
-    .fab-container button {
-        pointer-events: auto;
-        box-shadow: var(--shadow-lg);
-        border-radius: 30px;
-        padding: 0.85rem 1.25rem;
-        width: auto;
-        font-weight: 700;
-        text-transform: uppercase;
-        font-size: 0.75rem;
-        letter-spacing: 0.03em;
-    }
-
-    .mobile-fab {
-        background: var(--accent);
-        color: #fff;
-    }
-
-    .mobile-fab-stats {
-        background: var(--bg-surface);
-        color: var(--text-primary);
-        border: 1px solid var(--border-color);
+    .mobile-only {
+        display: flex !important;
     }
 
     .header-inner {
-        flex-direction: column;
-        align-items: flex-start;
-        gap: 1rem;
-        padding: 1rem;
+        flex-direction: row !important; /* Single horizontal line! */
+        justify-content: space-between !important;
+        align-items: center !important;
+        gap: 0.5rem !important;
+        padding: 0.6rem 0.75rem !important;
+    }
+
+    header h1 {
+        font-size: 1.15rem !important;
+        margin: 0 !important;
+        white-space: nowrap !important;
+    }
+
+    .header-logo {
+        width: 28px !important;
+        height: 28px !important;
+    }
+
+    .header-brand {
+        gap: 0.35rem !important;
     }
 
     .header-actions {
-        width: 100%;
-        display: flex;
-        gap: 0.75rem;
-        flex-wrap: wrap;
+        width: auto !important;
+        display: flex !important;
+        gap: 0.75rem !important; /* Spacious gap between circular buttons */
+        flex-wrap: nowrap !important;
+        align-items: center !important;
+    }
+
+    /* Hide separate desktop-only dropdowns and dashboard buttons in header on mobile */
+    .header-actions .dropdown:not(.mobile-only) {
+        display: none !important;
+    }
+    #btn-toggle-stats-desktop, #btn-toggle-compare-picker {
+        display: none !important;
+    }
+
+    /* Hide the vertical separator line on mobile for clean, cohesive symmetry */
+    .header-actions div[style*="width: 1px"] {
+        display: none !important;
+    }
+
+    /* Collapse text on other circular buttons (like theme toggle) to make them beautiful icon buttons */
+    .header-actions .btn-text {
+        display: none !important;
+    }
+
+    /* Uniform premium circular buttons styling for theme toggle and options menu */
+    .header-actions button,
+    .header-actions .btn-icon {
+        padding: 0.4rem !important;
+        width: 38px !important; /* Premium Guideline touch target size */
+        height: 38px !important;
+        border-radius: 50% !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        background: var(--bg-surface) !important;
+        border: 1px solid var(--border-color) !important;
+        color: var(--text-primary) !important;
+        cursor: pointer !important;
+        box-sizing: border-box !important;
+        transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
+        box-shadow: var(--shadow-sm) !important;
+    }
+
+    .header-actions button:hover,
+    .header-actions button.active,
+    .header-actions .btn-icon:hover,
+    .header-actions .btn-icon.active {
+        background: var(--bg-warm) !important;
+        border-color: var(--border-hover) !important;
+        transform: scale(1.05) !important;
+    }
+
+    /* Make active options dropdown button gold to pop beautifully */
+    #btn-mobile-menu.active {
+        background: var(--accent) !important;
+        color: var(--bg-surface) !important;
+        border-color: var(--accent) !important;
+        box-shadow: 0 0 10px rgba(230, 168, 23, 0.4) !important;
+    }
+
+    /* Positioning and styles for the mobile menu dropdown list */
+    #mobile-menu-dropdown-content {
+        position: absolute !important;
+        right: 0 !important;
+        top: 110% !important;
+        background: var(--bg-surface) !important;
+        border: 1px solid var(--border-color) !important;
+        border-radius: var(--radius-md) !important;
+        box-shadow: var(--shadow-lg) !important;
+        z-index: 10005 !important;
+        min-width: 240px !important;
+        padding: 0.5rem 0 !important;
+    }
+
+    .header-actions svg {
+        margin: 0 !important;
+        width: 14px !important;
+        height: 14px !important;
+    }
+
+    /* Complete removal of animations and transitions on mobile viewports */
+    *, *::before, *::after {
+        transition: none !important;
+        animation: none !important;
+    }
+
+    .filter-bar {
+        position: relative !important;
+        top: 0 !important;
+        box-shadow: none !important;
     }
 
     .filter-inner {
-        padding: 1rem;
+        padding: 0.5rem 0.75rem;
+        gap: 0.5rem;
     }
 
-    .filter-row {
-        flex-direction: column;
-        align-items: stretch;
-        gap: 1rem;
+    /* Row 1 has search wrapper taking up 100% width on left and funnel button on right */
+    .filter-row:first-of-type {
+        flex-direction: row !important;
+        align-items: center !important;
+        justify-content: space-between !important;
+        gap: 0.6rem !important;
     }
 
+    .search-wrapper {
+        flex: 1 !important;
+        min-width: 0 !important;
+    }
+
+    .search-wrapper input {
+        padding: 0.45rem 2.2rem 0.45rem 2.2rem !important;
+        font-size: 0.82rem !important;
+        height: 38px !important;
+    }
+
+    .search-wrapper .search-icon {
+        left: 0.6rem;
+        width: 14px;
+        height: 14px;
+    }
+
+    /* Mobile Funnel Toggle Button - styled as a beautiful 38px circular button */
+    #btn-mobile-filter-toggle {
+        display: inline-flex !important;
+        padding: 0.4rem !important;
+        width: 38px !important;
+        height: 38px !important;
+        justify-content: center !important;
+        align-items: center !important;
+        border-radius: 50% !important;
+        flex-shrink: 0 !important;
+        gap: 0 !important;
+        position: relative !important;
+        background: var(--bg-surface) !important;
+        border: 1px solid var(--border-color) !important;
+        color: var(--text-primary) !important;
+        cursor: pointer !important;
+        box-shadow: var(--shadow-sm) !important;
+    }
+    #btn-mobile-filter-toggle .btn-text {
+        display: none !important;
+    }
+    #btn-mobile-filter-toggle svg {
+        margin: 0 !important;
+        width: 15px !important;
+        height: 15px !important;
+    }
+    #btn-mobile-filter-toggle.active {
+        background: var(--accent) !important;
+        color: var(--bg-surface) !important;
+        border-color: var(--accent) !important;
+    }
+
+    /* Active filter count indicator badge */
+    .mobile-filter-badge {
+        position: absolute;
+        top: -4px;
+        right: -4px;
+        background: var(--accent);
+        color: var(--bg-surface);
+        border: 2px solid var(--bg-surface);
+        font-size: 0.62rem;
+        font-weight: 800;
+        min-width: 15px;
+        height: 15px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-sizing: border-box;
+        line-height: 1;
+        padding: 0 1px;
+    }
+    [data-theme="dark"] .mobile-filter-badge {
+        border-color: var(--bg-surface);
+    }
+    #btn-mobile-filter-toggle.active .mobile-filter-badge {
+        background: #ef4444 !important;
+        color: #fff !important;
+    }
+
+    /* On mobile, keep Row 2 visible by default to show the view switcher */
+    .filter-row:last-of-type {
+        display: flex !important;
+        flex-direction: column !important;
+        align-items: stretch !important;
+        gap: 0.6rem !important;
+        margin-top: 0.5rem !important;
+    }
+
+    /* Hide advanced select dropdowns by default on mobile */
+    .filter-row:last-of-type .filter-select {
+        display: none !important;
+    }
+
+    /* Display advanced select dropdowns vertically when filter bar is toggled */
+    .filter-bar.show-mobile-filters .filter-row:last-of-type .filter-select {
+        display: flex !important;
+    }
+
+    /* Add a premium dashed divider above select inputs only when open */
+    .filter-bar.show-mobile-filters .filter-row:last-of-type .filter-select:first-of-type {
+        border-top: 1px dashed var(--border-color);
+        padding-top: 0.6rem;
+        margin-top: 0.2rem;
+    }
+
+    /* Segmented view controls - full-width inside the drawer with labels fully visible! */
+    .view-toggle-group {
+        width: 100% !important;
+    }
     .view-toggle {
-        width: 100%;
+        width: 100% !important;
+        display: flex !important;
+        flex-shrink: 0 !important;
+        margin-bottom: 0.25rem !important;
+        gap: 0.35rem !important;
+    }
+
+    .view-toggle .btn-text {
+        display: inline !important; /* Keep My Collection, Wishlist, Sold text visible! */
+        font-size: 0.78rem !important;
+        font-weight: 700 !important;
     }
 
     .view-toggle .toggle-btn {
-        flex: 1;
-        justify-content: center;
+        flex: 1 !important;
+        padding: 0.55rem !important;
+        height: 38px !important;
+        justify-content: center !important;
+        align-items: center !important;
+        display: inline-flex !important;
+        border-radius: var(--radius-sm) !important;
+        gap: 0.35rem !important;
+    }
+
+    .view-toggle .toggle-btn svg {
+        margin: 0 !important;
+        width: 13px !important;
+        height: 13px !important;
+    }
+
+    .filter-row:last-of-type .form-group {
+        width: 100% !important;
+        flex: none !important;
+        gap: 0;
+    }
+
+    .filter-row:last-of-type label {
+        display: none !important; /* Hide label to save vertical space */
+    }
+
+    .filter-row:last-of-type select {
+        padding: 0.5rem 1.8rem 0.5rem 0.75rem !important;
+        font-size: 0.82rem !important;
+        background-position: right 0.75rem center !important;
+        background-size: 10px !important;
+        height: 38px !important; /* comfortable touch target */
+        border-radius: var(--radius-sm) !important;
+        width: 100% !important;
     }
 
     main {
-        padding: 1rem;
+        padding: 1rem 0.75rem !important; /* Perfect pixel alignment with header and search inputs */
     }
 
     .fossil-grid {
-        grid-template-columns: 1fr;
-        gap: 1.5rem;
+        grid-template-columns: 1fr !important;
+        gap: 1.25rem !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        box-sizing: border-box !important;
+    }
+    .fossil-card {
+        width: 100% !important;
+        max-width: 100% !important;
+        box-sizing: border-box !important;
+        overflow: hidden !important; /* Locks children inside card bounds! */
+    }
+
+    /* Compact Stats/Dashboard Charts on Mobile */
+    .chart-wrapper {
+        min-height: 280px !important;
+        max-width: 100% !important;
+    }
+    .stats-charts {
+        gap: 1.5rem !important;
+        padding: 1rem 0.5rem !important;
+    }
+
+    /* Compact Comparison Overlay on Mobile */
+    .compare-body {
+        padding: 1rem !important;
+        gap: 1rem !important;
+    }
+    .compare-img-box {
+        height: 250px !important;
+    }
+    .compare-header {
+        padding: 1rem !important;
+    }
+    .compare-exit-btn {
+        padding: 0.4rem 1rem !important;
+        font-size: 0.8rem !important;
     }
 
     .form-grid {
@@ -1877,6 +2176,39 @@ dialog::backdrop {
     }
 
     .header-actions div[style*="width: 1px"] {
+        display: none !important;
+    }
+
+    /* --- Premium Gold Add Button on Mobile --- */
+    .header-actions .btn-primary {
+        background: var(--accent) !important;
+        color: #fff !important;
+        border-color: var(--accent) !important;
+        box-shadow: 0 0 10px rgba(230, 168, 23, 0.2) !important;
+    }
+    .header-actions .btn-primary:hover {
+        background: var(--accent-light) !important;
+    }
+
+    /* --- Buttery-smooth Scroll Optimizations (Disable heavy GPU blurs on mobile) --- */
+    .filter-bar {
+        backdrop-filter: none !important;
+        -webkit-backdrop-filter: none !important;
+        background: var(--bg-base) !important;
+    }
+    .fossil-grid.sea-monster-scroll {
+        backdrop-filter: none !important;
+        -webkit-backdrop-filter: none !important;
+    }
+
+    /* --- Compact Card Curator Actions on Mobile --- */
+    .card-actions .btn-card-more {
+        width: 32px !important;
+        padding: 0 !important;
+        justify-content: center !important;
+    }
+    .card-actions .btn-card-more .btn-text,
+    .card-actions .btn-card-more .chevron-indicator {
         display: none !important;
     }
 }
@@ -5860,6 +6192,441 @@ dialog::backdrop {
 
 [data-theme="dark"] .chrono-epochs-strip {
     color: #cbd5e0;
+}
+
+/* =========================================================================
+   STREAMLINED REMINDERS-STYLE WISHLIST OVERHAUL
+   ========================================================================= */
+.wishlist-quick-add-card {
+    background: var(--bg-surface);
+    border: 1px dashed var(--border-color);
+    border-radius: var(--radius-md);
+    padding: 1rem;
+    margin-bottom: 1.25rem;
+    box-shadow: var(--shadow-sm);
+    transition: var(--transition);
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.wishlist-quick-add-card:focus-within {
+    border-color: var(--accent);
+    border-style: solid;
+    box-shadow: var(--shadow-md);
+}
+
+.quick-add-row {
+    display: flex;
+    gap: 0.75rem;
+    width: 100%;
+}
+
+.quick-add-inputs {
+    display: flex;
+    flex: 1;
+    gap: 0.75rem;
+}
+
+.quick-add-inputs input {
+    background: var(--bg-warm);
+    border: 1px solid var(--border-color);
+    color: var(--text-primary);
+    border-radius: var(--radius-sm);
+    padding: 0.5rem 0.75rem;
+    font-size: 0.85rem;
+    font-family: inherit;
+    transition: var(--transition);
+}
+
+.quick-add-inputs input:focus {
+    border-color: var(--accent);
+    outline: none;
+    background: var(--bg-surface);
+}
+
+#wl-quick-name {
+    flex: 2;
+    min-width: 150px;
+}
+
+.price-input-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+    flex: 1;
+    min-width: 100px;
+}
+
+.price-input-wrapper .currency-symbol {
+    position: absolute;
+    left: 0.6rem;
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    font-weight: 600;
+}
+
+.price-input-wrapper input {
+    width: 100%;
+    padding-left: 1.4rem !important;
+}
+
+.btn-wl-quick-add {
+    background: var(--accent);
+    color: var(--bg-surface);
+    border: 1px solid var(--accent);
+    border-radius: var(--radius-sm);
+    padding: 0.5rem 1rem;
+    font-size: 0.85rem;
+    font-weight: 700;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    transition: var(--transition);
+    white-space: nowrap;
+}
+
+.btn-wl-quick-add:hover {
+    background: var(--accent-light);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px var(--accent-ring);
+}
+
+.btn-wl-quick-add:active {
+    transform: translateY(0);
+}
+
+.quick-add-row-links {
+    width: 100%;
+}
+
+.quick-add-row-links textarea {
+    width: 100%;
+    background: var(--bg-warm);
+    border: 1px solid var(--border-color);
+    color: var(--text-primary);
+    border-radius: var(--radius-sm);
+    padding: 0.5rem 0.75rem;
+    font-size: 0.8rem;
+    font-family: inherit;
+    resize: none;
+    overflow-y: hidden;
+    line-height: 1.4;
+    transition: var(--transition);
+}
+
+.quick-add-row-links textarea:focus {
+    border-color: var(--accent);
+    outline: none;
+    background: var(--bg-surface);
+}
+
+/* --- Reminders Checklist Row Styles --- */
+.wishlist-row.reminders-style {
+    grid-template-columns: 85px 2fr 1.2fr 2fr auto !important;
+    padding: 0.75rem 1rem;
+    gap: 1.25rem;
+    align-items: center;
+    border-radius: var(--radius-md);
+    background: var(--bg-surface);
+    border: 1px solid var(--border-color);
+    box-shadow: var(--shadow-sm);
+    min-height: 58px;
+}
+
+.wishlist-row.reminders-style .wishlist-check-container {
+    flex-direction: row !important;
+    gap: 0.5rem;
+    align-items: center;
+    justify-content: flex-start;
+    padding-left: 0 !important;
+    width: auto !important;
+    border: none !important;
+    margin: 0 !important;
+}
+
+.wishlist-rank-num {
+    font-size: 0.75rem;
+    font-weight: 800;
+    color: var(--accent);
+    opacity: 0.75;
+    background: var(--accent-bg);
+    border-radius: 4px;
+    padding: 2px 6px;
+    min-width: 24px;
+    text-align: center;
+}
+
+/* Circular Checklist Checkbox */
+.wishlist-row.reminders-style .wishlist-checkbox {
+    appearance: none;
+    -webkit-appearance: none;
+    width: 18px;
+    height: 18px;
+    border: 2px solid var(--border-hover);
+    border-radius: 50%;
+    outline: none;
+    cursor: pointer;
+    transition: var(--transition);
+    position: relative;
+    margin: 0;
+}
+
+.wishlist-row.reminders-style .wishlist-checkbox:hover {
+    border-color: var(--accent);
+    background: var(--accent-bg);
+}
+
+.wishlist-row.reminders-style .wishlist-checkbox:checked {
+    background: var(--accent);
+    border-color: var(--accent);
+}
+
+.wishlist-row.reminders-style .wishlist-checkbox:checked::after {
+    content: '';
+    position: absolute;
+    top: 3px;
+    left: 6px;
+    width: 4px;
+    height: 8px;
+    border: solid var(--bg-surface);
+    border-width: 0 2px 2px 0;
+    transform: rotate(45deg);
+}
+
+.wishlist-title-column {
+    display: flex;
+    align-items: center;
+    min-width: 0;
+}
+
+.wishlist-row.reminders-style .wishlist-title {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.wishlist-price-column {
+    display: flex;
+    align-items: center;
+    min-width: 0;
+}
+
+.wishlist-price-badge {
+    font-size: 0.7rem;
+    font-weight: 700;
+    background: rgba(139, 105, 20, 0.08);
+    color: var(--accent);
+    padding: 2px 8px;
+    border-radius: 99px;
+    white-space: nowrap;
+}
+
+.wishlist-price-badge.empty-placeholder,
+.wishlist-link-placeholder {
+    color: var(--text-secondary);
+    opacity: 0.35;
+    font-weight: 600;
+    font-size: 0.8rem;
+    letter-spacing: 0.05em;
+}
+
+.wishlist-links-column {
+    display: flex;
+    align-items: center;
+    min-width: 0;
+    width: 100%;
+}
+
+/* Multiple Link Pills */
+.wishlist-links-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+    margin-top: 0.15rem;
+}
+
+.wishlist-link-pill {
+    display: inline-flex;
+    align-items: center;
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-decoration: none;
+    color: var(--wishlist-color);
+    background: var(--wishlist-bg);
+    border: 1px solid rgba(120, 80, 160, 0.15);
+    padding: 2px 8px;
+    border-radius: var(--radius-sm);
+    transition: var(--transition);
+}
+
+.wishlist-link-pill svg {
+    margin-right: 3px;
+    flex-shrink: 0;
+}
+
+.wishlist-link-pill:hover {
+    background: var(--wishlist-color);
+    color: white !important;
+    border-color: var(--wishlist-color);
+    transform: translateY(-0.5px);
+}
+
+.wishlist-row-actions-container {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+/* Checklist action buttons */
+.btn-acquire {
+    background: #10b981;
+    color: white;
+    border: 1px solid #10b981;
+    border-radius: var(--radius-sm);
+    padding: 0.4rem 0.75rem;
+    font-size: 0.75rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: var(--transition);
+    white-space: nowrap;
+}
+
+.btn-acquire:hover {
+    background: #059669;
+    border-color: #059669;
+    box-shadow: 0 2px 6px rgba(16, 185, 129, 0.2);
+}
+
+.btn-edit-info {
+    background: var(--bg-warm);
+    border: 1px solid var(--border-color);
+    color: var(--text-secondary);
+    border-radius: var(--radius-sm);
+    padding: 0.4rem 0.75rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    transition: var(--transition);
+    white-space: nowrap;
+}
+
+.btn-edit-info:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: var(--accent-bg);
+}
+
+.btn-delete-wishlist {
+    background: transparent;
+    border: 1px solid transparent;
+    color: var(--danger);
+    border-radius: var(--radius-sm);
+    padding: 0.4rem 0.5rem;
+    cursor: pointer;
+    transition: var(--transition);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.btn-delete-wishlist:hover {
+    background: rgba(239, 68, 68, 0.08);
+    border-color: rgba(239, 68, 68, 0.2);
+    color: var(--danger-hover);
+}
+
+/* Dark theme style tweaks */
+[data-theme="dark"] .wishlist-price-badge {
+    background: rgba(76, 161, 163, 0.12);
+    color: var(--accent);
+}
+
+[data-theme="dark"] .wishlist-quick-add-card {
+    background: var(--bg-surface);
+    border-color: var(--border-color);
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .wishlist-row.reminders-style {
+        grid-template-columns: 1fr !important;
+        display: flex !important;
+        flex-direction: column !important;
+        align-items: flex-start !important;
+        gap: 0.6rem !important;
+        padding: 0.85rem !important;
+    }
+    
+    .wishlist-row.reminders-style .wishlist-check-container {
+        width: 100% !important;
+        justify-content: space-between !important;
+        border-bottom: 1px dashed var(--border-color) !important;
+        padding-bottom: 0.4rem !important;
+    }
+    
+    .wishlist-info-reminders {
+        width: 100% !important;
+    }
+    
+    .wishlist-row-actions-container {
+        width: 100% !important;
+        justify-content: flex-end !important;
+        border-top: 1px solid var(--border-color) !important;
+        padding-top: 0.5rem !important;
+        margin-top: 0.25rem !important;
+    }
+    
+    .quick-add-row {
+        flex-direction: column !important;
+    }
+    
+    .quick-add-inputs {
+        flex-direction: column !important;
+        gap: 0.5rem !important;
+        width: 100% !important;
+    }
+    
+    .price-input-wrapper {
+        width: 100% !important;
+    }
+    
+    .btn-wl-quick-add {
+        width: 100% !important;
+        justify-content: center !important;
+    }
+}
+
+/* Museum-grade curatorial enhancements */
+.taxonomic-authority {
+    font-size: 0.85em;
+    font-weight: 400;
+    font-style: normal;
+    color: var(--text-secondary);
+    opacity: 0.85;
+    margin-left: 0.25rem;
+    font-family: var(--font-sans, system-ui, -apple-system, sans-serif);
+}
+
+.card-description-snippet {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    line-height: 1.35;
+    transition: opacity 0.25s ease;
+}
+
+#lightbox-biology-details {
+    transition: all 0.3s ease;
 }
 
 

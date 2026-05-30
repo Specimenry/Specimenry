@@ -1,4 +1,4 @@
-// =========================================================================
+﻿// =========================================================================
 // SPECIMENRY — app.js
 // Local-only fossil collection database
 // =========================================================================
@@ -516,6 +516,23 @@ var ETYMOLOGY = [
 function annotateSpecimenName(rawName, fossil) {
     if (!rawName) return '';
     var safeName = escapeHtml(rawName);
+    
+    var authHtml = '';
+    if (fossil && fossil.authority) {
+        var cleanAuth = fossil.authority.trim();
+        if (cleanAuth) {
+            if (cleanAuth.charAt(0) !== '(' && !cleanAuth.startsWith('(')) {
+                authHtml = ' <span class="taxonomic-authority">(' + escapeHtml(cleanAuth) + ')</span>';
+            } else {
+                authHtml = ' <span class="taxonomic-authority">' + escapeHtml(cleanAuth) + '</span>';
+            }
+        }
+    }
+
+    if (fossil && fossil.isWishlist) {
+        return safeName + authHtml;
+    }
+
     var nameLower = rawName.toLowerCase();
     var matches = [];
 
@@ -552,7 +569,7 @@ function annotateSpecimenName(rawName, fossil) {
         tooltipText += (fossil && fossil.etymology ? '' : 'Name meaning: ') + rootMeanings.join(', ');
     }
 
-    if (!tooltipText) return safeName;
+    if (!tooltipText) return safeName + authHtml;
 
     // 3. Return a SINGLE unified hover element
     // Only the WHOLE name triggers the tooltip. No nested spans with titles.
@@ -576,7 +593,7 @@ function annotateSpecimenName(rawName, fossil) {
 
     // The whole name is wrapped in one container for a single clean tooltip
     var cssClass = fossil && fossil.etymology ? 'etym-unified-summary' : 'etym-unified-roots';
-    return '<span class="' + cssClass + '" data-meaning="' + escapeHtml(tooltipText) + '">' + annotatedName + '</span>';
+    return '<span class="' + cssClass + '" data-meaning="' + escapeHtml(tooltipText) + '">' + annotatedName + '</span>' + authHtml;
 }
 
 // Map exact millions of years ago to proper Epoch, Period, and Age
@@ -789,7 +806,7 @@ function getAllFossils() {
 function addFossil(fossil) {
     return withStore('readwrite', function(store, resolve, reject) {
         var request = store.add(fossil);
-        request.onsuccess = function() { resolve(); };
+        request.onsuccess = function() { fossilsCacheLoaded = false; resolve(); };
         request.onerror = function() { reject(request.error); };
     });
 }
@@ -797,7 +814,7 @@ function addFossil(fossil) {
 function updateFossil(fossil) {
     return withStore('readwrite', function(store, resolve, reject) {
         var request = store.put(fossil);
-        request.onsuccess = function() { resolve(); };
+        request.onsuccess = function() { fossilsCacheLoaded = false; resolve(); };
         request.onerror = function() { reject(request.error); };
     });
 }
@@ -805,7 +822,7 @@ function updateFossil(fossil) {
 function deleteFossil(id) {
     return withStore('readwrite', function(store, resolve, reject) {
         var request = store.delete(id);
-        request.onsuccess = function() { resolve(); };
+        request.onsuccess = function() { fossilsCacheLoaded = false; resolve(); };
         request.onerror = function() { reject(request.error); };
     });
 }
@@ -816,7 +833,7 @@ function deleteMultipleFossils(ids) {
             var tx = db.transaction('fossils', 'readwrite');
             var store = tx.objectStore('fossils');
             tx.onerror = function(e) { reject(e); };
-            tx.oncomplete = function() { resolve(); };
+            tx.oncomplete = function() { fossilsCacheLoaded = false; resolve(); };
             ids.forEach(function(id) { store.delete(id); });
         });
     });
@@ -1081,6 +1098,7 @@ var KEY_SPECIMENS = [
 ];
 
 var fossils = [];
+var fossilsCacheLoaded = false;
 var selectedFossils = new Set();
 var expandedTaxonomyIds = new Set();
 var currentImages = [];
@@ -1159,6 +1177,17 @@ function fetchExchangeRates() {
 }
 
 window.addEventListener('DOMContentLoaded', function() {
+    var sizeUnitSelect = document.getElementById('f-size-unit');
+    if (sizeUnitSelect) {
+        sizeUnitSelect.addEventListener('change', function() {
+            var val = sizeUnitSelect.value;
+            var wDisp = document.getElementById('f-width-unit-display');
+            var tDisp = document.getElementById('f-thickness-unit-display');
+            if (wDisp) wDisp.textContent = val;
+            if (tDisp) tDisp.textContent = val;
+        });
+    }
+
     var savedTheme = localStorage.getItem('oceanic_theme') || 'light';
     if (savedTheme === 'dark') {
         document.documentElement.setAttribute('data-theme', 'dark');
@@ -1212,6 +1241,10 @@ window.addEventListener('DOMContentLoaded', function() {
         if (dbMenu && dbMenu.classList.contains('active')) {
             dbMenu.classList.remove('active');
         }
+        var mobileMenu = document.getElementById('mobile-menu-dropdown-content');
+        if (mobileMenu && mobileMenu.classList.contains('active')) {
+            mobileMenu.classList.remove('active');
+        }
         if (window.app && typeof window.app.closeAllCardMenus === 'function') {
             window.app.closeAllCardMenus();
         }
@@ -1230,7 +1263,7 @@ window.addEventListener('DOMContentLoaded', function() {
                 backToTopBtn.style.pointerEvents = 'none';
                 backToTopBtn.style.transform = 'translateY(15px)';
             }
-        });
+        }, { passive: true });
     }
 });
 
@@ -1767,8 +1800,8 @@ window.app = {
         if (curatorElem) {
             var curHtml = '';
             var curParts = [];
-            if (f.size) curParts.push('📏 <strong>Size:</strong> ' + f.size + (f.sizeUnit || 'cm'));
-            if (f.weight) curParts.push('⚖️ <strong>Weight:</strong> ' + f.weight + 'g');
+            if (f.size) curParts.push('📏 <strong>Size:</strong> ' + formatSpecimenDimensions(f));
+            if (f.weight) curParts.push('⚖️ <strong>Weight:</strong> ' + formatSpecimenWeight(f.weight));
             if (f.price && !f.isWishlist) curParts.push('💰 <strong>Value:</strong> ' + f.price + ' ' + (f.currency || 'USD'));
             
             // Condition mapping
@@ -1823,6 +1856,34 @@ window.app = {
                 curatorElem.style.display = '';
             } else {
                 curatorElem.style.display = 'none';
+            }
+        }
+
+        // Render prehistoric biology / animal description details
+        var biologyElem = document.getElementById('lightbox-biology-details');
+        if (biologyElem) {
+            var bioHtml = '';
+            var bioParts = [];
+            if (f.authority) {
+                bioParts.push('🧬 <strong>Taxonomic Authority:</strong> ' + escapeHtml(f.authority));
+            }
+            if (f.description) {
+                bioParts.push('📖 <strong>Paleo-Biology & History:</strong> <span style="font-style: italic; display: block; margin-top: 0.25rem; line-height: 1.4; color: var(--text-secondary);">' + escapeHtml(f.description) + '</span>');
+            }
+            
+            if (bioParts.length > 0) {
+                bioHtml = '<div style="font-size: 0.75rem; font-weight: 800; color: var(--accent); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem; display: flex; align-items: center; gap: 4px;">' +
+                           '🦕 Prehistoric Biology & Classification</div>' +
+                           '<div style="font-size: 0.8rem; line-height: 1.6; display: flex; flex-direction: column; gap: 0.5rem; color: var(--text-primary);">';
+                bioParts.forEach(function(part) {
+                    bioHtml += '<div>' + part + '</div>';
+                });
+                bioHtml += '</div>';
+                
+                biologyElem.innerHTML = bioHtml;
+                biologyElem.style.display = '';
+            } else {
+                biologyElem.style.display = 'none';
             }
         }
 
@@ -2188,8 +2249,8 @@ window.app = {
         // Dimensions
         if (metaAnatomy) {
             var dimParts = [];
-            if (f.size) dimParts.push('Size: ' + f.size + (f.sizeUnit || 'cm'));
-            if (f.weight) dimParts.push('Weight: ' + f.weight + 'g');
+            if (f.size) dimParts.push('Size: ' + formatSpecimenDimensions(f));
+            if (f.weight) dimParts.push('Weight: ' + formatSpecimenWeight(f.weight));
             metaAnatomy.textContent = dimParts.length > 0 ? dimParts.join(' · ') : 'Dimensions not recorded';
         }
 
@@ -3207,8 +3268,8 @@ window.app = {
             if (f.country) originParts.push(f.country);
             var origin = originParts.join(', ') || 'N/A';
 
-            var sizeText = f.size ? f.size + ' ' + (f.sizeUnit || 'cm') : 'N/A';
-            if (f.weight) sizeText += ' / ' + f.weight + ' g';
+            var sizeText = f.size ? formatSpecimenDimensions(f) : 'N/A';
+            if (f.weight) sizeText += ' / ' + formatSpecimenWeight(f.weight);
 
             var thumbUrl = (f.images && f.images.length > 0) ? f.images[0] : '';
             var isVid = thumbUrl ? window.app.isVideo(thumbUrl) : false;
@@ -3467,9 +3528,9 @@ window.app = {
                 } else if (criteria === 'animalSize') {
                     metricText = '🦕 ' + parseFloat(f.animalSize) + ' m (' + window.app.getScaleDescription(f.animalSize) + ')';
                 } else if (criteria === 'size') {
-                    metricText = '📏 ' + parseFloat(f.size) + ' ' + (f.sizeUnit || 'cm');
+                    metricText = '📏 ' + formatSpecimenDimensions(f);
                 } else if (criteria === 'weight') {
-                    metricText = '⚖️ ' + parseFloat(f.weight).toLocaleString() + ' g';
+                    metricText = '⚖️ ' + formatSpecimenWeight(f.weight);
                 }
 
                 // 3. Render Card item row
@@ -4167,6 +4228,13 @@ window.app = {
                 document.getElementById('f-lng').value = f.lng !== undefined && f.lng !== null ? f.lng : '';
                 document.getElementById('f-size').value = f.size || '';
                 document.getElementById('f-size-unit').value = f.sizeUnit || 'cm';
+                document.getElementById('f-width').value = f.width || '';
+                document.getElementById('f-thickness').value = f.thickness || '';
+                var val = f.sizeUnit || 'cm';
+                var wDisp = document.getElementById('f-width-unit-display');
+                var tDisp = document.getElementById('f-thickness-unit-display');
+                if (wDisp) wDisp.textContent = val;
+                if (tDisp) tDisp.textContent = val;
                 document.getElementById('f-weight').value = f.weight || '';
                 document.getElementById('f-price').value = f.price || '';
                 document.getElementById('f-currency').value = f.currency || 'USD';
@@ -4175,6 +4243,8 @@ window.app = {
                 document.getElementById('f-link').value = f.sourceUrl || '';
                 document.getElementById('f-notes').value = f.notes || '';
                 document.getElementById('f-etymology').value = f.etymology || '';
+                document.getElementById('f-authority').value = f.authority || '';
+                document.getElementById('f-description').value = f.description || '';
                 document.getElementById('f-tags').value = (f.tags || []).join(', ');
 
                 // Condition report checkboxes
@@ -4204,11 +4274,19 @@ window.app = {
             document.getElementById('f-age').value = 0;
             document.getElementById('f-age-slider').value = 0;
             document.getElementById('f-size-unit').value = 'cm';
+            document.getElementById('f-width').value = '';
+            document.getElementById('f-thickness').value = '';
+            var wDisp = document.getElementById('f-width-unit-display');
+            var tDisp = document.getElementById('f-thickness-unit-display');
+            if (wDisp) wDisp.textContent = 'cm';
+            if (tDisp) tDisp.textContent = 'cm';
             document.getElementById('f-currency').value = 'USD';
             document.getElementById('f-est-value').value = '';
             document.getElementById('f-est-currency').value = 'USD';
             document.getElementById('f-link').value = '';
             document.getElementById('f-etymology').value = '';
+            document.getElementById('f-authority').value = '';
+            document.getElementById('f-description').value = '';
             document.getElementById('f-tags').value = '';
             document.getElementById('f-lat').value = '';
             document.getElementById('f-lng').value = '';
@@ -4248,6 +4326,98 @@ window.app = {
         document.getElementById('fossil-modal').close();
     },
 
+    autoFetchAllSpecimenData: async function(event) {
+        var name = document.getElementById('f-specimen').value;
+        if (!name) { 
+            window.app.showToast('Please enter a specimen name first.', 'warning'); 
+            return; 
+        }
+        
+        var btn = event ? event.currentTarget : null;
+        if (btn) {
+            btn.disabled = true;
+            btn.innerHTML = '<span class="loading-spinner" style="width:12px; height:12px; border-width:2px; border-color: white; border-top-color: transparent;"></span> Fetching All...';
+        }
+
+        try {
+            window.app.showToast('Initiating Auto-Fetch for all taxonomy, biology, and location data...', 'info');
+            var genus = name.split(' ')[0];
+
+            // 1. Fetch Scientific Info in parallel
+            var results = await Promise.allSettled([
+                window.app.fetchTaxonomy(genus),
+                window.app.fetchEtymology(genus),
+                window.app.fetchWikipediaSummary(genus)
+            ]);
+            
+            var tax = results[0].status === 'fulfilled' ? results[0].value : null;
+            var etym = results[1].status === 'fulfilled' ? results[1].value : null;
+            var wikiDesc = results[2].status === 'fulfilled' ? results[2].value : null;
+
+            // Update DOM fields for scientific info
+            var localSize = window.app.autoSizeLookup();
+
+            if (tax) {
+                if (tax.period) document.getElementById('f-period').value = tax.period;
+                if (tax.age) {
+                    document.getElementById('f-age').value = tax.age;
+                    document.getElementById('f-age-slider').value = Math.min(tax.age, 541);
+                    window.app.updateDropdownsFromAge();
+                }
+                if (tax.authority) {
+                    document.getElementById('f-authority').value = tax.authority;
+                }
+            }
+
+            if (wikiDesc) {
+                document.getElementById('f-description').value = wikiDesc;
+            }
+
+            if (etym) {
+                document.getElementById('f-etymology').value = etym;
+                if (!localSize) {
+                    var extractedSize = window.app.extractSizeFromText(etym);
+                    if (extractedSize) {
+                        document.getElementById('f-animal-size').value = extractedSize;
+                    }
+                }
+            }
+
+            // 2. Perform Geocoding coordinates fetch in parallel (if location info exists)
+            var country = document.getElementById('f-country').value.trim();
+            var location = document.getElementById('f-location').value.trim();
+            var formation = document.getElementById('f-formation').value.trim();
+
+            if (country || location || formation) {
+                var queries = getSmartGeocodeQueries(location, formation, country);
+                if (queries.length > 0) {
+                    trySmartGeocode(queries, 0, function(result, matchedQuery) {
+                        var lat = parseFloat(result.lat);
+                        var lon = parseFloat(result.lon);
+                        document.getElementById('f-lat').value = lat.toFixed(6);
+                        document.getElementById('f-lng').value = lon.toFixed(6);
+                        window.app.showToast('⚡ Auto-fetched all taxonomy, prehistoric biology, and geocoded coordinates successfully!', 'success');
+                    }, function() {
+                        window.app.showToast('Fetched taxonomy & biology successfully, but could not geocode coordinates.', 'warning');
+                    });
+                } else {
+                    window.app.showToast('⚡ Auto-fetched scientific taxonomy & biology successfully!', 'success');
+                }
+            } else {
+                window.app.showToast('⚡ Auto-fetched taxonomy & biology! (To auto-geocode coordinates, add Location/Country and click again).', 'success');
+            }
+
+        } catch (err) {
+            console.error('Unified Auto-Fetch failed', err);
+            window.app.showToast('Auto-Fetch encountered an error.', 'error');
+        } finally {
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = '⚡ Auto-Fetch All';
+            }
+        }
+    },
+
     fetchScientificInfo: async function(event) {
         var name = document.getElementById('f-specimen').value;
         if (!name) { window.app.showToast('Please enter a specimen name first.', 'warning'); return; }
@@ -4263,11 +4433,13 @@ window.app = {
             // Parallel fetch
             var results = await Promise.allSettled([
                 window.app.fetchTaxonomy(genus),
-                window.app.fetchEtymology(genus)
+                window.app.fetchEtymology(genus),
+                window.app.fetchWikipediaSummary(genus)
             ]);
             
             var tax = results[0].status === 'fulfilled' ? results[0].value : null;
             var etym = results[1].status === 'fulfilled' ? results[1].value : null;
+            var wikiDesc = results[2].status === 'fulfilled' ? results[2].value : null;
 
             // 1. Check local size database first
             var localSize = window.app.autoSizeLookup();
@@ -4279,6 +4451,13 @@ window.app = {
                     document.getElementById('f-age-slider').value = Math.min(tax.age, 541);
                     window.app.updateDropdownsFromAge();
                 }
+                if (tax.authority) {
+                    document.getElementById('f-authority').value = tax.authority;
+                }
+            }
+
+            if (wikiDesc) {
+                document.getElementById('f-description').value = wikiDesc;
             }
 
             if (etym) {
@@ -4290,7 +4469,7 @@ window.app = {
                         document.getElementById('f-animal-size').value = extractedSize;
                     }
                 }
-            } else if (!tax) {
+            } else if (!tax && !wikiDesc) {
                 window.app.showToast('No definitive scientific data found for "' + genus + '".', 'info');
             }
         } catch (err) {
@@ -4402,9 +4581,20 @@ window.app = {
                 var r = data.records[0];
                 // PBDB doesn't give a simple "Period", but we can try to find one via age
                 var age = (r.eag + r.lag) / 2;
-                return { age: age };
+                return { age: age, authority: r.att || '' };
             }
         } catch (e) { console.error('PBDB error', e); }
+        return null;
+    },
+
+    fetchWikipediaSummary: async function(name) {
+        try {
+            var url = 'https://en.wikipedia.org/api/rest_v1/page/summary/' + encodeURIComponent(name);
+            var resp = await fetch(url);
+            if (!resp.ok) return null;
+            var data = await resp.json();
+            return data.extract || '';
+        } catch (e) { console.error('Wikipedia summary error', e); }
         return null;
     },
 
@@ -4730,6 +4920,8 @@ window.app = {
             lng: (document.getElementById('f-lng').value.trim() !== '' && !isNaN(parseFloat(document.getElementById('f-lng').value))) ? parseFloat(document.getElementById('f-lng').value) : null,
             size: parseFloat(document.getElementById('f-size').value) || null,
             sizeUnit: document.getElementById('f-size-unit').value,
+            width: parseFloat(document.getElementById('f-width').value) || null,
+            thickness: parseFloat(document.getElementById('f-thickness').value) || null,
             weight: parseFloat(document.getElementById('f-weight').value) || null,
             price: parseFloat(document.getElementById('f-price').value) || null,
             currency: document.getElementById('f-currency').value,
@@ -4738,6 +4930,8 @@ window.app = {
             sourceUrl: document.getElementById('f-link').value,
             notes: document.getElementById('f-notes').value,
             etymology: document.getElementById('f-etymology').value,
+            authority: document.getElementById('f-authority').value,
+            description: document.getElementById('f-description').value,
             tags: (document.getElementById('f-tags').value || '').split(/[,\s]+/).map(function(t) { return t.trim().toLowerCase().replace(/^#/, ''); }).filter(function(t) { return t.length > 0; }),
             images: currentImages,
             condition: {
@@ -4778,6 +4972,65 @@ window.app = {
                 }, 4000);
             }
             window.app.closeModal();
+            window.app.renderFossils();
+        });
+    },
+
+    quickAddWishlist: function() {
+        var nameInput = document.getElementById('wl-quick-name');
+        var priceInput = document.getElementById('wl-quick-price');
+        var linksInput = document.getElementById('wl-quick-links');
+        
+        if (!nameInput) return;
+        var name = nameInput.value.trim();
+        if (!name) {
+            if (window.app.showToast) {
+                window.app.showToast('Please enter a specimen name.', 'warning');
+            } else {
+                alert('Please enter a specimen name.');
+            }
+            return;
+        }
+        
+        var price = parseFloat(priceInput ? priceInput.value : '') || null;
+        var links = linksInput ? linksInput.value.trim() : '';
+        
+        // Find highest rank in current wishlist to assign new rank at bottom
+        var nextRank = 1;
+        var wlFossils = fossils.filter(function(f) { return f.isWishlist && !f.isSold; });
+        if (wlFossils.length > 0) {
+            nextRank = Math.max.apply(null, wlFossils.map(function(f) { return f.wishlistRank || 0; })) + 1;
+        }
+        
+        // Create new specimen object
+        var newFossil = {
+            id: generateId(),
+            specimen: name,
+            category: 'Uncategorized',
+            isWishlist: true,
+            isSold: false,
+            price: price,
+            currency: 'USD',
+            sourceUrl: links,
+            wishlistRank: nextRank,
+            images: [],
+            tags: [],
+            notes: '',
+            createdAt: Date.now()
+        };
+        
+        addFossil(newFossil).then(function() {
+            if (window.app.showToast) {
+                window.app.showToast('✨ "' + name + '" added to your Wishlist!', 'success');
+            }
+            // Clear inputs
+            nameInput.value = '';
+            if (priceInput) priceInput.value = '';
+            if (linksInput) {
+                linksInput.value = '';
+                linksInput.style.height = '';
+            }
+            // Re-render
             window.app.renderFossils();
         });
     },
@@ -4991,6 +5244,40 @@ window.app = {
         window.app.showToast(isAutoEnhanceActive ? 'Museum spot-lighting enhancement active! 💡' : 'Photo lighting restored to original.', 'info');
     },
 
+    toggleMobileFilters: function() {
+        var filterBar = document.querySelector('.filter-bar');
+        if (filterBar) {
+            filterBar.classList.toggle('show-mobile-filters');
+            var isShow = filterBar.classList.contains('show-mobile-filters');
+            var btn = document.getElementById('btn-mobile-filter-toggle');
+            if (btn) {
+                btn.classList.toggle('active', isShow);
+            }
+        }
+    },
+
+    toggleMobileMenu: function(event) {
+        if (event) event.stopPropagation();
+        
+        // Close other dropdowns
+        var dbMenu = document.getElementById('db-dropdown');
+        if (dbMenu) dbMenu.classList.remove('active');
+        var enrichMenu = document.getElementById('enrich-dropdown');
+        if (enrichMenu) enrichMenu.classList.remove('active');
+        
+        var menu = document.getElementById('mobile-menu-dropdown-content');
+        if (menu) {
+            menu.classList.toggle('active');
+        }
+    },
+
+    closeMobileMenu: function() {
+        var menu = document.getElementById('mobile-menu-dropdown-content');
+        if (menu) {
+            menu.classList.remove('active');
+        }
+    },
+
     updateFilterBadges: function() {
         var badgesContainer = document.getElementById('active-filter-badges');
         if (!badgesContainer) return;
@@ -5027,6 +5314,24 @@ window.app = {
             badgesContainer.innerHTML = '';
             badgesContainer.style.display = 'none';
         }
+
+        // Count active mobile filters (Category, Period, and Sort if not newest)
+        var activeCount = 0;
+        if (catVal) activeCount++;
+        if (periodVal) activeCount++;
+        var sortSelect = document.getElementById('filter-sort');
+        var sortVal = sortSelect ? sortSelect.value : 'newest';
+        if (sortVal !== 'newest') activeCount++;
+
+        var badge = document.getElementById('mobile-filter-count-badge');
+        if (badge) {
+            if (activeCount > 0) {
+                badge.textContent = activeCount;
+                badge.style.display = 'inline-flex';
+            } else {
+                badge.style.display = 'none';
+            }
+        }
     },
 
     resetFiltersOnly: function() {
@@ -5036,6 +5341,98 @@ window.app = {
         if (searchInput) searchInput.value = '';
         if (catSelect) catSelect.value = '';
         if (periodSelect) periodSelect.value = '';
+        window.app.renderFossils();
+    },
+
+    batchAutoEnrichAll: async function() {
+        if (!confirm('Start batch Auto-Enrichment?\n\nThis will scan your entire archive database and automatically fetch missing Sizes, Wikipedia Etymologies, Taxonomic Authorities, Biology Descriptions, and location coordinates in parallel.\n\nNote: We respect API rate limits with polite request throttling.')) {
+            return;
+        }
+
+        var total = fossils.length;
+        if (total === 0) {
+            window.app.showToast('No specimens in database to enrich!', 'warning');
+            return;
+        }
+
+        var count = 0;
+        var i = 0;
+        window.app.showBatchProgress('⚡ Auto-Enriching Database', 0, total);
+
+        for (var f of fossils) {
+            i++;
+            window.app.showBatchProgress('⚡ Auto-Enriching Database', i, total);
+
+            var genus = (f.specimen || '').split(' ')[0];
+            if (!genus) continue;
+
+            var changed = false;
+
+            // 1. Fetch missing Taxonomy / Authority / Period
+            if (!f.geologicalPeriod || !f.ageMa || !f.authority) {
+                try {
+                    var tax = await window.app.fetchTaxonomy(genus);
+                    if (tax) {
+                        if (!f.geologicalPeriod && tax.period) { f.geologicalPeriod = tax.period; changed = true; }
+                        if (!f.ageMa && tax.age) { f.ageMa = tax.age; changed = true; }
+                        if (!f.authority && tax.authority) { f.authority = tax.authority; changed = true; }
+                    }
+                } catch (e) { console.error('Taxonomy batch fetch error', e); }
+            }
+
+            // 2. Fetch missing Wikipedia Description / Biology
+            if (!f.description) {
+                try {
+                    var wikiDesc = await window.app.fetchWikipediaSummary(genus);
+                    if (wikiDesc) { f.description = wikiDesc; changed = true; }
+                } catch (e) { console.error('Description batch fetch error', e); }
+            }
+
+            // 3. Fetch missing Wikipedia Etymology
+            if (!f.etymology) {
+                try {
+                    var etym = await window.app.fetchEtymology(genus);
+                    if (etym) { f.etymology = etym; changed = true; }
+                } catch (e) { console.error('Etymology batch fetch error', e); }
+            }
+
+            // 4. Fetch missing coordinates if location details exist
+            var hasLocation = (f.country && f.country.trim() !== '') || 
+                              (f.location && f.location.trim() !== '') ||
+                              (f.formation && f.formation.trim() !== '');
+            var lacksCoords = f.lat === undefined || f.lat === null || f.lat === '' ||
+                              f.lng === undefined || f.lng === null || f.lng === '';
+            if (hasLocation && lacksCoords) {
+                try {
+                    var queries = getSmartGeocodeQueries(f.location, f.formation, f.country);
+                    if (queries.length > 0) {
+                        var geoRes = await new Promise(function(resolve) {
+                            trySmartGeocode(queries, 0, function(result) {
+                                resolve(result);
+                            }, function() {
+                                resolve(null);
+                            });
+                        });
+                        if (geoRes) {
+                            f.lat = parseFloat(geoRes.lat).toFixed(6);
+                            f.lng = parseFloat(geoRes.lon).toFixed(6);
+                            changed = true;
+                        }
+                    }
+                } catch (e) { console.error('Geocode batch fetch error', e); }
+            }
+
+            if (changed) {
+                await updateFossil(f);
+                count++;
+            }
+
+            // Small delay to be polite to Wikipedia & OpenStreetMap
+            await new Promise(function(r) { setTimeout(r, 200); });
+        }
+
+        window.app.hideBatchProgress();
+        window.app.showToast('Successfully auto-enriched ' + count + ' specimens with new data!', 'success');
         window.app.renderFossils();
     },
 
@@ -5338,6 +5735,13 @@ window.app = {
         document.getElementById('f-formation').value = f.formation || '';
         document.getElementById('f-size').value = f.size || '';
         document.getElementById('f-size-unit').value = f.sizeUnit || 'cm';
+        document.getElementById('f-width').value = f.width || '';
+        document.getElementById('f-thickness').value = f.thickness || '';
+        var val = f.sizeUnit || 'cm';
+        var wDisp = document.getElementById('f-width-unit-display');
+        var tDisp = document.getElementById('f-thickness-unit-display');
+        if (wDisp) wDisp.textContent = val;
+        if (tDisp) tDisp.textContent = val;
         document.getElementById('f-weight').value = f.weight || '';
         document.getElementById('f-price').value = f.price || '';
         document.getElementById('f-currency').value = f.currency || 'USD';
@@ -5346,6 +5750,8 @@ window.app = {
         document.getElementById('f-link').value = f.sourceUrl || '';
         document.getElementById('f-notes').value = f.notes || '';
         document.getElementById('f-tags').value = (f.tags || []).join(', ');
+        document.getElementById('f-authority').value = f.authority || '';
+        document.getElementById('f-description').value = f.description || '';
     },
 
     // --- Print Label ---
@@ -5589,8 +5995,10 @@ window.app = {
 
     // --- Render ---
     renderFossils: function() {
-        return getAllFossils().then(function(allFossils) {
+        var promise = fossilsCacheLoaded ? Promise.resolve(fossils) : getAllFossils();
+        return promise.then(function(allFossils) {
             fossils = allFossils;
+            fossilsCacheLoaded = true;
             
             // --- UPDATE DROPDOWN OPTIONS WITH COUNTS ---
             // Tally all specimens in active collection view (owned, sold, or wishlist)
@@ -5611,36 +6019,29 @@ window.app = {
             var catSelect = document.getElementById('filter-category');
             if (catSelect) {
                 var selectedVal = catSelect.value;
-                catSelect.innerHTML = '<option value="">All Categories (' + activeCollectionFossils.length + ')</option>';
+                var html = '<option value="">All Categories (' + activeCollectionFossils.length + ')</option>';
                 CATEGORIES.forEach(function(cat) {
                     var count = catTallies[cat] || 0;
-                    var opt = document.createElement('option');
-                    opt.value = cat;
-                    opt.textContent = cat + ' (' + count + ')';
-                    catSelect.appendChild(opt);
+                    html += '<option value="' + escapeHtml(cat) + '"' + (cat === selectedVal ? ' selected' : '') + '>' + escapeHtml(cat) + ' (' + count + ')</option>';
                 });
-                catSelect.value = selectedVal;
+                catSelect.innerHTML = html;
             }
             
             // Period filter dropdown options update
             var periodSelect = document.getElementById('filter-period');
             if (periodSelect) {
                 var selectedVal = periodSelect.value;
-                periodSelect.innerHTML = '<option value="">All Periods (' + activeCollectionFossils.length + ')</option>';
+                var html = '<option value="">All Periods (' + activeCollectionFossils.length + ')</option>';
                 var groups = getPeriodsGrouped();
                 groups.forEach(function(group) {
-                    var og = document.createElement('optgroup');
-                    og.label = group.era;
+                    html += '<optgroup label="' + escapeHtml(group.era) + '">';
                     group.periods.forEach(function(per) {
                         var count = periodTallies[per] || 0;
-                        var opt = document.createElement('option');
-                        opt.value = per;
-                        opt.textContent = per + ' (' + count + ')';
-                        og.appendChild(opt);
+                        html += '<option value="' + escapeHtml(per) + '"' + (per === selectedVal ? ' selected' : '') + '>' + escapeHtml(per) + ' (' + count + ')</option>';
                     });
-                    periodSelect.appendChild(og);
+                    html += '</optgroup>';
                 });
-                periodSelect.value = selectedVal;
+                periodSelect.innerHTML = html;
             }
             
             // Update filter badges
@@ -5776,503 +6177,543 @@ window.app = {
                 });
             }
 
-            // --- STATS DASHBOARD ---
+            // --- STATS DASHBOARD (OPTIMIZED: Execute ONLY if open to ensure instant tab-switching) ---
             var statsContainer = document.getElementById('stats-summary');
-            if (filtered.length > 0) {
-                // GROUP AND TALLY VALUE
-                var valueByCurrency = {};
-                var estValueByCurrency = {};
-                
-                // Charts Data Arrays
-                var countryCounts = {};
-                var maxCountryCount = 0;
-                var mostCommonCountry = null;
-                var periodCounts = {};
+            if (!isStatsOpen) {
+                if (statsContainer) statsContainer.style.display = 'none';
+            } else {
+                if (filtered.length > 0) {
+                    statsContainer.style.display = 'flex';
 
-                var catCounts = {};
-                var maxCatCount = 0;
-                var mostCommonCat = null;
+                    // GROUP AND TALLY VALUE
+                    var valueByCurrency = {};
+                    var estValueByCurrency = {};
+                    
+                    // Charts Data Arrays
+                    var countryCounts = {};
+                    var maxCountryCount = 0;
+                    var mostCommonCountry = null;
+                    var periodCounts = {};
 
-                var totalWeight = 0;
-                var weightCount = 0;
-                var totalSizeCm = 0;
-                var sizeCount = 0;
-                var tagCounts = {};
+                    var catCounts = {};
+                    var maxCatCount = 0;
+                    var mostCommonCat = null;
 
-                for (var i = 0; i < filtered.length; i++) {
-                    var f = filtered[i];
+                    var totalWeight = 0;
+                    var weightCount = 0;
+                    var totalSizeCm = 0;
+                    var sizeCount = 0;
+                    var tagCounts = {};
 
-                    // Tally Category
-                    var c = f.category;
-                    if (c) {
-                        catCounts[c] = (catCounts[c] || 0) + 1;
-                        if (catCounts[c] > maxCatCount) {
-                            maxCatCount = catCounts[c];
-                            mostCommonCat = c;
+                    for (var i = 0; i < filtered.length; i++) {
+                        var f = filtered[i];
+
+                        // Tally Category
+                        var c = f.category;
+                        if (c) {
+                            catCounts[c] = (catCounts[c] || 0) + 1;
+                            if (catCounts[c] > maxCatCount) {
+                                maxCatCount = catCounts[c];
+                                mostCommonCat = c;
+                            }
+                        }
+
+                        // Tally Purchase Value
+                        if (f.price > 0) {
+                            var curr = f.currency || 'USD';
+                            valueByCurrency[curr] = (valueByCurrency[curr] || 0) + f.price;
+                        }
+
+                        // Tally Estimated Value
+                        if (f.estimatedValue > 0) {
+                            var estCurr = f.estimatedCurrency || 'USD';
+                            estValueByCurrency[estCurr] = (estValueByCurrency[estCurr] || 0) + f.estimatedValue;
+                        }
+
+                        // Tally Country
+                        var cntry = f.country ? f.country.trim() : 'Unknown';
+                        if (cntry.length === 0) cntry = 'Unknown';
+                        countryCounts[cntry] = (countryCounts[cntry] || 0) + 1;
+                        if (countryCounts[cntry] > maxCountryCount && cntry !== 'Unknown') {
+                            maxCountryCount = countryCounts[cntry];
+                            mostCommonCountry = cntry;
+                        }
+
+                        // Tally Period
+                        var per = f.geologicalPeriod ? f.geologicalPeriod : 'Unknown';
+                        periodCounts[per] = (periodCounts[per] || 0) + 1;
+
+                        // Tally Weight
+                        if (f.weight > 0) {
+                            totalWeight += f.weight;
+                            weightCount++;
+                        }
+
+                        // Tally Size (Normalize to cm)
+                        if (f.size > 0) {
+                            var s = f.size;
+                            var su = (f.sizeUnit || '').toLowerCase().trim();
+                            if (su === 'inch' || su === 'in' || su === 'inches') {
+                                s *= 2.54;
+                            }
+                            totalSizeCm += s;
+                            sizeCount++;
+                        }
+
+                        // Tally Tags
+                        if (f.tags && Array.isArray(f.tags)) {
+                            f.tags.forEach(function(t) {
+                                tagCounts[t] = (tagCounts[t] || 0) + 1;
+                            });
                         }
                     }
-
-                    // Tally Purchase Value
-                    if (f.price > 0) {
-                        var curr = f.currency || 'USD';
-                        valueByCurrency[curr] = (valueByCurrency[curr] || 0) + f.price;
-                    }
-
-                    // Tally Estimated Value
-                    if (f.estimatedValue > 0) {
-                        var estCurr = f.estimatedCurrency || 'USD';
-                        estValueByCurrency[estCurr] = (estValueByCurrency[estCurr] || 0) + f.estimatedValue;
-                    }
-
-                    // Tally Country
-                    var cntry = f.country ? f.country.trim() : 'Unknown';
-                    if (cntry.length === 0) cntry = 'Unknown';
-                    countryCounts[cntry] = (countryCounts[cntry] || 0) + 1;
-                    if (countryCounts[cntry] > maxCountryCount && cntry !== 'Unknown') {
-                        maxCountryCount = countryCounts[cntry];
-                        mostCommonCountry = cntry;
-                    }
-
-                    // Tally Period
-                    var per = f.geologicalPeriod ? f.geologicalPeriod : 'Unknown';
-                    periodCounts[per] = (periodCounts[per] || 0) + 1;
-
-                    // Tally Weight
-                    if (f.weight > 0) {
-                        totalWeight += f.weight;
-                        weightCount++;
-                    }
-
-                    // Tally Size (Normalize to cm)
-                    if (f.size > 0) {
-                        var s = f.size;
-                        if (f.sizeUnit === 'inch') {
-                            s *= 2.54;
+                    
+                    function calculateTotalSEK(map) {
+                        var total = 0;
+                        for (var k in map) {
+                            var val = map[k];
+                            if (exchangeRates && exchangeRates[k]) {
+                                total += val / exchangeRates[k];
+                            } else {
+                                if (k === 'USD') total += val * 10.50;
+                                else if (k === 'EUR') total += val * 11.50;
+                                else total += val;
+                            }
                         }
-                        totalSizeCm += s;
-                        sizeCount++;
+                        return total;
                     }
 
-                    // Tally Tags
-                    if (f.tags && Array.isArray(f.tags)) {
-                        f.tags.forEach(function(t) {
-                            tagCounts[t] = (tagCounts[t] || 0) + 1;
+                    var totalCostSEK = calculateTotalSEK(valueByCurrency);
+                    var totalEstSEK = calculateTotalSEK(estValueByCurrency);
+                    var totalAppreciation = totalEstSEK - totalCostSEK;
+
+                    // Redesigned Quick Stats (Better visuals)
+                    var statsHtml = '<div class="stats-summary-pills" style="display: flex; flex-wrap: wrap; gap: 0.65rem; align-items: center; justify-content: flex-start;">';
+                    
+                    if (currentView === 'sold') {
+                        var saleValueByCurrency = {};
+                        filtered.forEach(function(f) {
+                            if (f.isSold && f.salePrice > 0) {
+                                var saleCurr = f.saleCurrency || 'USD';
+                                saleValueByCurrency[saleCurr] = (saleValueByCurrency[saleCurr] || 0) + f.salePrice;
+                            }
                         });
-                    }
-                }
-                
-                function calculateTotalSEK(map) {
-                    var total = 0;
-                    for (var k in map) {
-                        var val = map[k];
-                        if (exchangeRates && exchangeRates[k]) {
-                            total += val / exchangeRates[k];
-                        } else {
-                            if (k === 'USD') total += val * 10.50;
-                            else if (k === 'EUR') total += val * 11.50;
-                            else total += val;
+                        var totalSaleSEK = calculateTotalSEK(saleValueByCurrency);
+                        var totalProfitSEK = totalSaleSEK - totalCostSEK;
+
+                        // Count Pill
+                        statsHtml += '<div class="stats-pill" style="display: flex; align-items: center; gap: 0.5rem; background: var(--bg-warm); padding: 0.4rem 0.85rem; border-radius: 2rem; border: 1px solid var(--border-color); font-size: 0.85rem; font-weight: 500;">' +
+                                        '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2v11z"/></svg>' +
+                                        '<span><strong>' + filtered.length + '</strong> Sold Specimens</span>' +
+                                      '</div>';
+
+                        // Acquisition Cost Pill
+                        if (totalCostSEK > 0) {
+                            statsHtml += '<div class="stats-pill" style="display: flex; align-items: center; gap: 0.5rem; background: var(--bg-warm); padding: 0.4rem 0.85rem; border-radius: 2rem; border: 1px solid var(--border-color); font-size: 0.85rem; font-weight: 500;">' +
+                                            '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6b5d4d" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M16 8l-8 8M8 8l8 8"/></svg>' +
+                                            '<span>Acquisition Cost: <strong>' + Math.round(totalCostSEK).toLocaleString() + ' SEK</strong></span>' +
+                                          '</div>';
                         }
-                    }
-                    return total;
-                }
 
-                var totalCostSEK = calculateTotalSEK(valueByCurrency);
-                var totalEstSEK = calculateTotalSEK(estValueByCurrency);
-                var totalAppreciation = totalEstSEK - totalCostSEK;
-
-                // Redesigned Quick Stats (Better visuals)
-                var statsHtml = '<div class="stats-summary-pills" style="display: flex; flex-wrap: wrap; gap: 0.65rem; align-items: center; justify-content: flex-start;">';
-                
-                if (currentView === 'sold') {
-                    var saleValueByCurrency = {};
-                    filtered.forEach(function(f) {
-                        if (f.isSold && f.salePrice > 0) {
-                            var saleCurr = f.saleCurrency || 'USD';
-                            saleValueByCurrency[saleCurr] = (saleValueByCurrency[saleCurr] || 0) + f.salePrice;
+                        // Sales Revenue Pill
+                        if (totalSaleSEK > 0) {
+                            statsHtml += '<div class="stats-pill" style="display: flex; align-items: center; gap: 0.5rem; background: var(--bg-warm); padding: 0.4rem 0.85rem; border-radius: 2rem; border: 1px solid var(--border-color); font-size: 0.85rem; font-weight: 500;">' +
+                                            '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>' +
+                                            '<span>Sales Revenue: <strong>' + Math.round(totalSaleSEK).toLocaleString() + ' SEK</strong></span>' +
+                                          '</div>';
                         }
-                    });
-                    var totalSaleSEK = calculateTotalSEK(saleValueByCurrency);
-                    var totalProfitSEK = totalSaleSEK - totalCostSEK;
 
-                    // Count Pill
-                    statsHtml += '<div class="stats-pill" style="display: flex; align-items: center; gap: 0.5rem; background: var(--bg-warm); padding: 0.4rem 0.85rem; border-radius: 2rem; border: 1px solid var(--border-color); font-size: 0.85rem; font-weight: 500;">' +
-                                    '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2v11z"/></svg>' +
-                                    '<span><strong>' + filtered.length + '</strong> Sold Specimens</span>' +
-                                  '</div>';
-
-                    // Acquisition Cost Pill
-                    if (totalCostSEK > 0) {
-                        statsHtml += '<div class="stats-pill" style="display: flex; align-items: center; gap: 0.5rem; background: var(--bg-warm); padding: 0.4rem 0.85rem; border-radius: 2rem; border: 1px solid var(--border-color); font-size: 0.85rem; font-weight: 500;">' +
-                                        '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6b5d4d" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M16 8l-8 8M8 8l8 8"/></svg>' +
-                                        '<span>Acquisition Cost: <strong>' + Math.round(totalCostSEK).toLocaleString() + ' SEK</strong></span>' +
-                                      '</div>';
-                    }
-
-                    // Sales Revenue Pill
-                    if (totalSaleSEK > 0) {
-                        statsHtml += '<div class="stats-pill" style="display: flex; align-items: center; gap: 0.5rem; background: var(--bg-warm); padding: 0.4rem 0.85rem; border-radius: 2rem; border: 1px solid var(--border-color); font-size: 0.85rem; font-weight: 500;">' +
-                                        '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>' +
-                                        '<span>Sales Revenue: <strong>' + Math.round(totalSaleSEK).toLocaleString() + ' SEK</strong></span>' +
-                                      '</div>';
-                    }
-
-                    // Net Profit / ROI Pill
-                    if (totalSaleSEK > 0 && totalCostSEK > 0) {
-                        var percentProfit = Math.round((totalProfitSEK / totalCostSEK) * 100);
-                        var profitColor = totalProfitSEK >= 0 ? '#439775' : '#b33a3a';
-                        var profitBg = totalProfitSEK >= 0 ? 'rgba(67, 151, 117, 0.1)' : 'rgba(179, 58, 58, 0.1)';
-                        var profitBorder = totalProfitSEK >= 0 ? 'rgba(67, 151, 117, 0.2)' : 'rgba(179, 58, 58, 0.2)';
-                        statsHtml += '<div class="stats-pill" style="display: flex; align-items: center; gap: 0.5rem; background: ' + profitBg + '; color: ' + profitColor + '; padding: 0.4rem 0.85rem; border-radius: 2rem; border: 1px solid ' + profitBorder + '; font-size: 0.85rem; font-weight: 700;">' +
-                                        '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>' +
-                                        '<span>Net Profit: ' + (totalProfitSEK >= 0 ? '+' : '') + Math.round(totalProfitSEK).toLocaleString() + ' SEK (' + (totalProfitSEK >= 0 ? '↑' : '↓') + percentProfit + '%)</span>' +
-                                      '</div>';
-                    }
-                } else {
-                    // Count Pill
-                    statsHtml += '<div class="stats-pill" style="display: flex; align-items: center; gap: 0.5rem; background: var(--bg-warm); padding: 0.4rem 0.85rem; border-radius: 2rem; border: 1px solid var(--border-color); font-size: 0.85rem; font-weight: 500;">' +
-                                    '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2v11z"/></svg>' +
-                                    '<span><strong>' + filtered.length + '</strong> Specimens</span>' +
-                                  '</div>';
-
-                    // Top Origin Pill
-                    if (mostCommonCountry && mostCommonCountry !== 'Unknown') {
-                        var summaryFlag = getFlagHtml(mostCommonCountry);
-                        statsHtml += '<div class="stats-pill" style="display: flex; align-items: center; gap: 0.5rem; background: var(--bg-warm); padding: 0.4rem 0.85rem; border-radius: 2rem; border: 1px solid var(--border-color); font-size: 0.85rem; font-weight: 500;">' +
-                                        summaryFlag + '<span>Top Origin: <strong>' + (window.escapeHtml ? escapeHtml(mostCommonCountry) : mostCommonCountry) + '</strong></span>' +
-                                      '</div>';
-                    }
-
-                    // Pricing Pillar (Cost)
-                    if (totalCostSEK > 0) {
-                        statsHtml += '<div class="stats-pill" style="display: flex; align-items: center; gap: 0.5rem; background: var(--bg-warm); padding: 0.4rem 0.85rem; border-radius: 2rem; border: 1px solid var(--border-color); font-size: 0.85rem; font-weight: 500;">' +
-                                        '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6b5d4d" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M16 8l-8 8M8 8l8 8"/></svg>' +
-                                        '<span>Cost: <strong>' + Math.round(totalCostSEK).toLocaleString() + ' SEK</strong></span>' +
-                                      '</div>';
-                    }
-
-                    // Value Pillar (Total Estimated Value)
-                    if (totalEstSEK > 0) {
-                        statsHtml += '<div class="stats-pill" style="display: flex; align-items: center; gap: 0.5rem; background: var(--bg-warm); padding: 0.4rem 0.85rem; border-radius: 2rem; border: 1px solid var(--border-color); font-size: 0.85rem; font-weight: 500;">' +
-                                        '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#e6a817" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v12M17 12H7"/></svg>' +
-                                        '<span>Value: <strong>' + Math.round(totalEstSEK).toLocaleString() + ' SEK</strong></span>' +
-                                      '</div>';
-                    }
-
-                    // Appreciation Pill
-                    if (totalAppreciation > 0) {
-                        var percentGain = Math.round((totalAppreciation / totalCostSEK) * 100);
-                        statsHtml += '<div class="stats-pill" style="display: flex; align-items: center; gap: 0.5rem; background: rgba(67, 151, 117, 0.1); color: #439775; padding: 0.4rem 0.85rem; border-radius: 2rem; border: 1px solid rgba(67, 151, 117, 0.2); font-size: 0.85rem; font-weight: 700;">' +
-                                        '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>' +
-                                        '<span>Appreciation: +' + Math.round(totalAppreciation).toLocaleString() + ' SEK (↑' + percentGain + '%)</span>' +
-                                      '</div>';
-                    }
-                }
-                
-                statsHtml += '</div>';
-
-                var textContainer = document.getElementById('stats-summary-text');
-                if (textContainer) {
-                    textContainer.innerHTML = statsHtml;
-                }
-
-                // Compressed Horizontal Legend with Flags
-                var countryListHtml = '<div class="dashboard-custom-legend" style="margin-top: 1rem; display: flex; flex-wrap: wrap; gap: 0.5rem; justify-content: center; align-items: center;">';
-                var sortedCountries = Object.entries(countryCounts).sort(function(a,b){ return b[1] - a[1]; });
-                var chartColors = ['#4e79a7', '#f28e2c', '#e15759', '#76b7b2', '#59a14f', '#edc949', '#af7aa1', '#ff9da7', '#9c755f', '#bab0ab'];
-                
-                sortedCountries.forEach(function(entry, idx) {
-                    var cName = entry[0];
-                    var cValue = entry[1];
-                    var cFlagHtml = getFlagHtml(cName);
-                    var color = chartColors[idx % chartColors.length];
-                    
-                    countryListHtml += '<div style="display: flex; align-items: center; gap: 0.4rem; font-size: 0.75rem; background: var(--bg-warm); padding: 0.25rem 0.6rem; border-radius: 1rem; border: 1px solid var(--border-color); white-space: nowrap;">' +
-                                        '<div style="width: 8px; height: 8px; border-radius: 50%; background: ' + color + '; flex-shrink: 0;"></div>' +
-                                        cFlagHtml.replace('margin-right: 0.4rem;', 'margin-right: 0;') + 
-                                        '<span style="font-weight: 600;">' + (window.escapeHtml ? escapeHtml(cName) : cName) + '</span>' +
-                                        '<span style="opacity: 0.6; font-weight: 700; color: var(--accent); margin-left: 0.15rem;">' + cValue + '</span>' +
-                                      '</div>';
-                });
-                countryListHtml += '</div>';
-
-                var countryChartElem = document.getElementById('chart-country');
-                if (countryChartElem && countryChartElem.parentElement) {
-                    var countryChartWrapper = countryChartElem.parentElement;
-                    var existingList = countryChartWrapper.querySelector('.dashboard-country-list') || countryChartWrapper.querySelector('.dashboard-custom-legend');
-                    if (existingList) existingList.remove();
-                    countryChartWrapper.insertAdjacentHTML('beforeend', countryListHtml);
-                }
-
-                // Compressed Horizontal Legend for PERIODS
-                var periodListHtml = '<div class="dashboard-custom-legend" style="margin-top: 1rem; display: flex; flex-wrap: wrap; gap: 0.5rem; justify-content: center; align-items: center;">';
-                var sortedPeriods = Object.entries(periodCounts).sort(function(a,b){ return b[1] - a[1]; });
-                
-                sortedPeriods.forEach(function(entry, idx) {
-                    var pName = entry[0];
-                    var pValue = entry[1];
-                    var color = chartColors[idx % chartColors.length];
-                    
-                    periodListHtml += '<div style="display: flex; align-items: center; gap: 0.4rem; font-size: 0.75rem; background: var(--bg-warm); padding: 0.25rem 0.6rem; border-radius: 1rem; border: 1px solid var(--border-color); white-space: nowrap;">' +
-                                        '<div style="width: 8px; height: 8px; border-radius: 50%; background: ' + color + '; flex-shrink: 0;"></div>' +
-                                        '<span style="font-weight: 600;">' + (window.escapeHtml ? escapeHtml(pName) : pName) + '</span>' +
-                                        '<span style="opacity: 0.6; font-weight: 700; color: var(--accent); margin-left: 0.15rem;">' + pValue + '</span>' +
-                                      '</div>';
-                });
-                periodListHtml += '</div>';
-
-                var periodChartElem = document.getElementById('chart-period');
-                if (periodChartElem && periodChartElem.parentElement) {
-                    var periodChartWrapper = periodChartElem.parentElement;
-                    var existingList = periodChartWrapper.querySelector('.dashboard-custom-legend');
-                    if (existingList) existingList.remove();
-                    periodChartWrapper.insertAdjacentHTML('beforeend', periodListHtml);
-                }
-
-                // --- DATA INSIGHTS VIEW ---
-                var dataContainer = document.getElementById('data-insights-container');
-                if (dataContainer) {
-                    var dataHtml = '';
-
-                    if (currentView === 'true') {
-                        // Wishlist-Specific Data Insights
-                        var targetBudgetEst = totalEstSEK;
-                        var targetBudgetCost = totalCostSEK;
-                        var totalBudget = targetBudgetEst > 0 ? targetBudgetEst : targetBudgetCost;
-                        var missingCount = filtered.length;
-                        
-                        var topWantedCats = Object.entries(catCounts)
-                            .sort(function(a, b) { return b[1] - a[1]; })
-                            .slice(0, 4);
-
-                        dataHtml = '<div class="data-insights-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.5rem; padding: 1rem 0;">' +
-                                        // Budget Card
-                                        '<div class="data-card" style="background: var(--bg-warm); padding: 1.5rem; border-radius: 1rem; border: 1px solid var(--border-color); text-align: center; box-shadow: var(--shadow-sm);">' +
-                                            '<div style="color: var(--accent); margin-bottom: 0.5rem;"><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></div>' +
-                                            '<div style="font-size: 0.9rem; opacity: 0.7; font-weight: 600; text-transform: uppercase;">Total Target Budget</div>' +
-                                            '<div style="font-size: 2.25rem; font-weight: 800; color: var(--text-main); margin-top: 0.5rem;">' + Math.round(totalBudget).toLocaleString() + ' SEK</div>' +
-                                            '<div style="font-size: 0.8rem; opacity: 0.6; margin-top: 0.25rem;">For ' + missingCount + ' tracked specimens</div>' +
-                                        '</div>' +
-                                        // Most Wanted Card
-                                        '<div class="data-card" style="background: var(--bg-warm); padding: 1.5rem; border-radius: 1rem; border: 1px solid var(--border-color); text-align: left; box-shadow: var(--shadow-sm);">' +
-                                            '<div style="color: var(--accent); margin-bottom: 0.5rem;"><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg></div>' +
-                                            '<div style="font-size: 0.9rem; opacity: 0.7; font-weight: 600; text-transform: uppercase; margin-bottom: 1rem;">Most Wanted Categories</div>';
-                                            
-                                            topWantedCats.forEach(function(cat) {
-                                                dataHtml += '<div style="margin-bottom: 0.5rem; display: flex; justify-content: space-between; border-bottom: 1px dashed var(--border-color); padding-bottom: 0.25rem;">' +
-                                                                '<span style="font-weight: 600; opacity: 0.8;">' + cat[0] + '</span>' +
-                                                                '<span class="badge badge-wishlist">' + cat[1] + '</span>' +
-                                                            '</div>';
-                                            });
-                                            if (topWantedCats.length === 0) dataHtml += '<div style="font-size: 0.85rem; opacity: 0.6;">No categories found.</div>';
-                                            
-                        dataHtml +=     '</div></div>';
+                        // Net Profit / ROI Pill
+                        if (totalSaleSEK > 0 && totalCostSEK > 0) {
+                            var percentProfit = Math.round((totalProfitSEK / totalCostSEK) * 100);
+                            var profitColor = totalProfitSEK >= 0 ? '#439775' : '#b33a3a';
+                            var profitBg = totalProfitSEK >= 0 ? 'rgba(67, 151, 117, 0.1)' : 'rgba(179, 58, 58, 0.1)';
+                            var profitBorder = totalProfitSEK >= 0 ? 'rgba(67, 151, 117, 0.2)' : 'rgba(179, 58, 58, 0.2)';
+                            statsHtml += '<div class="stats-pill" style="display: flex; align-items: center; gap: 0.5rem; background: ' + profitBg + '; color: ' + profitColor + '; padding: 0.4rem 0.85rem; border-radius: 2rem; border: 1px solid ' + profitBorder + '; font-size: 0.85rem; font-weight: 700;">' +
+                                            '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>' +
+                                            '<span>Net Profit: ' + (totalProfitSEK >= 0 ? '+' : '') + Math.round(totalProfitSEK).toLocaleString() + ' SEK (' + (totalProfitSEK >= 0 ? 'â†‘' : 'â†“') + percentProfit + '%)</span>' +
+                                          '</div>';
+                        }
                     } else {
-                        // Standard Collection Data Insights
-                        var avgSize = sizeCount > 0 ? (totalSizeCm / sizeCount).toFixed(2) : 0;
-                        var weightStr = totalWeight >= 1000 ? (totalWeight / 1000).toFixed(2) + ' kg' : totalWeight.toFixed(1) + ' g';
+                        // Count Pill
+                        statsHtml += '<div class="stats-pill" style="display: flex; align-items: center; gap: 0.5rem; background: var(--bg-warm); padding: 0.4rem 0.85rem; border-radius: 2rem; border: 1px solid var(--border-color); font-size: 0.85rem; font-weight: 500;">' +
+                                        '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2v11z"/></svg>' +
+                                        '<span><strong>' + filtered.length + '</strong> Specimens</span>' +
+                                      '</div>';
+
+                        // Top Origin Pill
+                        if (mostCommonCountry && mostCommonCountry !== 'Unknown') {
+                            var summaryFlag = getFlagHtml(mostCommonCountry);
+                            statsHtml += '<div class="stats-pill" style="display: flex; align-items: center; gap: 0.5rem; background: var(--bg-warm); padding: 0.4rem 0.85rem; border-radius: 2rem; border: 1px solid var(--border-color); font-size: 0.85rem; font-weight: 500;">' +
+                                            summaryFlag + '<span>Top Origin: <strong>' + (window.escapeHtml ? escapeHtml(mostCommonCountry) : mostCommonCountry) + '</strong></span>' +
+                                          '</div>';
+                        }
+
+                        // Pricing Pillar (Cost)
+                        if (totalCostSEK > 0) {
+                            statsHtml += '<div class="stats-pill" style="display: flex; align-items: center; gap: 0.5rem; background: var(--bg-warm); padding: 0.4rem 0.85rem; border-radius: 2rem; border: 1px solid var(--border-color); font-size: 0.85rem; font-weight: 500;">' +
+                                            '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6b5d4d" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M16 8l-8 8M8 8l8 8"/></svg>' +
+                                            '<span>Cost: <strong>' + Math.round(totalCostSEK).toLocaleString() + ' SEK</strong></span>' +
+                                          '</div>';
+                        }
+
+                        // Value Pillar (Total Estimated Value)
+                        if (totalEstSEK > 0) {
+                            statsHtml += '<div class="stats-pill" style="display: flex; align-items: center; gap: 0.5rem; background: var(--bg-warm); padding: 0.4rem 0.85rem; border-radius: 2rem; border: 1px solid var(--border-color); font-size: 0.85rem; font-weight: 500;">' +
+                                            '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#e6a817" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v12M17 12H7"/></svg>' +
+                                            '<span>Value: <strong>' + Math.round(totalEstSEK).toLocaleString() + ' SEK</strong></span>' +
+                                          '</div>';
+                        }
+
+                        // Appreciation Pill
+                        if (totalAppreciation > 0) {
+                            var percentGain = Math.round((totalAppreciation / totalCostSEK) * 100);
+                            statsHtml += '<div class="stats-pill" style="display: flex; align-items: center; gap: 0.5rem; background: rgba(67, 151, 117, 0.1); color: #439775; padding: 0.4rem 0.85rem; border-radius: 2rem; border: 1px solid rgba(67, 151, 117, 0.2); font-size: 0.85rem; font-weight: 700;">' +
+                                            '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>' +
+                                            '<span>Appreciation: +' + Math.round(totalAppreciation).toLocaleString() + ' SEK (â†‘' + percentGain + '%)</span>' +
+                                          '</div>';
+                        }
+                    }
+                    
+                    statsHtml += '</div>';
+
+                    var textContainer = document.getElementById('stats-summary-text');
+                    if (textContainer) {
+                        textContainer.innerHTML = statsHtml;
+                    }
+
+                    // Compressed Horizontal Legend with Flags
+                    var countryListHtml = '<div class="dashboard-custom-legend" style="margin-top: 1rem; display: flex; flex-wrap: wrap; gap: 0.5rem; justify-content: center; align-items: center;">';
+                    var sortedCountries = Object.entries(countryCounts).sort(function(a,b){ return b[1] - a[1]; });
+                    var chartColors = ['#4e79a7', '#f28e2c', '#e15759', '#76b7b2', '#59a14f', '#edc949', '#af7aa1', '#ff9da7', '#9c755f', '#bab0ab'];
+                    
+                    sortedCountries.forEach(function(entry, idx) {
+                        var cName = entry[0];
+                        var cValue = entry[1];
+                        var cFlagHtml = getFlagHtml(cName);
+                        var color = chartColors[idx % chartColors.length];
                         
-                        // --- CALCULATE MISSING PERIODS ---
-                        var missingByEra = {};
-                        var totalMissing = 0;
-                        for (var era in PERIODS_AND_EPOCHS) {
-                            var eraMissing = [];
-                            for (var per in PERIODS_AND_EPOCHS[era]) {
-                                if (!periodCounts[per]) {
-                                    eraMissing.push(per);
-                                    totalMissing++;
+                        countryListHtml += '<div style="display: flex; align-items: center; gap: 0.4rem; font-size: 0.75rem; background: var(--bg-warm); padding: 0.25rem 0.6rem; border-radius: 1rem; border: 1px solid var(--border-color); white-space: nowrap;">' +
+                                            '<div style="width: 8px; height: 8px; border-radius: 50%; background: ' + color + '; flex-shrink: 0;"></div>' +
+                                            cFlagHtml.replace('margin-right: 0.4rem;', 'margin-right: 0;') + 
+                                            '<span style="font-weight: 600;">' + (window.escapeHtml ? escapeHtml(cName) : cName) + '</span>' +
+                                            '<span style="opacity: 0.6; font-weight: 700; color: var(--accent); margin-left: 0.15rem;">' + cValue + '</span>' +
+                                          '</div>';
+                    });
+                    countryListHtml += '</div>';
+
+                    var countryChartElem = document.getElementById('chart-country');
+                    if (countryChartElem && countryChartElem.parentElement) {
+                        var countryChartWrapper = countryChartElem.parentElement;
+                        var existingList = countryChartWrapper.querySelector('.dashboard-country-list') || countryChartWrapper.querySelector('.dashboard-custom-legend');
+                        if (existingList) existingList.remove();
+                        countryChartWrapper.insertAdjacentHTML('beforeend', countryListHtml);
+                    }
+
+                    // Compressed Horizontal Legend for PERIODS
+                    var periodListHtml = '<div class="dashboard-custom-legend" style="margin-top: 1rem; display: flex; flex-wrap: wrap; gap: 0.5rem; justify-content: center; align-items: center;">';
+                    var sortedPeriods = Object.entries(periodCounts).sort(function(a,b){ return b[1] - a[1]; });
+                    
+                    sortedPeriods.forEach(function(entry, idx) {
+                        var pName = entry[0];
+                        var pValue = entry[1];
+                        var color = chartColors[idx % chartColors.length];
+                        
+                        periodListHtml += '<div style="display: flex; align-items: center; gap: 0.4rem; font-size: 0.75rem; background: var(--bg-warm); padding: 0.25rem 0.6rem; border-radius: 1rem; border: 1px solid var(--border-color); white-space: nowrap;">' +
+                                            '<div style="width: 8px; height: 8px; border-radius: 50%; background: ' + color + '; flex-shrink: 0;"></div>' +
+                                            '<span style="font-weight: 600;">' + (window.escapeHtml ? escapeHtml(pName) : pName) + '</span>' +
+                                            '<span style="opacity: 0.6; font-weight: 700; color: var(--accent); margin-left: 0.15rem;">' + pValue + '</span>' +
+                                          '</div>';
+                    });
+                    periodListHtml += '</div>';
+
+                    var periodChartElem = document.getElementById('chart-period');
+                    if (periodChartElem && periodChartElem.parentElement) {
+                        var periodChartWrapper = periodChartElem.parentElement;
+                        var existingList = periodChartWrapper.querySelector('.dashboard-custom-legend');
+                        if (existingList) existingList.remove();
+                        periodChartWrapper.insertAdjacentHTML('beforeend', periodListHtml);
+                    }
+
+                    // --- DATA INSIGHTS VIEW ---
+                    var dataContainer = document.getElementById('data-insights-container');
+                    if (dataContainer) {
+                        var dataHtml = '';
+
+                        if (currentView === 'true') {
+                            // Wishlist-Specific Data Insights
+                            var targetBudgetEst = totalEstSEK;
+                            var targetBudgetCost = totalCostSEK;
+                            var totalBudget = targetBudgetEst > 0 ? targetBudgetEst : targetBudgetCost;
+                            var missingCount = filtered.length;
+                            
+                            var topWantedCats = Object.entries(catCounts)
+                                .sort(function(a, b) { return b[1] - a[1]; })
+                                .slice(0, 4);
+
+                            dataHtml = '<div class="data-insights-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.5rem; padding: 1rem 0;">' +
+                                            // Budget Card
+                                            '<div class="data-card" style="background: var(--bg-warm); padding: 1.5rem; border-radius: 1rem; border: 1px solid var(--border-color); text-align: center; box-shadow: var(--shadow-sm);">' +
+                                                '<div style="color: var(--accent); margin-bottom: 0.5rem;"><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></div>' +
+                                                '<div style="font-size: 0.9rem; opacity: 0.7; font-weight: 600; text-transform: uppercase;">Total Target Budget</div>' +
+                                                '<div style="font-size: 2.25rem; font-weight: 800; color: var(--text-main); margin-top: 0.5rem;">' + Math.round(totalBudget).toLocaleString() + ' SEK</div>' +
+                                                '<div style="font-size: 0.8rem; opacity: 0.6; margin-top: 0.25rem;">For ' + missingCount + ' tracked specimens</div>' +
+                                            '</div>' +
+                                            // Most Wanted Card
+                                            '<div class="data-card" style="background: var(--bg-warm); padding: 1.5rem; border-radius: 1rem; border: 1px solid var(--border-color); text-align: left; box-shadow: var(--shadow-sm);">' +
+                                                '<div style="color: var(--accent); margin-bottom: 0.5rem;"><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg></div>' +
+                                                '<div style="font-size: 0.9rem; opacity: 0.7; font-weight: 600; text-transform: uppercase; margin-bottom: 1rem;">Most Wanted Categories</div>';
+                                                
+                                                topWantedCats.forEach(function(cat) {
+                                                    dataHtml += '<div style="margin-bottom: 0.5rem; display: flex; justify-content: space-between; border-bottom: 1px dashed var(--border-color); padding-bottom: 0.25rem;">' +
+                                                                    '<span style="font-weight: 600; opacity: 0.8;">' + cat[0] + '</span>' +
+                                                                    '<span class="badge badge-wishlist">' + cat[1] + '</span>' +
+                                                                '</div>';
+                                                });
+                                                if (topWantedCats.length === 0) dataHtml += '<div style="font-size: 0.85rem; opacity: 0.6;">No categories found.</div>';
+                                                
+                            dataHtml +=     '</div></div>';
+                        } else {
+                            // Standard Collection Data Insights
+                            var avgSize = sizeCount > 0 ? (totalSizeCm / sizeCount).toFixed(2) : 0;
+                            var weightStr = totalWeight >= 1000 ? (totalWeight / 1000).toFixed(2) + ' kg' : totalWeight.toFixed(1) + ' g';
+                            
+                            // --- CALCULATE MISSING PERIODS ---
+                            var missingByEra = {};
+                            var totalMissing = 0;
+                            for (var era in PERIODS_AND_EPOCHS) {
+                                var eraMissing = [];
+                                for (var per in PERIODS_AND_EPOCHS[era]) {
+                                    if (!periodCounts[per]) {
+                                        eraMissing.push(per);
+                                        totalMissing++;
+                                    }
+                                }
+                                if (eraMissing.length > 0) {
+                                    missingByEra[era] = eraMissing;
                                 }
                             }
-                            if (eraMissing.length > 0) {
-                                missingByEra[era] = eraMissing;
+
+                            // --- CALCULATE TOP TAGS ---
+                            var topTags = Object.entries(tagCounts)
+                                .sort(function(a, b) { return b[1] - a[1]; })
+                                .slice(0, 8);
+
+                            // --- CALCULATE FIELD DISCOVERY SCORE ---
+                            var overallOwned = fossils.filter(function(f) { return !f.isWishlist && !f.isSold; });
+                            var ownedCount = overallOwned.length;
+                            var selfFoundCount = overallOwned.filter(function(f) { return !!f.isSelfFound; }).length;
+                            var selfFoundPercent = ownedCount > 0 ? Math.round((selfFoundCount / ownedCount) * 100) : 0;
+                            
+                            var rankTitle = 'Curator';
+                            var rankEmoji = 'ðŸ›ï¸';
+                            if (selfFoundCount >= 25) {
+                                rankTitle = 'Veteran Prospector';
+                                rankEmoji = 'ðŸ¦–';
+                            } else if (selfFoundCount >= 10) {
+                                rankTitle = 'Field Paleontologist';
+                                rankEmoji = 'âš’ï¸';
+                            } else if (selfFoundCount >= 3) {
+                                rankTitle = 'Fossil Hunter';
+                                rankEmoji = 'ðŸ¥¾';
+                            } else if (selfFoundCount >= 1) {
+                                rankTitle = 'Novice Explorer';
+                                rankEmoji = 'ðŸ§­';
+                            } else {
+                                rankTitle = 'Museum Curator';
+                                rankEmoji = 'ðŸ›ï¸';
                             }
-                        }
 
-                        // --- CALCULATE TOP TAGS ---
-                        var topTags = Object.entries(tagCounts)
-                            .sort(function(a, b) { return b[1] - a[1]; })
-                            .slice(0, 8);
-
-                        // --- CALCULATE FIELD DISCOVERY SCORE ---
-                        var overallOwned = fossils.filter(function(f) { return !f.isWishlist && !f.isSold; });
-                        var ownedCount = overallOwned.length;
-                        var selfFoundCount = overallOwned.filter(function(f) { return !!f.isSelfFound; }).length;
-                        var selfFoundPercent = ownedCount > 0 ? Math.round((selfFoundCount / ownedCount) * 100) : 0;
-                        
-                        var rankTitle = 'Curator';
-                        var rankEmoji = '🏛️';
-                        if (selfFoundCount >= 25) {
-                            rankTitle = 'Veteran Prospector';
-                            rankEmoji = '🦖';
-                        } else if (selfFoundCount >= 10) {
-                            rankTitle = 'Field Paleontologist';
-                            rankEmoji = '⚒️';
-                        } else if (selfFoundCount >= 3) {
-                            rankTitle = 'Fossil Hunter';
-                            rankEmoji = '🥾';
-                        } else if (selfFoundCount >= 1) {
-                            rankTitle = 'Novice Explorer';
-                            rankEmoji = '🧭';
-                        } else {
-                            rankTitle = 'Museum Curator';
-                            rankEmoji = '🏛️';
-                        }
-
-                        dataHtml = '<div class="data-insights-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.5rem; padding: 1rem 0;">' +
-                                        // Weight Card
-                                        '<div class="data-card" style="background: var(--bg-warm); padding: 1.5rem; border-radius: 1rem; border: 1px solid var(--border-color); text-align: center; box-shadow: var(--shadow-sm);">' +
-                                            '<div style="color: var(--accent); margin-bottom: 0.5rem;"><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg></div>' +
-                                            '<div style="font-size: 0.9rem; opacity: 0.7; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;">Total Collection Weight</div>' +
-                                            '<div style="font-size: 2.25rem; font-weight: 800; color: var(--text-main); margin-top: 0.5rem;">' + weightStr + '</div>' +
-                                            '<div style="font-size: 0.8rem; opacity: 0.6; margin-top: 0.25rem;">From ' + weightCount + ' weighed specimens</div>' +
-                                        '</div>' +
-                                        // Size Card
-                                        '<div class="data-card" style="background: var(--bg-warm); padding: 1.5rem; border-radius: 1rem; border: 1px solid var(--border-color); text-align: center; box-shadow: var(--shadow-sm);">' +
-                                            '<div style="color: var(--accent); margin-bottom: 0.5rem;"><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg></div>' +
-                                            '<div style="font-size: 0.9rem; opacity: 0.7; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;">Average Specimen Size</div>' +
-                                            '<div style="font-size: 2.25rem; font-weight: 800; color: var(--text-main); margin-top: 0.5rem;">' + avgSize + ' cm</div>' +
-                                            '<div style="font-size: 0.8rem; opacity: 0.6; margin-top: 0.25rem;">Based on ' + sizeCount + ' measured specimens</div>' +
-                                        '</div>' +
-                                        // Missing Periods Card
-                                        '<div class="data-card" style="background: var(--bg-warm); padding: 1.5rem; border-radius: 1rem; border: 1px solid var(--border-color); text-align: left; box-shadow: var(--shadow-sm);">' +
-                                            '<div style="color: var(--danger); margin-bottom: 0.5rem;"><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></div>' +
-                                            '<div style="font-size: 0.9rem; opacity: 0.7; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;">Lacking Fossils From</div>' +
-                                            '<div style="margin-top: 1rem; max-height: 120px; overflow-y: auto; padding-right: 0.5rem;">';
-                                            
-                                            for (var era in missingByEra) {
-                                                dataHtml += '<div style="margin-bottom: 0.5rem;">' +
-                                                                '<div style="font-size: 0.7rem; font-weight: 800; color: var(--accent); text-transform: uppercase; margin-bottom: 0.25rem;">' + era + '</div>' +
-                                                                '<div style="font-size: 0.85rem; color: var(--text-primary); opacity: 0.9;">' + missingByEra[era].join(', ') + '</div>' +
-                                                            '</div>';
-                                            }
-                                            if (totalMissing === 0) {
-                                                dataHtml += '<div style="font-size: 0.85rem; color: #439775; font-weight: 600;">You collection is geologically complete!</div>';
-                                            }
-
-                        dataHtml +=         '</div>' +
-                                        '</div>' +
-                                        // Top Tags Card
-                                        '<div class="data-card" style="background: var(--bg-warm); padding: 1.5rem; border-radius: 1rem; border: 1px solid var(--border-color); text-align: left; box-shadow: var(--shadow-sm);">' +
-                                            '<div style="color: var(--accent); margin-bottom: 0.5rem;"><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg></div>' +
-                                            '<div style="font-size: 0.9rem; opacity: 0.7; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;">Most Frequent Tags</div>' +
-                                            '<div style="margin-top: 1rem; display: flex; flex-wrap: wrap; gap: 0.5rem;">';
-                                            
-                                            topTags.forEach(function(tagPair) {
-                                                dataHtml += '<span class="tag-pill" style="margin: 0; background: var(--bg-surface); border: 1px solid var(--border-color); cursor: pointer;" onclick="document.getElementById(\'search\').value = \'#' + tagPair[0] + '\'; app.renderFossils();">#' + tagPair[0] + ' <small style="opacity: 0.6; margin-left: 2px;">' + tagPair[1] + '</small></span>';
-                                            });
-                                            if (topTags.length === 0) {
-                                                dataHtml += '<div style="font-size: 0.85rem; opacity: 0.6;">No tags used yet.</div>';
-                                            }
-
-                        dataHtml +=         '</div>' +
-                                        '</div>' +
-                                        // Paleontological Field Score Card
-                                        '<div class="data-card" style="background: var(--bg-warm); padding: 1.5rem; border-radius: 1rem; border: 1px solid var(--border-color); text-align: center; box-shadow: var(--shadow-sm); display: flex; flex-direction: column; justify-content: space-between;">' +
-                                            '<div>' +
-                                                '<div style="color: #e6a817; margin-bottom: 0.5rem;"><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"></polygon></svg></div>' +
-                                                '<div style="font-size: 0.9rem; opacity: 0.7; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;">Field Discovery Score</div>' +
-                                                '<div style="font-size: 2.25rem; font-weight: 800; color: var(--text-main); margin-top: 0.5rem;">' + selfFoundPercent + '%</div>' +
-                                                '<div class="badge" style="display: inline-flex; align-items: center; gap: 0.25rem; background: var(--bg-surface); border: 1px solid var(--border-color); color: #e6a817; font-weight: 700; font-size: 0.85rem; padding: 0.25rem 0.75rem; border-radius: 2rem; margin-top: 0.5rem; text-transform: uppercase; letter-spacing: 0.03em;">' + rankEmoji + ' ' + rankTitle + '</div>' +
+                            dataHtml = '<div class="data-insights-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.5rem; padding: 1rem 0;">' +
+                                            // Weight Card
+                                            '<div class="data-card" style="background: var(--bg-warm); padding: 1.5rem; border-radius: 1rem; border: 1px solid var(--border-color); text-align: center; box-shadow: var(--shadow-sm);">' +
+                                                '<div style="color: var(--accent); margin-bottom: 0.5rem;"><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg></div>' +
+                                                '<div style="font-size: 0.9rem; opacity: 0.7; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;">Total Collection Weight</div>' +
+                                                '<div style="font-size: 2.25rem; font-weight: 800; color: var(--text-main); margin-top: 0.5rem;">' + weightStr + '</div>' +
+                                                '<div style="font-size: 0.8rem; opacity: 0.6; margin-top: 0.25rem;">From ' + weightCount + ' weighed specimens</div>' +
                                             '</div>' +
-                                            '<div>' +
-                                                '<div style="background: var(--border-color); border-radius: 9999px; height: 8px; margin-top: 1.25rem; overflow: hidden; position: relative;" title="' + selfFoundPercent + '% field discoveries">' +
-                                                    '<div style="background: linear-gradient(90deg, #e6a817, #f7d070); height: 100%; width: ' + selfFoundPercent + '%; border-radius: 9999px; transition: width 0.6s ease;"></div>' +
+                                            // Size Card
+                                            '<div class="data-card" style="background: var(--bg-warm); padding: 1.5rem; border-radius: 1rem; border: 1px solid var(--border-color); text-align: center; box-shadow: var(--shadow-sm);">' +
+                                                '<div style="color: var(--accent); margin-bottom: 0.5rem;"><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg></div>' +
+                                                '<div style="font-size: 0.9rem; opacity: 0.7; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;">Average Specimen Size</div>' +
+                                                '<div style="font-size: 2.25rem; font-weight: 800; color: var(--text-main); margin-top: 0.5rem;">' + avgSize + ' cm</div>' +
+                                                '<div style="font-size: 0.8rem; opacity: 0.6; margin-top: 0.25rem;">Based on ' + sizeCount + ' measured specimens</div>' +
+                                            '</div>' +
+                                            // Missing Periods Card
+                                            '<div class="data-card" style="background: var(--bg-warm); padding: 1.5rem; border-radius: 1rem; border: 1px solid var(--border-color); text-align: left; box-shadow: var(--shadow-sm);">' +
+                                                '<div style="color: var(--danger); margin-bottom: 0.5rem;"><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></div>' +
+                                                '<div style="font-size: 0.9rem; opacity: 0.7; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;">Lacking Fossils From</div>' +
+                                                '<div style="margin-top: 1rem; max-height: 120px; overflow-y: auto; padding-right: 0.5rem;">';
+                                                
+                                                for (var era in missingByEra) {
+                                                    dataHtml += '<div style="margin-bottom: 0.5rem;">' +
+                                                                    '<div style="font-size: 0.7rem; font-weight: 800; color: var(--accent); text-transform: uppercase; margin-bottom: 0.25rem;">' + era + '</div>' +
+                                                                    '<div style="font-size: 0.85rem; color: var(--text-primary); opacity: 0.9;">' + missingByEra[era].join(', ') + '</div>' +
+                                                                '</div>';
+                                                }
+                                                if (totalMissing === 0) {
+                                                    dataHtml += '<div style="font-size: 0.85rem; color: #439775; font-weight: 600;">You collection is geologically complete!</div>';
+                                                }
+
+                            dataHtml +=         '</div>' +
+                                            '</div>' +
+                                            // Top Tags Card
+                                            '<div class="data-card" style="background: var(--bg-warm); padding: 1.5rem; border-radius: 1rem; border: 1px solid var(--border-color); text-align: left; box-shadow: var(--shadow-sm);">' +
+                                                '<div style="color: var(--accent); margin-bottom: 0.5rem;"><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg></div>' +
+                                                '<div style="font-size: 0.9rem; opacity: 0.7; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;">Most Frequent Tags</div>' +
+                                                '<div style="margin-top: 1rem; display: flex; flex-wrap: wrap; gap: 0.5rem;">';
+                                                
+                                                topTags.forEach(function(tagPair) {
+                                                    dataHtml += '<span class="tag-pill" style="margin: 0; background: var(--bg-surface); border: 1px solid var(--border-color); cursor: pointer;" onclick="document.getElementById(\'search\').value = \'#' + tagPair[0] + '\'; app.renderFossils();">#' + tagPair[0] + ' <small style="opacity: 0.6; margin-left: 2px;">' + tagPair[1] + '</small></span>';
+                                                });
+                                                if (topTags.length === 0) {
+                                                    dataHtml += '<div style="font-size: 0.85rem; opacity: 0.6;">No tags used yet.</div>';
+                                                }
+
+                            dataHtml +=         '</div>' +
+                                            '</div>' +
+                                            // Paleontological Field Score Card
+                                            '<div class="data-card" style="background: var(--bg-warm); padding: 1.5rem; border-radius: 1rem; border: 1px solid var(--border-color); text-align: center; box-shadow: var(--shadow-sm); display: flex; flex-direction: column; justify-content: space-between;">' +
+                                                '<div>' +
+                                                    '<div style="color: #e6a817; margin-bottom: 0.5rem;"><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"></polygon></svg></div>' +
+                                                    '<div style="font-size: 0.9rem; opacity: 0.7; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;">Field Discovery Score</div>' +
+                                                    '<div style="font-size: 2.25rem; font-weight: 800; color: var(--text-main); margin-top: 0.5rem;">' + selfFoundPercent + '%</div>' +
+                                                    '<div class="badge" style="display: inline-flex; align-items: center; gap: 0.25rem; background: var(--bg-surface); border: 1px solid var(--border-color); color: #e6a817; font-weight: 700; font-size: 0.85rem; padding: 0.25rem 0.75rem; border-radius: 2rem; margin-top: 0.5rem; text-transform: uppercase; letter-spacing: 0.03em;">' + rankEmoji + ' ' + rankTitle + '</div>' +
                                                 '</div>' +
-                                                '<div style="font-size: 0.8rem; opacity: 0.6; margin-top: 0.75rem;">You collected ' + selfFoundCount + ' of your ' + ownedCount + ' active specimens personally in the field.</div>' +
+                                                '<div>' +
+                                                    '<div style="background: var(--border-color); border-radius: 9999px; height: 8px; margin-top: 1.25rem; overflow: hidden; position: relative;" title="' + selfFoundPercent + '% field discoveries">' +
+                                                        '<div style="background: linear-gradient(90deg, #e6a817, #f7d070); height: 100%; width: ' + selfFoundPercent + '%; border-radius: 9999px; transition: width 0.6s ease;"></div>' +
+                                                    '</div>' +
+                                                    '<div style="font-size: 0.8rem; opacity: 0.6; margin-top: 0.75rem;">You collected ' + selfFoundCount + ' of your ' + ownedCount + ' active specimens personally in the field.</div>' +
+                                                '</div>' +
                                             '</div>' +
-                                        '</div>' +
-                                       '</div>';
-                    }
-                    dataContainer.innerHTML = dataHtml;
-                }
-
-                // --- STRATIGRAPHIC COLUMN ---
-                // (Existing strat logic follows...)
-
-                if (isStatsOpen) {
-                    statsContainer.style.display = 'flex';
-                    
-                    if (isFossilMapOpen) {
-                        window.app.drawMapMarkers();
-                    } else if (isDataInsightsOpen) {
-                        // Logic is already handled above in the inline section
-                    } else if (isTreemapOpen) {
-                        window.app.renderMissingSpecimens();
-                    } else if (isEarthHistoryOpen) {
-                        // Refresh represented specimens list in earth history based on currently selected period
-                        var activePeriodBtn = document.querySelector('.geological-sidebar button[style*="background: var(--accent-bg)"]');
-                        var activePeriod = activePeriodBtn ? activePeriodBtn.textContent.trim().split('\n')[0].trim() : 'Quaternary';
-                        window.app.renderEarthHistory(activePeriod);
-                    } else {
-                        // Render Charts
-                        try {
-                        var isDark = document.documentElement.getAttribute('data-theme') === 'dark';
-                        var chartTextColor = isDark ? '#9da8b5' : '#7a6e5d';
-                        var chartBorderColor = isDark ? '#141d26' : '#ffffff';
-
-                        if (chartCountry) chartCountry.destroy();
-                        var ctxCountry = document.getElementById('chart-country').getContext('2d');
-                        chartCountry = new Chart(ctxCountry, {
-                            type: 'pie',
-                            data: {
-                                labels: Object.keys(countryCounts),
-                                datasets: [{
-                                    data: Object.values(countryCounts),
-                                    backgroundColor: ['#4e79a7', '#f28e2c', '#e15759', '#76b7b2', '#59a14f', '#edc949', '#af7aa1', '#ff9da7', '#9c755f', '#bab0ab'],
-                                    borderColor: chartBorderColor,
-                                    borderWidth: 1.5
-                                }]
-                            },
-                            options: { 
-                                responsive: true, 
-                                maintainAspectRatio: true,
-                                aspectRatio: 1.15,
-                                plugins: { 
-                                    legend: { display: false }, 
-                                    title: { display: false } 
-                                } 
-                            }
-                        });
-
-                        if (chartPeriod) chartPeriod.destroy();
-                        var ctxPeriod = document.getElementById('chart-period').getContext('2d');
-                        chartPeriod = new Chart(ctxPeriod, {
-                            type: 'pie',
-                            data: {
-                                labels: Object.keys(periodCounts),
-                                datasets: [{
-                                    data: Object.values(periodCounts),
-                                    backgroundColor: ['#4e79a7', '#f28e2c', '#e15759', '#76b7b2', '#59a14f', '#edc949', '#af7aa1', '#ff9da7', '#9c755f', '#bab0ab'],
-                                    borderColor: chartBorderColor,
-                                    borderWidth: 1.5
-                                }]
-                            },
-                            options: { 
-                                responsive: true, 
-                                maintainAspectRatio: true,
-                                aspectRatio: 1.15,
-                                plugins: { 
-                                    legend: { display: false }, 
-                                    title: { display: false } 
-                                } 
-                            }
-                        });
-                        } catch (e) {
-                            console.error('Chart.js error:', e);
+                                           '</div>';
                         }
-                    } // end of chart else
+                        dataContainer.innerHTML = dataHtml;
+                    }
+
+                    // --- STRATIGRAPHIC COLUMN ---
+                    // (Existing strat logic follows...)
+
+                    if (isStatsOpen) {
+                        statsContainer.style.display = 'flex';
+                        
+                        if (isFossilMapOpen) {
+                            window.app.drawMapMarkers();
+                        } else if (isDataInsightsOpen) {
+                            // Logic is already handled above in the inline section
+                        } else if (isTreemapOpen) {
+                            window.app.renderMissingSpecimens();
+                        } else if (isEarthHistoryOpen) {
+                            // Refresh represented specimens list in earth history based on currently selected period
+                            var activePeriodBtn = document.querySelector('.geological-sidebar button[style*="background: var(--accent-bg)"]');
+                            var activePeriod = activePeriodBtn ? activePeriodBtn.textContent.trim().split('\n')[0].trim() : 'Quaternary';
+                            window.app.renderEarthHistory(activePeriod);
+                        } else {
+                            // Render Charts with Dynamic In-Place Caching (MASSIVE Speed Boost!)
+                            try {
+                                var isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+                                var chartBorderColor = isDark ? '#141d26' : '#ffffff';
+
+                                if (chartCountry) {
+                                    // Efficient dynamic update instead of expensive destroy-recreate cycle!
+                                    chartCountry.data.labels = Object.keys(countryCounts);
+                                    chartCountry.data.datasets[0].data = Object.values(countryCounts);
+                                    chartCountry.data.datasets[0].borderColor = chartBorderColor;
+                                    chartCountry.update('none'); // silent update without layout shifts
+                                } else {
+                                    var ctxCountry = document.getElementById('chart-country').getContext('2d');
+                                    chartCountry = new Chart(ctxCountry, {
+                                        type: 'pie',
+                                        data: {
+                                            labels: Object.keys(countryCounts),
+                                            datasets: [{
+                                                data: Object.values(countryCounts),
+                                                backgroundColor: ['#4e79a7', '#f28e2c', '#e15759', '#76b7b2', '#59a14f', '#edc949', '#af7aa1', '#ff9da7', '#9c755f', '#bab0ab'],
+                                                borderColor: chartBorderColor,
+                                                borderWidth: 1.5
+                                            }]
+                                        },
+                                        options: { 
+                                            responsive: true, 
+                                            maintainAspectRatio: true,
+                                            aspectRatio: 1.15,
+                                            plugins: { 
+                                                legend: { display: false }, 
+                                                title: { display: false } 
+                                            } 
+                                        }
+                                    });
+                                }
+
+                                if (chartPeriod) {
+                                    chartPeriod.data.labels = Object.keys(periodCounts);
+                                    chartPeriod.data.datasets[0].data = Object.values(periodCounts);
+                                    chartPeriod.data.datasets[0].borderColor = chartBorderColor;
+                                    chartPeriod.update('none');
+                                } else {
+                                    var ctxPeriod = document.getElementById('chart-period').getContext('2d');
+                                    chartPeriod = new Chart(ctxPeriod, {
+                                        type: 'pie',
+                                        data: {
+                                            labels: Object.keys(periodCounts),
+                                            datasets: [{
+                                                data: Object.values(periodCounts),
+                                                backgroundColor: ['#4e79a7', '#f28e2c', '#e15759', '#76b7b2', '#59a14f', '#edc949', '#af7aa1', '#ff9da7', '#9c755f', '#bab0ab'],
+                                                borderColor: chartBorderColor,
+                                                borderWidth: 1.5
+                                            }]
+                                        },
+                                        options: { 
+                                            responsive: true, 
+                                            maintainAspectRatio: true,
+                                            aspectRatio: 1.15,
+                                            plugins: { 
+                                                legend: { display: false }, 
+                                                title: { display: false } 
+                                            } 
+                                        }
+                                    });
+                                }
+                            } catch (e) {
+                                console.error('Chart.js update error:', e);
+                            }
+                        }
+                    } else {
+                        statsContainer.style.display = 'none';
+                    }
                 } else {
                     statsContainer.style.display = 'none';
                 }
-            } else {
-                statsContainer.style.display = 'none';
-            }
-
-            // --- RENDER CARDS ---
+            }// --- RENDER CARDS ---
             grid.classList.toggle('wishlist-mode', wlQ);
             var fragment = document.createDocumentFragment();
 
             // Store filtered list for lightbox inter-fossil navigation
             lightboxFilteredList = filtered.slice();
+
+            // Always prepend the Quick Add Card at the very top if in wishlist view
+            if (wlQ) {
+                var quickAddDiv = document.createElement('div');
+                quickAddDiv.className = 'wishlist-quick-add-card';
+                quickAddDiv.innerHTML = 
+                    '<div class="quick-add-row">' +
+                        '<div class="quick-add-inputs">' +
+                            '<input type="text" id="wl-quick-name" placeholder="➕ New Specimen Name... (e.g. Spinosaurus Tooth)" aria-label="Specimen Name" onkeydown="if(event.key===\'Enter\') app.quickAddWishlist()">' +
+                            '<div class="price-input-wrapper">' +
+                                '<span class="currency-symbol">$</span>' +
+                                '<input type="number" step="0.01" id="wl-quick-price" placeholder="Target Price" aria-label="Target Price" onkeydown="if(event.key===\'Enter\') app.quickAddWishlist()">' +
+                            '</div>' +
+                        '</div>' +
+                        '<button class="btn-wl-quick-add" onclick="app.quickAddWishlist()" title="Add to Wishlist">' +
+                            '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> Add' +
+                        '</button>' +
+                    '</div>' +
+                    '<div class="quick-add-row-links">' +
+                        '<textarea id="wl-quick-links" placeholder="Paste source links / URLs here... (Separate multiple links with space or newlines)" rows="1" oninput="this.style.height=\'\';this.style.height=this.scrollHeight+\'px\'"></textarea>' +
+                    '</div>';
+                fragment.appendChild(quickAddDiv);
+            }
 
             if (filtered.length === 0) {
                 var empty = document.createElement('div');
@@ -6280,8 +6721,12 @@ window.app = {
                 empty.innerHTML =
                     '<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>' +
                     '<h3>No Specimens Found</h3>' +
-                    '<p>Add your first fossil using the button above, or import a CSV file.</p>';
-                grid.innerHTML = ''; // Clear once
+                    '<p>' + (wlQ ? 'Quickly add a specimen to your wishlist above!' : 'Add your first fossil using the button above, or import a CSV file.') + '</p>';
+                
+                grid.innerHTML = '';
+                if (wlQ) {
+                    grid.appendChild(fragment); // Render quick add card
+                }
                 grid.appendChild(empty);
                 return;
             }
@@ -6293,66 +6738,63 @@ window.app = {
 
                 if (wlQ) {
                     // WISHLIST CHECKLIST VIEW
-                    card.className = 'wishlist-row';
+                    card.className = 'wishlist-row reminders-style';
                     
-                    // Trigger async fetch for source thumbnail if needed
-                    if ((!f.images || f.images.length === 0) && f.sourceUrl && !f.sourceThumb && !f.sourceThumbFailed) {
-                        window.app.fetchSourceThumb(f);
-                    }
-                    
-                    var thumbUrl = (f.images && f.images.length > 0) ? f.images[0] : (f.sourceThumb || null);
-                    if (!thumbUrl && f.sourceUrl) {
-                        try {
-                            var sUrl = new URL(f.sourceUrl);
-                            thumbUrl = 'https://t3.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=' + sUrl.protocol + '//' + sUrl.hostname + '&size=64';
-                        } catch(e) {}
+                    var urls = [];
+                    if (f.sourceUrl) {
+                        urls = f.sourceUrl.split(/[\n, ]+/).map(function(u) { return u.trim(); }).filter(function(u) {
+                            return u.length > 0 && (u.startsWith('http://') || u.startsWith('https://') || u.indexOf('.') !== -1);
+                        });
                     }
 
-                    var thumbHtml = '';
-                    if (thumbUrl) {
-                        thumbHtml = '<div class="wishlist-thumb"><img src="' + thumbUrl + '" alt="Thumbnail" loading="lazy" style="width: 100%; height: 100%; object-fit: cover;"></div>';
-                    } else {
-                        thumbHtml = '<div class="wishlist-thumb placeholder" style="display: flex; align-items: center; justify-content: center; background: var(--bg-surface);"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" opacity="0.4" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg></div>';
+                    var linksHtml = '';
+                    if (urls.length > 0) {
+                        linksHtml = '<div class="wishlist-links-container">';
+                        urls.forEach(function(url, idx) {
+                            var displayLabel = 'Link ' + (idx + 1);
+                            try {
+                                var parsedUrl = new URL(url.startsWith('http') ? url : 'https://' + url);
+                                displayLabel = parsedUrl.hostname.replace('www.', '');
+                            } catch(e) {}
+                            
+                            linksHtml += '<a href="' + (url.startsWith('http') ? url : 'https://' + url) + '" target="_blank" class="wishlist-link-pill" onclick="event.stopPropagation();" title="' + escapeHtml(url) + '">' +
+                                '<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg> ' + escapeHtml(displayLabel) +
+                                '</a>';
+                        });
+                        linksHtml += '</div>';
                     }
-
-                    var linkHtml = f.sourceUrl ? '<a href="' + f.sourceUrl + '" target="_blank" class="btn-primary btn-sm" title="Open Source Link" style="white-space: nowrap; font-size: 0.75rem; padding: 0.4rem 0.7rem; border-radius: 2rem;"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="margin-right:0.25rem;"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="4"/><line x1="21.17" y1="8" x2="12" y2="8"/><line x1="3.95" y1="6.06" x2="8.54" y2="14"/><line x1="10.88" y1="21.94" x2="15.46" y2="14"/></svg> Hunt</a>' : '';
 
                     var priceTarget = '';
                     if (f.price > 0 || f.estimatedValue > 0) {
                         var val = f.price > 0 ? f.price : f.estimatedValue;
                         var curr = f.price > 0 ? (f.currency || 'USD') : (f.estimatedCurrency || 'USD');
-                        priceTarget = '<span class="badge badge-price" style="background: rgba(107, 93, 77, 0.1); color: #6b5d4d;">Price Target: ' + val.toLocaleString() + ' ' + curr + '</span>';
-                    }
-
-                    var sizeTarget = '';
-                    if (f.size > 0) {
-                        sizeTarget = '<span class="badge badge-size" style="background: rgba(58, 143, 183, 0.1); color: #3a8fb7;"><svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:2px; display:inline-block;"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg> Target Size: ' + f.size + ' ' + (f.sizeUnit || 'cm') + '</span>';
+                        priceTarget = '<span class="wishlist-price-badge">Target: ' + val.toLocaleString() + ' ' + curr + '</span>';
+                    } else {
+                        priceTarget = '<span class="wishlist-price-badge empty-placeholder">—</span>';
                     }
 
                     cardInnerHtml = 
-                        '<div class="wishlist-check-container" style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.2rem; cursor: grab; padding-left: 0.5rem;" title="Drag to reorder">' +
-                            '<div style="font-size: 0.85rem; font-weight: 800; color: var(--accent); opacity: 0.8;">#' + f.wishlistRank + '</div>' +
+                        '<div class="wishlist-check-container" style="cursor: grab;" title="Drag to reorder">' +
+                            '<div class="wishlist-rank-num">#' + f.wishlistRank + '</div>' +
                             '<input type="checkbox" class="wishlist-checkbox" title="Mark as Found" onchange="app.markAsFound(event, \'' + f.id + '\', \'' + escapeHtml(f.specimen) + '\')">' +
                         '</div>' +
-                        thumbHtml +
-                        '<div class="wishlist-info">' +
-                            '<h3 class="wishlist-title">' + annotateSpecimenName(f.specimen, f) + '</h3>' +
-                            '<div class="wishlist-meta">' +
-                                '<span class="badge badge-wishlist">' + escapeHtml(f.category) + '</span>' +
-                                ((f.anatomy && f.anatomy.length > 0) ? '<span>&middot; ' + escapeHtml(f.anatomy) + '</span>' : '') +
-                                (f.geologicalPeriod ? '<span>&middot; ' + escapeHtml(f.geologicalPeriod) + '</span>' : '') +
-                                (f.location || f.country ? '<span>&middot; ' + escapeHtml(f.location || f.country) + '</span>' : '') +
-                            '</div>' +
-                            ((priceTarget || sizeTarget) ? '<div class="wishlist-targets" style="display: flex; gap: 0.35rem; flex-wrap: wrap; margin-top: 0.35rem;">' + priceTarget + sizeTarget + '</div>' : '') + 
+                        '<div class="wishlist-title-column">' +
+                            '<h3 class="wishlist-title">' + escapeHtml(f.specimen) + '</h3>' +
                         '</div>' +
-                        '<div class="wishlist-actions">' +
-                            linkHtml +
-                            '<button class="btn-primary btn-sm" onclick="app.acquireWishlistFossil(\'' + f.id + '\')" style="white-space: nowrap; font-size: 0.75rem; padding: 0.4rem 0.7rem; border-radius: 2rem; background: #10b981; border-color: #10b981; color: white; cursor: pointer; transition: all 0.2s;" title="Acquire Specimen and Add to Collection">🚀 Acquire</button>' +
+                        '<div class="wishlist-price-column">' +
+                            priceTarget +
                         '</div>' +
-                        '<div class="card-actions">' +
-                            '<button class="btn-copy" title="Copy Specimen Name" onclick="app.copySpecimenName(&quot;' + escapeHtml(f.specimen).replace(/"/g, '&quot;') + '&quot;)"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>' +
-                            '<button title="Edit" onclick="app.openModal(\'' + f.id + '\')"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>' +
-                            '<button class="btn-delete" title="Delete" onclick="app.deleteFossilItem(\'' + f.id + '\')"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>' +
+                        '<div class="wishlist-links-column">' +
+                            (linksHtml || '<span class="wishlist-link-placeholder">—</span>') +
+                        '</div>' +
+                        '<div class="wishlist-row-actions-container">' +
+                            '<button class="btn-acquire" onclick="app.acquireWishlistFossil(\'' + f.id + '\')" title="Acquire Specimen and Add to Collection">🚀 Acquire</button>' +
+                            '<button class="btn-edit-info" title="Full Settings / Edit Specimen" onclick="app.openModal(\'' + f.id + '\')">' +
+                                '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:3px;"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg> Full Settings' +
+                            '</button>' +
+                            '<button class="btn-delete-wishlist" title="Delete from Wishlist" onclick="app.deleteFossilItem(\'' + f.id + '\')">' +
+                                '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>' +
+                            '</button>' +
                         '</div>';
                 } else {
                     // STANDARD COLLECTION CARD VIEW
@@ -6437,8 +6879,8 @@ window.app = {
                     var locationHtmlStr = locQueryArr.length > 0 ? '<a href="https://www.google.com/maps/search/?api=1&query=' + mapQuery + '" target="_blank" onclick="event.stopPropagation();" title="View on Google Maps" style="color: inherit; text-decoration: none; transition: color 0.15s ease;" onmouseover="this.style.color=\'var(--accent)\'" onmouseout="this.style.color=\'inherit\'">' + locationTextRaw + '</a>' : locationTextRaw;
 
                     var detailsArr = [];
-                    if (f.size) detailsArr.push('Size: ' + escapeHtml(f.size) + ' ' + (f.sizeUnit || 'cm'));
-                    if (f.weight) detailsArr.push('Weight: ' + escapeHtml(f.weight) + 'g');
+                    if (f.size) detailsArr.push('Size: ' + formatSpecimenDimensions(f));
+                    if (f.weight) detailsArr.push('Weight: ' + formatSpecimenWeight(f.weight));
                     if (f.price) {
                         var pText = 'Price: ' + f.price + ' ' + (f.currency || 'USD');
                         detailsArr.push(pText);
@@ -6463,6 +6905,7 @@ window.app = {
                                 '</div>' : '') +
                             '</div>' +
                             '<h3 class="card-title">' + annotateSpecimenName(f.specimen, f) + '</h3>' +
+                            (f.description ? '<p class="card-description-snippet" style="font-size: 0.8rem; font-style: italic; color: var(--text-secondary); margin-top: 0.15rem; margin-bottom: 0.4rem; line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;" title="' + escapeHtml(f.description) + '">' + escapeHtml(f.description) + '</p>' : '') +
                             (f.anatomy ? '<div style="margin-top: -0.25rem; margin-bottom: 0.5rem;"><span style="display: inline-flex; align-items: center; gap: 0.35rem; background: transparent; border: 1px solid var(--accent); color: var(--accent); padding: 0.15rem 0.5rem; border-radius: 1rem; font-size: 0.75rem; font-weight: 600;"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg> ' + escapeHtml(f.anatomy) + '</span></div>' : '') +
                             '<p class="card-meta"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg> ' + escapeHtml(f.category) + '</p>' +
                             '<p class="card-meta" style="margin-top: 0.5rem;"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg> ' + locationHtmlStr + '</p>' +
@@ -6479,7 +6922,7 @@ window.app = {
                                     '<div class="card-more-menu-container">' +
                                         '<button class="btn-card-more" title="Curator Toolkit" onclick="event.stopPropagation(); app.toggleCardMenu(event, \'' + f.id + '\')">' +
                                             '<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>' +
-                                            'Manage' +
+                                            '<span class="btn-text">Manage</span>' +
                                             '<svg class="chevron-indicator" xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="opacity: 0.85; margin-left: 1px;"><path d="m6 9 6 6 6-6"/></svg>' +
                                         '</button>' +
                                         '<div class="card-dropdown-list" id="dropdown-' + f.id + '">' +
@@ -6729,6 +7172,101 @@ window.app = {
         
         html += '</div>';
         stratContainer.innerHTML = html;
+    },
+
+    copyLLMContext: function() {
+        if (!fossils || fossils.length === 0) {
+            window.app.showToast('No specimens in database to copy!', 'warning');
+            return;
+        }
+
+        var text = '# Specimenry Personal Fossil Collection Database\n' +
+                   'Exported on: ' + new Date().toLocaleDateString() + ' ' + new Date().toLocaleTimeString() + '\n' +
+                   'Total Specimens: ' + fossils.length + '\n\n' +
+                   'This file contains the full curatorial context of all fossils in the user\'s private collection database. ' +
+                   'Use this context to analyze, summarize, estimate scientific values, or answer general paleontological questions based on their specimens.\n\n' +
+                   '==================================================\n\n';
+
+        fossils.forEach(function(f, idx) {
+            text += '## Specimen #' + (idx + 1) + ': ' + (f.specimen || 'Unnamed Specimen') + ' (' + (f.id || 'N/A') + ')\n';
+            text += '- **Catalog ID**: ' + (f.id || 'N/A') + '\n';
+            text += '- **Category**: ' + (f.category || 'N/A') + '\n';
+            if (f.anatomy) text += '- **Anatomy/Part**: ' + f.anatomy + '\n';
+            
+            var periodText = f.geologicalPeriod || '';
+            if (f.epoch) periodText += ' (' + f.epoch + ')';
+            if (f.ageMa) periodText += ' - ' + f.ageMa + ' Ma';
+            if (periodText) text += '- **Geological Age**: ' + periodText + '\n';
+            
+            if (f.formation) text += '- **Geological Formation**: ' + f.formation + '\n';
+            
+            var locText = '';
+            if (f.location) locText += f.location;
+            if (f.country) locText += (locText ? ', ' : '') + f.country;
+            if (locText) text += '- **Origin Location**: ' + locText + '\n';
+            
+            var dimensions = [];
+            if (f.size) dimensions.push('Size: ' + formatSpecimenDimensions(f));
+            if (f.weight) dimensions.push('Weight: ' + formatSpecimenWeight(f.weight));
+            if (f.animalSize) dimensions.push('Est. Entire Animal Size: ' + f.animalSize + 'm');
+            if (dimensions.length > 0) text += '- **Physical Dimensions**: ' + dimensions.join(' | ') + '\n';
+            
+            var statusText = f.isWishlist ? 'Wishlist Specimen' : (f.isSold ? 'Sold' : 'Owned / Physical Collection');
+            text += '- **Curation Status**: ' + statusText + '\n';
+            
+            var financial = [];
+            if (f.price) financial.push('Acquisition Cost: ' + f.price + ' ' + (f.currency || 'USD'));
+            if (f.isSold && f.salePrice) financial.push('Sale Price: ' + f.salePrice + ' ' + (f.saleCurrency || 'USD'));
+            if (financial.length > 0) text += '- **Financial Valuation**: ' + financial.join(' | ') + '\n';
+            
+            text += '- **Self-Found**: ' + (f.isSelfFound ? 'Yes' : 'No') + '\n';
+            
+            if (f.tags && f.tags.length > 0) text += '- **Custom Tags**: #' + f.tags.join(' #') + '\n';
+            if (f.notes) text += '- **Curator Notes**: ' + f.notes + '\n';
+            if (f.description) text += '- **Prehistoric Biology & Description**: ' + f.description + '\n';
+            if (f.authority) text += '- **Taxonomic Authority**: ' + f.authority + '\n';
+            if (f.scientificEtymology) text += '- **Scientific Name Etymology**: ' + f.scientificEtymology + '\n';
+            
+            if (f.taxonomy) {
+                var taxKeys = ['kingdom', 'phylum', 'class', 'order', 'family', 'genus', 'species'];
+                var taxChain = [];
+                taxKeys.forEach(function(k) {
+                    if (f.taxonomy[k]) taxChain.push(f.taxonomy[k]);
+                });
+                if (taxChain.length > 0) text += '- **Biological Taxonomy Hierarchy**: ' + taxChain.join(' > ') + '\n';
+            }
+            
+            text += '\n--------------------------------------------------\n\n';
+        });
+
+        text += '=== End of Specimen Context ===\n';
+
+        // 1. Trigger text file download for Claude/ChatGPT direct drag-and-drop
+        try {
+            var blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+            var url = URL.createObjectURL(blob);
+            var a = document.createElement('a');
+            a.href = url;
+            a.download = 'specimenry_fossils_ai_context.txt';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        } catch (e) {
+            console.error('File download failed', e);
+        }
+
+        // 2. Attempt to copy to clipboard for instant paste
+        if (navigator.clipboard) {
+            navigator.clipboard.writeText(text).then(function() {
+                window.app.showToast('📋 Copied AI/LLM Context (' + fossils.length + ' Specimens) & Downloaded Context File!', 'success', 3500);
+            }).catch(function(err) {
+                console.error('Copy failed', err);
+                window.app.showToast('Downloaded text file, but clipboard copy failed.', 'info', 3000);
+            });
+        } else {
+            window.app.showToast('Downloaded context file (clipboard not supported).', 'info', 3000);
+        }
     },
 
     // --- Export / Import ---
@@ -7058,12 +7596,14 @@ window.app = {
         if (!modal || !container) return;
         
         // Calculate highlight differences (size, age, weight)
-        // Size normalization: convert inches to cm if sizeUnit === 'inch'
+        // Size normalization: convert inches to cm if sizeUnit matches inches
         var sizes = selectedList.map(function(f) {
             if (!f.size) return 0;
             var num = parseFloat(f.size);
             if (isNaN(num)) return 0;
-            return (f.sizeUnit || 'cm').toLowerCase() === 'inch' ? num * 2.54 : num;
+            var su = (f.sizeUnit || 'cm').toLowerCase().trim();
+            var isInch = (su === 'inch' || su === 'in' || su === 'inches');
+            return isInch ? num * 2.54 : num;
         });
         var ages = selectedList.map(function(f) {
             var num = parseFloat(f.ageMa);
@@ -7188,11 +7728,17 @@ window.app = {
                             '</div>' +
                             '<div class="compare-spec-section">' +
                                 '<h5>📐 Sizing & Curation</h5>' +
-                                '<div class="compare-spec-row"><span class="compare-spec-label">Specimen Size</span><span class="compare-spec-value">' + (f.size ? f.size + ' ' + (f.sizeUnit || 'cm') : 'N/A') + '</span></div>' +
-                                '<div class="compare-spec-row"><span class="compare-spec-label">Weight</span><span class="compare-spec-value">' + (f.weight ? f.weight + ' g' : 'N/A') + '</span></div>' +
+                                '<div class="compare-spec-row"><span class="compare-spec-label">Specimen Size</span><span class="compare-spec-value">' + (f.size ? formatSpecimenDimensions(f) : 'N/A') + '</span></div>' +
+                                '<div class="compare-spec-row"><span class="compare-spec-label">Weight</span><span class="compare-spec-value">' + (f.weight ? formatSpecimenWeight(f.weight) : 'N/A') + '</span></div>' +
                                 '<div class="compare-spec-row"><span class="compare-spec-label">Est. Animal Size</span><span class="compare-spec-value">' + (f.animalSize ? f.animalSize + ' m' : 'N/A') + '</span></div>' +
                                 '<div class="compare-spec-row"><span class="compare-spec-label">Value</span><span class="compare-spec-value">' + (f.price ? f.price + ' ' + (f.currency || 'USD') : 'N/A') + '</span></div>' +
                             '</div>' +
+                            (f.authority || f.description ? 
+                            '<div class="compare-spec-section">' +
+                                '<h5>🦕 Prehistoric Biology</h5>' +
+                                (f.authority ? '<div class="compare-spec-row"><span class="compare-spec-label">Named By / Authority</span><span class="compare-spec-value">' + escapeHtml(f.authority) + '</span></div>' : '') +
+                                (f.description ? '<div class="compare-notes-box" style="font-style: italic; line-height: 1.35; max-height: 80px; overflow-y: auto;">' + escapeHtml(f.description) + '</div>' : '') +
+                            '</div>' : '') +
                             '<div class="compare-spec-section">' +
                                 '<h5>🩺 Curation & Preservation</h5>' +
                                 '<div class="compare-spec-row"><span class="compare-spec-label">Condition</span><span class="compare-spec-value">' + escapeHtml(condLabels.join(', ')) + '</span></div>' +
@@ -7307,8 +7853,8 @@ window.app = {
         var loc = f.location || 'N/A';
         var country = f.country || 'N/A';
         
-        var sizeVal = f.size ? f.size + ' ' + (f.sizeUnit || 'cm') : 'N/A';
-        var weightVal = f.weight ? f.weight + ' g' : 'N/A';
+        var sizeVal = f.size ? formatSpecimenDimensions(f) : 'N/A';
+        var weightVal = f.weight ? formatSpecimenWeight(f.weight) : 'N/A';
         var animalSizeVal = f.animalSize ? f.animalSize + ' m' : 'N/A';
         
         var cond = f.condition || {};
@@ -8255,6 +8801,71 @@ function getFullTaxonomyTray(f) {
 }
 
 
+function formatSpecimenSize(size, unit) {
+    if (size === undefined || size === null || size === '') return '';
+    var num = parseFloat(size);
+    if (isNaN(num) || num <= 0) return size;
+    
+    var u = (unit || 'cm').toLowerCase().trim();
+    if (u === 'cm') {
+        var inches = num / 2.54;
+        return num + ' cm (' + inches.toFixed(1) + ' in)';
+    } else if (u === 'inch' || u === 'in' || u === 'inches') {
+        var cm = num * 2.54;
+        return num + ' in (' + cm.toFixed(1) + ' cm)';
+    }
+    return num + ' ' + unit;
+}
+
+function formatSpecimenDimensions(f) {
+    if (!f) return '';
+    if (f.size === undefined || f.size === null || f.size === '') return '';
+    var sizeNum = parseFloat(f.size);
+    if (isNaN(sizeNum) || sizeNum <= 0) return f.size;
+
+    var u = (f.sizeUnit || 'cm').toLowerCase().trim();
+    var hasWidth = f.width !== undefined && f.width !== null && f.width !== '' && !isNaN(parseFloat(f.width)) && parseFloat(f.width) > 0;
+    var hasThick = f.thickness !== undefined && f.thickness !== null && f.thickness !== '' && !isNaN(parseFloat(f.thickness)) && parseFloat(f.thickness) > 0;
+
+    var len = parseFloat(f.size);
+    var wid = hasWidth ? parseFloat(f.width) : 0;
+    var thick = hasThick ? parseFloat(f.thickness) : 0;
+
+    if (u === 'cm') {
+        var main = len + ' cm';
+        var alt = (len / 2.54).toFixed(1) + ' in';
+        if (hasWidth) {
+            main += ' x ' + wid + ' cm';
+            alt += ' x ' + (wid / 2.54).toFixed(1) + ' in';
+        }
+        if (hasThick) {
+            main += ' x ' + thick + ' cm';
+            alt += ' x ' + (thick / 2.54).toFixed(1) + ' in';
+        }
+        return main + ' (' + alt + ')';
+    } else {
+        var main = len + ' in';
+        var alt = (len * 2.54).toFixed(1) + ' cm';
+        if (hasWidth) {
+            main += ' x ' + wid + ' in';
+            alt += ' x ' + (wid * 2.54).toFixed(1) + ' cm';
+        }
+        if (hasThick) {
+            main += ' x ' + thick + ' in';
+            alt += ' x ' + (thick * 2.54).toFixed(1) + ' cm';
+        }
+        return main + ' (' + alt + ')';
+    }
+}
+
+function formatSpecimenWeight(weight) {
+    if (weight === undefined || weight === null || weight === '') return '';
+    var num = parseFloat(weight);
+    if (isNaN(num) || num <= 0) return weight;
+    var lbs = num / 453.59237;
+    return num.toLocaleString() + ' g (' + lbs.toFixed(2) + ' lb)';
+}
+
 // =========================================================================
 // HELPERS
 // =========================================================================
@@ -8672,4 +9283,4 @@ window.addEventListener('scroll', function() {
     seaMonsterScrollTimeout = setTimeout(function() {
         grid.classList.remove('sea-monster-scroll');
     }, 150);
-});
+}, { passive: true });
