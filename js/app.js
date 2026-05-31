@@ -3491,12 +3491,28 @@ window.app = {
             return parseFloat(f.price);
         };
 
+        // Helper: convert a fossil's estimated value to SEK for normalized comparison
+        var toSEKEst = function(f) {
+            if (!f.estimatedValue) return 0;
+            var curr = f.estimatedCurrency || 'USD';
+            if (curr === 'SEK') return parseFloat(f.estimatedValue);
+            if (exchangeRates && exchangeRates[curr]) {
+                return parseFloat(f.estimatedValue) / exchangeRates[curr];
+            }
+            // Approximate fallback rates
+            if (curr === 'USD') return parseFloat(f.estimatedValue) * 10.50;
+            if (curr === 'EUR') return parseFloat(f.estimatedValue) * 11.50;
+            return parseFloat(f.estimatedValue);
+        };
+
         // 1. Smart Filtering based on active collection
         var rankedFossils = (fossils || []).filter(function(f) {
             if (f.isWishlist) return false;
 
             if (criteria === 'price') {
                 return f.price !== undefined && f.price !== null && !isNaN(parseFloat(f.price)) && parseFloat(f.price) > 0;
+            } else if (criteria === 'estimatedValue') {
+                return f.estimatedValue !== undefined && f.estimatedValue !== null && !isNaN(parseFloat(f.estimatedValue)) && parseFloat(f.estimatedValue) > 0;
             } else if (criteria === 'conditionTier') {
                 return f.conditionTier !== undefined && f.conditionTier !== null && f.conditionTier !== '';
             } else if (criteria === 'animalSize') {
@@ -3513,6 +3529,8 @@ window.app = {
         rankedFossils.sort(function(a, b) {
             if (criteria === 'price') {
                 return toSEK(b) - toSEK(a);
+            } else if (criteria === 'estimatedValue') {
+                return toSEKEst(b) - toSEKEst(a);
             } else if (criteria === 'conditionTier') {
                 var tierOrder = { 'S': 5, 'A': 4, 'B': 3, 'C': 2, 'D': 1 };
                 var rankA = tierOrder[a.conditionTier] || 0;
@@ -3539,10 +3557,13 @@ window.app = {
         var navHtml = 
             '<div class="scoreboard-nav-pills">' +
                 '<button type="button" class="' + (criteria === 'price' ? 'active' : '') + '" onclick="app.renderScoreboard(\'price\')">' +
-                    '💰 Value Leaderboard' +
+                    '💰 Acq. Cost' +
+                '</button>' +
+                '<button type="button" class="' + (criteria === 'estimatedValue' ? 'active' : '') + '" onclick="app.renderScoreboard(\'estimatedValue\')">' +
+                    '💎 Est. Value' +
                 '</button>' +
                 '<button type="button" class="' + (criteria === 'conditionTier' ? 'active' : '') + '" onclick="app.renderScoreboard(\'conditionTier\')">' +
-                    '🩺 Preservation Tier' +
+                    '🩺 Preservation' +
                 '</button>' +
                 '<button type="button" class="' + (criteria === 'animalSize' ? 'active' : '') + '" onclick="app.renderScoreboard(\'animalSize\')">' +
                     '📐 Largest Animals' +
@@ -3551,7 +3572,7 @@ window.app = {
                     '📏 Largest Fossils' +
                 '</button>' +
                 '<button type="button" class="' + (criteria === 'weight' ? 'active' : '') + '" onclick="app.renderScoreboard(\'weight\')">' +
-                    '⚖️ Heaviest Specimens' +
+                    '⚖️ Heaviest' +
                 '</button>' +
             '</div>';
 
@@ -3560,7 +3581,8 @@ window.app = {
         if (topEntries.length === 0) {
             // Render beautiful zero state
             var criteriaNames = {
-                price: 'financial value',
+                price: 'acquisition cost',
+                estimatedValue: 'estimated current value',
                 conditionTier: 'preservation grade tier',
                 animalSize: 'estimated whole-animal size',
                 size: 'physical fossil dimension',
@@ -3568,13 +3590,15 @@ window.app = {
             };
             var criteriaFields = {
                 price: 'Purchase Price (Curation & Value tab)',
+                estimatedValue: 'Estimated Current Value (Curation & Value tab)',
                 conditionTier: 'Preservation Grade Tier (Curation & Value tab)',
                 animalSize: 'Est. Animal Size (Geology & Location tab)',
                 size: 'Fossil Size (Curation & Value tab)',
                 weight: 'Fossil Weight (Curation & Value tab)'
             };
             var zeroIcons = {
-                price: '💎',
+                price: '💰',
+                estimatedValue: '💎',
                 conditionTier: '🩺',
                 animalSize: '🦕',
                 size: '📐',
@@ -3628,6 +3652,15 @@ window.app = {
                         metricText = '💰 ' + origPrice + ' <small style="opacity: 0.85; font-size: 0.7rem; font-weight: 500; margin-left: 0.25rem; font-family: monospace;">(~' + sekEquiv.toLocaleString() + ' SEK)</small>';
                     } else {
                         metricText = '💰 ' + origPrice;
+                    }
+                } else if (criteria === 'estimatedValue') {
+                    var currency = f.estimatedCurrency || 'USD';
+                    var origPrice = parseFloat(f.estimatedValue).toLocaleString() + ' ' + currency;
+                    if (currency !== 'SEK') {
+                        var sekEquiv = Math.round(toSEKEst(f));
+                        metricText = '💎 ' + origPrice + ' <small style="opacity: 0.85; font-size: 0.7rem; font-weight: 500; margin-left: 0.25rem; font-family: monospace;">(~' + sekEquiv.toLocaleString() + ' SEK)</small>';
+                    } else {
+                        metricText = '💎 ' + origPrice;
                     }
                 } else if (criteria === 'conditionTier') {
                     metricText = getConditionTierBadgeHtml(f.conditionTier, false);
@@ -9444,7 +9477,7 @@ function generateId() {
 
 function getCategoryPrefix(cat) {
     if (!cat) return "FOSL";
-    var c = cat.toLowerCase();
+    var c = cat.toLowerCase().trim();
     if (c.indexOf('vertebrate') !== -1 && c.indexOf('invertebrate') === -1) return "VERT";
     if (c.indexOf('invertebrate') !== -1) return "INVT";
     if (c.indexOf('plant') !== -1) return "PLNT";
@@ -9454,14 +9487,20 @@ function getCategoryPrefix(cat) {
 }
 
 function generateCatalogId(category, list) {
-    var prefix = getCategoryPrefix(category);
+    var prefix = getCategoryPrefix(category).toUpperCase();
     var maxNum = 0;
     var listToSearch = list || fossils || [];
     
     listToSearch.forEach(function(f) {
-        if (f.id && f.id.startsWith(prefix + '-')) {
-            var num = parseInt(f.id.split('-')[1], 10);
-            if (!isNaN(num) && num > maxNum) maxNum = num;
+        if (f.id) {
+            var idUpper = f.id.toUpperCase().trim();
+            if (idUpper.startsWith(prefix + '-')) {
+                var parts = f.id.split('-');
+                if (parts.length >= 2) {
+                    var num = parseInt(parts[1], 10);
+                    if (!isNaN(num) && num > maxNum) maxNum = num;
+                }
+            }
         }
     });
     
