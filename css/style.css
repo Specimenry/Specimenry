@@ -6684,8 +6684,9 @@ dialog::backdrop {
     }
 }
 
-/* --- Wishlist Export Dialog Backdrop --- */
-#wishlist-export-modal::backdrop {
+/* --- Wishlist and AI Export Dialog Backdrops --- */
+#wishlist-export-modal::backdrop,
+#ai-export-modal::backdrop {
     background: rgba(0, 0, 0, 0.4);
     backdrop-filter: blur(5px);
     -webkit-backdrop-filter: blur(5px);

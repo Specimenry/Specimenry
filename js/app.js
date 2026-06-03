@@ -7916,31 +7916,63 @@ window.app = {
 
         text += '=== End of Specimen Context ===\n';
 
-        // 1. Trigger text file download for Claude/ChatGPT direct drag-and-drop
-        try {
-            var blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
-            var url = URL.createObjectURL(blob);
-            var a = document.createElement('a');
-            a.href = url;
-            a.download = 'specimenry_fossils_ai_context.txt';
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
-        } catch (e) {
-            console.error('File download failed', e);
+        var textarea = document.getElementById('ai-export-textarea');
+        if (textarea) {
+            textarea.value = text;
         }
 
-        // 2. Attempt to copy to clipboard for instant paste
-        if (navigator.clipboard) {
-            navigator.clipboard.writeText(text).then(function() {
-                window.app.showToast('📋 Copied AI/LLM Context (' + fossils.length + ' Specimens) & Downloaded Context File!', 'success', 3500);
-            }).catch(function(err) {
-                console.error('Copy failed', err);
-                window.app.showToast('Downloaded text file, but clipboard copy failed.', 'info', 3000);
-            });
-        } else {
-            window.app.showToast('Downloaded context file (clipboard not supported).', 'info', 3000);
+        var modal = document.getElementById('ai-export-modal');
+        if (modal) {
+            modal.showModal();
+        }
+    },
+
+    copyAIContextText: function() {
+        var textarea = document.getElementById('ai-export-textarea');
+        if (textarea) {
+            textarea.select();
+            textarea.setSelectionRange(0, 99999); // For mobile devices
+            
+            if (navigator.clipboard) {
+                navigator.clipboard.writeText(textarea.value).then(function() {
+                    window.app.showToast('📋 AI Context copied to clipboard!', 'success');
+                    var modal = document.getElementById('ai-export-modal');
+                    if (modal) modal.close();
+                }).catch(function(err) {
+                    console.error('Clipboard copy failed:', err);
+                    window.app.showToast('Copy failed, please copy manually.', 'warning');
+                });
+            } else {
+                try {
+                    document.execCommand('copy');
+                    window.app.showToast('📋 AI Context copied to clipboard!', 'success');
+                    var modal = document.getElementById('ai-export-modal');
+                    if (modal) modal.close();
+                } catch (err) {
+                    window.app.showToast('Copy failed, please copy manually.', 'warning');
+                }
+            }
+        }
+    },
+
+    downloadAIContextFile: function() {
+        var textarea = document.getElementById('ai-export-textarea');
+        if (textarea && textarea.value) {
+            try {
+                var blob = new Blob([textarea.value], { type: 'text/plain;charset=utf-8' });
+                var url = URL.createObjectURL(blob);
+                var a = document.createElement('a');
+                a.href = url;
+                a.download = 'specimenry_fossils_ai_context.txt';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                window.app.showToast('File downloaded successfully!', 'success');
+            } catch (err) {
+                console.error('File download failed:', err);
+                window.app.showToast('Download failed: ' + err.message, 'danger');
+            }
         }
     },
 
