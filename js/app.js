@@ -1219,6 +1219,7 @@ var lightboxFilteredList = []; // The current filtered+sorted fossil list, used 
 var isShowcaseActive = false;
 var showcaseList = [];
 var showcaseIndex = 0;
+var showcaseImageIndex = 0;
 var showcaseIntervalId = null;
 var showcasePlayActive = true;
 
@@ -1372,6 +1373,23 @@ document.addEventListener('keydown', function(e) {
         if (e.key === 'Escape') {
             window.app.closeZoomOverlay();
             e.stopPropagation();
+            return;
+        }
+        if (e.key === 'ArrowLeft') {
+            if (window.app.navigateZoomOverlay) {
+                window.app.navigateZoomOverlay(-1);
+                e.stopPropagation();
+                e.preventDefault();
+            }
+            return;
+        }
+        if (e.key === 'ArrowRight') {
+            if (window.app.navigateZoomOverlay) {
+                window.app.navigateZoomOverlay(1);
+                e.stopPropagation();
+                e.preventDefault();
+            }
+            return;
         }
         return;
     }
@@ -1751,7 +1769,7 @@ window.app = {
                 vid.src = f.images[lightboxIdx];
                 vid.play().catch(function(e) { console.log("Video auto play blocked: ", e); });
                 vid.onclick = function() {
-                    window.app.openZoomOverlay(vid.src);
+                    window.app.openZoomOverlay(vid.src, f.images, lightboxIdx);
                 };
             }
         } else {
@@ -1763,7 +1781,7 @@ window.app = {
             img.src = f.images[lightboxIdx];
             img.style.cursor = 'zoom-in';
             img.onclick = function() {
-                window.app.openZoomOverlay(img.src);
+                window.app.openZoomOverlay(img.src, f.images, lightboxIdx);
             };
         }
         img.classList.toggle('enhanced-photo', isAutoEnhanceActive);
@@ -1984,6 +2002,7 @@ window.app = {
                     return x.id !== fossilId && 
                            !x.isWishlist && 
                            !x.isSold && 
+                           !x.isCartItem && 
                            (x.geologicalPeriod || '').trim().toLowerCase() === period.toLowerCase();
                 });
             }
@@ -2155,11 +2174,14 @@ window.app = {
         }
     },
 
-    openZoomOverlay: function(src) {
+    openZoomOverlay: function(src, allImages, currentIndex) {
         var zoomOverlay = document.getElementById('zoom-overlay');
         var zoomImg = document.getElementById('zoom-overlay-img');
         var zoomVid = document.getElementById('zoom-overlay-video');
         if (zoomOverlay && zoomImg && zoomVid) {
+            window.app._zoomImages = allImages || [];
+            window.app._zoomCurrentIndex = currentIndex !== undefined ? currentIndex : 0;
+
             var isVid = window.app.isVideo(src);
             if (isVid) {
                 zoomImg.style.display = 'none';
@@ -2167,16 +2189,56 @@ window.app = {
                 zoomVid.src = src;
                 zoomVid.play().catch(function(e) { console.log(e); });
             } else {
-                zoomVid.pause();
+                if (zoomVid) zoomVid.pause();
                 zoomVid.style.display = 'none';
                 zoomImg.style.display = 'block';
                 zoomImg.src = src;
             }
+
+            var prevBtn = document.getElementById('zoom-overlay-prev');
+            var nextBtn = document.getElementById('zoom-overlay-next');
+            if (prevBtn && nextBtn) {
+                if (window.app._zoomImages.length > 1) {
+                    prevBtn.style.display = 'flex';
+                    nextBtn.style.display = 'flex';
+                } else {
+                    prevBtn.style.display = 'none';
+                    nextBtn.style.display = 'none';
+                }
+            }
+
             zoomOverlay.style.display = 'flex';
             // Trigger reflow for transition
             void zoomOverlay.offsetWidth;
             zoomOverlay.classList.add('active');
             document.body.style.overflow = 'hidden';
+        }
+    },
+
+    navigateZoomOverlay: function(dir) {
+        if (!window.app._zoomImages || window.app._zoomImages.length <= 1) return;
+        
+        var nextIdx = (window.app._zoomCurrentIndex + dir + window.app._zoomImages.length) % window.app._zoomImages.length;
+        window.app._zoomCurrentIndex = nextIdx;
+        
+        var nextSrc = window.app._zoomImages[nextIdx];
+        
+        var zoomImg = document.getElementById('zoom-overlay-img');
+        var zoomVid = document.getElementById('zoom-overlay-video');
+        
+        if (zoomImg && zoomVid) {
+            var isVid = window.app.isVideo(nextSrc);
+            if (isVid) {
+                zoomImg.style.display = 'none';
+                zoomVid.style.display = 'block';
+                zoomVid.src = nextSrc;
+                zoomVid.play().catch(function(e) { console.log(e); });
+            } else {
+                zoomVid.pause();
+                zoomVid.style.display = 'none';
+                zoomImg.style.display = 'block';
+                zoomImg.src = nextSrc;
+            }
         }
     },
 
@@ -2206,9 +2268,10 @@ window.app = {
         }
     },
 
-    enterShowcaseMode: function() {
-        if (!lightboxFilteredList || lightboxFilteredList.length === 0) {
-            window.app.showToast('No specimens in the current view to showcase.', 'warning');
+    enterShowcaseMode: function(customList) {
+        var listToUse = customList || lightboxFilteredList;
+        if (!listToUse || listToUse.length === 0) {
+            window.app.showToast('No specimens to showcase.', 'warning');
             return;
         }
         
@@ -2216,8 +2279,9 @@ window.app = {
         if (menu) menu.style.display = 'none';
 
         isShowcaseActive = true;
-        showcaseList = lightboxFilteredList.slice();
+        showcaseList = listToUse.slice();
         showcaseIndex = 0;
+        showcaseImageIndex = 0;
         showcasePlayActive = true;
 
         var overlay = document.getElementById('showcase-mode');
@@ -2240,7 +2304,7 @@ window.app = {
     exitShowcaseMode: function() {
         isShowcaseActive = false;
         if (showcaseIntervalId) {
-            clearInterval(showcaseIntervalId);
+            clearTimeout(showcaseIntervalId);
             showcaseIntervalId = null;
         }
         var overlay = document.getElementById('showcase-mode');
@@ -2271,31 +2335,7 @@ window.app = {
         var metaNotes = document.getElementById('showcase-meta-notes');
 
         // Populate Image & Video (with fallback)
-        var vid = document.getElementById('showcase-video');
-        var hasMedia = f.images && f.images.length > 0;
-        var mediaSrc = hasMedia ? f.images[0] : 'img/placeholder.png';
-        var isVid = hasMedia ? window.app.isVideo(mediaSrc) : false;
-
-        if (img && vid) {
-            img.style.opacity = '0';
-            vid.style.opacity = '0';
-            setTimeout(function() {
-                if (isVid) {
-                    img.style.display = 'none';
-                    vid.style.display = 'block';
-                    vid.src = mediaSrc;
-                    vid.play().catch(function(e) { console.log(e); });
-                    vid.style.opacity = '1';
-                } else {
-                    vid.pause();
-                    vid.style.display = 'none';
-                    img.style.display = 'block';
-                    img.src = mediaSrc;
-                    img.classList.toggle('enhanced-photo', isAutoEnhanceActive);
-                    img.style.opacity = '1';
-                }
-            }, 150);
-        }
+        this.renderShowcaseMedia(f);
 
         // Title & Category Badge
         if (title) title.textContent = f.specimen || 'Unknown Specimen';
@@ -2315,7 +2355,11 @@ window.app = {
 
         // Counter (Index)
         if (indexText) {
-            indexText.textContent = 'Specimen ' + (showcaseIndex + 1) + ' of ' + showcaseList.length;
+            var photoLabel = '';
+            if (f.images && f.images.length > 1) {
+                photoLabel = ' (Photo ' + (showcaseImageIndex + 1) + '/' + f.images.length + ')';
+            }
+            indexText.textContent = 'Specimen ' + (showcaseIndex + 1) + ' of ' + showcaseList.length + photoLabel;
         }
 
         // Geological Timeline
@@ -2373,14 +2417,114 @@ window.app = {
             metaCondition.textContent = condText;
         }
 
+        // Price / Value in Showcase
+        var priceWrapper = document.getElementById('showcase-meta-price-wrapper');
+        var priceVal = document.getElementById('showcase-meta-price');
+        if (priceWrapper && priceVal) {
+            if (f.price) {
+                priceVal.textContent = f.price + ' ' + (f.currency || 'USD');
+                priceWrapper.style.display = 'block';
+            } else {
+                priceWrapper.style.display = 'none';
+            }
+        }
+
         // Trigger Auto-Play progress bar
         window.app._runShowcaseProgressBar();
     },
 
+    getShowcaseSlideDuration: function() {
+        var f = showcaseList[showcaseIndex];
+        if (!f || !f.images || f.images.length === 0) return 9000;
+
+        var total = f.images.length;
+        if (total === 1) return 10000; // 10s for single-image specimen
+
+        if (total === 2) {
+            // 12s for Fossil (first), 6s for Life Reconstruction/Animal (second)
+            if (showcaseImageIndex === 0) return 12000;
+            if (showcaseImageIndex === 1) return 6000;
+        }
+
+        // Fallback for 3+ images: last one (the reconstruction/info) gets 6s, others get 10s
+        if (showcaseImageIndex === total - 1) return 6000;
+        return 10000;
+    },
+
+    renderShowcaseMedia: function(f) {
+        var img = document.getElementById('showcase-img');
+        var vid = document.getElementById('showcase-video');
+        
+        var hasMedia = f.images && f.images.length > 0;
+        var mediaSrc = hasMedia ? f.images[showcaseImageIndex] : 'img/placeholder.png';
+        var isVid = hasMedia ? window.app.isVideo(mediaSrc) : false;
+
+        if (img && vid) {
+            img.style.opacity = '0';
+            vid.style.opacity = '0';
+            setTimeout(function() {
+                if (isVid) {
+                    img.style.display = 'none';
+                    vid.style.display = 'block';
+                    vid.src = mediaSrc;
+                    vid.play().catch(function(e) { console.log(e); });
+                    vid.style.opacity = '1';
+                } else {
+                    vid.pause();
+                    vid.style.display = 'none';
+                    img.style.display = 'block';
+                    img.src = mediaSrc;
+                    img.classList.toggle('enhanced-photo', isAutoEnhanceActive);
+                    img.style.opacity = '1';
+                }
+            }, 150);
+        }
+    },
+
+    renderShowcaseMediaOnly: function() {
+        var f = showcaseList[showcaseIndex];
+        if (!f) return;
+        this.renderShowcaseMedia(f);
+
+        var indexText = document.getElementById('showcase-index-text');
+        if (indexText) {
+            var photoLabel = '';
+            if (f.images && f.images.length > 1) {
+                photoLabel = ' (Photo ' + (showcaseImageIndex + 1) + '/' + f.images.length + ')';
+            }
+            indexText.textContent = 'Specimen ' + (showcaseIndex + 1) + ' of ' + showcaseList.length + photoLabel;
+        }
+
+        window.app._runShowcaseProgressBar();
+    },
+
     showcaseNav: function(dir) {
-        if (!showcaseList || showcaseList.length <= 1) return;
-        showcaseIndex = (showcaseIndex + dir + showcaseList.length) % showcaseList.length;
-        window.app.renderShowcaseSpecimen();
+        if (!showcaseList || showcaseList.length === 0) return;
+        var f = showcaseList[showcaseIndex];
+        if (!f) return;
+
+        var images = f.images || [];
+        if (dir === 1) {
+            if (showcaseImageIndex + 1 < images.length) {
+                showcaseImageIndex++;
+                window.app.renderShowcaseMediaOnly();
+            } else {
+                showcaseIndex = (showcaseIndex + 1) % showcaseList.length;
+                showcaseImageIndex = 0;
+                window.app.renderShowcaseSpecimen();
+            }
+        } else if (dir === -1) {
+            if (showcaseImageIndex - 1 >= 0) {
+                showcaseImageIndex--;
+                window.app.renderShowcaseMediaOnly();
+            } else {
+                showcaseIndex = (showcaseIndex - 1 + showcaseList.length) % showcaseList.length;
+                var prevSpecimen = showcaseList[showcaseIndex];
+                var prevImages = (prevSpecimen && prevSpecimen.images) || [];
+                showcaseImageIndex = prevImages.length > 0 ? prevImages.length - 1 : 0;
+                window.app.renderShowcaseSpecimen();
+            }
+        }
     },
 
     toggleShowcasePlay: function() {
@@ -2395,7 +2539,7 @@ window.app = {
 
     _runShowcaseProgressBar: function() {
         if (showcaseIntervalId) {
-            clearInterval(showcaseIntervalId);
+            clearTimeout(showcaseIntervalId);
             showcaseIntervalId = null;
         }
 
@@ -2406,21 +2550,27 @@ window.app = {
         bar.style.transition = 'none';
         bar.style.width = '0%';
 
-        if (!showcasePlayActive || showcaseList.length <= 1) {
+        if (!showcaseList || showcaseList.length === 0) return;
+        var f = showcaseList[showcaseIndex];
+        var totalSlides = f && f.images ? f.images.length : 1;
+
+        if (!showcasePlayActive || (showcaseList.length <= 1 && totalSlides <= 1)) {
             return;
         }
 
         // Trigger reflow
         void bar.offsetWidth;
 
-        // Animate width to 100% over 6 seconds
-        bar.style.transition = 'width 6000ms linear';
+        var duration = window.app.getShowcaseSlideDuration();
+
+        // Animate width to 100% over the dynamic duration
+        bar.style.transition = 'width ' + duration + 'ms linear';
         bar.style.width = '100%';
 
-        // Set interval to navigate next after 6 seconds
-        showcaseIntervalId = setInterval(function() {
+        // Set timeout to navigate next
+        showcaseIntervalId = setTimeout(function() {
             window.app.showcaseNav(1);
-        }, 6000);
+        }, duration);
     },
 
     lightboxNav: function(dir) {
@@ -2999,7 +3149,7 @@ window.app = {
         CHRONO_PERIODS.forEach(function(pInfo) {
             // Find fossils matching this group
             var periodFossils = fossils.filter(function(f) {
-                return getPeriodGroup(f) === pInfo.id;
+                return !f.isCartItem && getPeriodGroup(f) === pInfo.id;
             });
 
             var count = periodFossils.length;
@@ -3110,6 +3260,7 @@ window.app = {
         var soldCount = 0;
 
         fossils.forEach(function(f) {
+            if (f.isCartItem) return;
             var cost = parseFloat(f.price) || 0;
             var costBase = window.app._convertCurrency(cost, f.currency || 'USD', activeBaseCurrency);
 
@@ -3209,7 +3360,7 @@ window.app = {
                             '</thead>' +
                             '<tbody>';
 
-        var sortedFossils = fossils.slice();
+        var sortedFossils = fossils.filter(function(f) { return !f.isCartItem; });
         if (fossils.length === 0) {
             html += '<tr><td colspan="7" style="text-align: center; color: var(--text-secondary); padding: 2rem;">No specimens in your collection to display in the ledger.</td></tr>';
         } else {
@@ -3311,7 +3462,7 @@ window.app = {
             return;
         }
 
-        var activeFossils = fossils.filter(function(f) { return !f.isWishlist && !f.isSold; });
+        var activeFossils = fossils.filter(function(f) { return !f.isWishlist && !f.isSold && !f.isCartItem; });
         var totalCost = 0;
         var totalEst = 0;
         
@@ -3507,7 +3658,7 @@ window.app = {
 
         // 1. Smart Filtering based on active collection
         var rankedFossils = (fossils || []).filter(function(f) {
-            if (f.isWishlist) return false;
+            if (f.isWishlist || f.isCartItem) return false;
 
             if (criteria === 'price') {
                 return f.price !== undefined && f.price !== null && !isNaN(parseFloat(f.price)) && parseFloat(f.price) > 0;
@@ -3940,7 +4091,7 @@ window.app = {
         var counts = {};
         for (var pName in GEOLOGICAL_HISTORY_DATA) {
             counts[pName] = fossils.filter(function(f) {
-                if (f.isWishlist) return false;
+                if (f.isWishlist || f.isCartItem) return false;
                 var fp = f.geologicalPeriod ? f.geologicalPeriod.trim().toLowerCase() : '';
                 return fp === pName.toLowerCase();
             }).length;
@@ -4042,7 +4193,7 @@ window.app = {
         
         // Show specimens from active collection representing this period
         var periodFossils = fossils.filter(function(f) {
-            if (f.isWishlist) return false;
+            if (f.isWishlist || f.isCartItem) return false;
             var fp = f.geologicalPeriod ? f.geologicalPeriod.trim().toLowerCase() : '';
             return fp === selectedPeriodName.toLowerCase();
         });
@@ -4076,8 +4227,8 @@ window.app = {
         var container = document.getElementById('treemap-container');
         if (!container) return;
         
-        var ownedFossils = fossils.filter(function(f) { return !f.isWishlist && !f.isSold; });
-        var wishlistedFossils = fossils.filter(function(f) { return f.isWishlist && !f.isSold; });
+        var ownedFossils = fossils.filter(function(f) { return !f.isWishlist && !f.isSold && !f.isCartItem; });
+        var wishlistedFossils = fossils.filter(function(f) { return f.isWishlist && !f.isSold && !f.isCartItem; });
         
         var collectedList = [];
         var wishlistedList = [];
@@ -4993,6 +5144,9 @@ window.app = {
         if (document.getElementById('btn-sale')) {
             document.getElementById('btn-sale').classList.toggle('active', view === 'sale');
         }
+        if (document.getElementById('btn-carts')) {
+            document.getElementById('btn-carts').classList.toggle('active', view === 'carts');
+        }
         window.app.renderFossils();
     },
 
@@ -5131,6 +5285,45 @@ window.app = {
             
             imgContainer.appendChild(removeBtn);
             
+            // Left (move back) button
+            if (index > 0) {
+                var leftBtn = document.createElement('button');
+                leftBtn.type = 'button';
+                leftBtn.innerHTML = '◀';
+                leftBtn.title = 'Move left';
+                leftBtn.style.cssText = 'position:absolute; bottom:4px; left:4px; background:rgba(0,0,0,0.7); color:#fff; border:none; width:18px; height:18px; border-radius:4px; z-index:10; cursor:pointer; font-size:8px; display:flex; align-items:center; justify-content:center; opacity:0.8; transition:opacity 0.2s, transform 0.1s;';
+                leftBtn.onmouseover = function() { this.style.opacity = '1'; this.style.transform = 'scale(1.1)'; };
+                leftBtn.onmouseout = function() { this.style.opacity = '0.8'; this.style.transform = 'scale(1)'; };
+                leftBtn.onclick = function(e) {
+                    e.stopPropagation();
+                    var temp = currentImages[index];
+                    currentImages[index] = currentImages[index - 1];
+                    currentImages[index - 1] = temp;
+                    window.app.renderImagePreview();
+                };
+                imgContainer.appendChild(leftBtn);
+            }
+
+            // Right (move forward) button
+            if (index < currentImages.length - 1) {
+                var rightBtn = document.createElement('button');
+                rightBtn.type = 'button';
+                rightBtn.innerHTML = '▶';
+                rightBtn.title = 'Move right';
+                var leftPos = index > 0 ? '25px' : '4px';
+                rightBtn.style.cssText = 'position:absolute; bottom:4px; left:' + leftPos + '; background:rgba(0,0,0,0.7); color:#fff; border:none; width:18px; height:18px; border-radius:4px; z-index:10; cursor:pointer; font-size:8px; display:flex; align-items:center; justify-content:center; opacity:0.8; transition:opacity 0.2s, transform 0.1s;';
+                rightBtn.onmouseover = function() { this.style.opacity = '1'; this.style.transform = 'scale(1.1)'; };
+                rightBtn.onmouseout = function() { this.style.opacity = '0.8'; this.style.transform = 'scale(1)'; };
+                rightBtn.onclick = function(e) {
+                    e.stopPropagation();
+                    var temp = currentImages[index];
+                    currentImages[index] = currentImages[index + 1];
+                    currentImages[index + 1] = temp;
+                    window.app.renderImagePreview();
+                };
+                imgContainer.appendChild(rightBtn);
+            }
+
             if (index > 0) {
                 var coverBtn = document.createElement('button');
                 coverBtn.type = 'button';
@@ -5335,7 +5528,7 @@ window.app = {
         if (event.target.checked) { selectedFossils.add(id); }
         else { selectedFossils.delete(id); }
         
-        var cardEl = document.querySelector('.fossil-card[data-id="' + id + '"]');
+        var cardEl = document.querySelector('.fossil-card[data-id="' + id + '"], .cart-card[data-id="' + id + '"]');
         if (cardEl) {
             if (event.target.checked) cardEl.classList.add('picker-selected');
             else cardEl.classList.remove('picker-selected');
@@ -5527,6 +5720,7 @@ window.app = {
         var standardTypes = FOSSIL_TYPES;
         var existingTypes = [];
         fossils.forEach(function(f) {
+            if (f.isCartItem) return;
             if (f.fossilType && existingTypes.indexOf(f.fossilType) === -1) {
                 existingTypes.push(f.fossilType);
             }
@@ -5918,7 +6112,7 @@ window.app = {
     },
 
     batchFetchEtymologies: async function() {
-        var missing = fossils.filter(function(f) { return !f.etymology; });
+        var missing = fossils.filter(function(f) { return !f.etymology && !f.isCartItem; });
         if (missing.length === 0) { window.app.showToast('All specimens already have etymologies!', 'info'); return; }
         
         if (!confirm('Attempt to fetch etymologies for ' + missing.length + ' specimens from Wikipedia? This may take a minute.')) return;
@@ -5950,6 +6144,7 @@ window.app = {
 
     batchFetchCoordinates: async function() {
         var missing = fossils.filter(function(f) { 
+            if (f.isCartItem) return false;
             var hasLocation = (f.country && f.country.trim() !== '') || 
                               (f.location && f.location.trim() !== '') ||
                               (f.formation && f.formation.trim() !== '');
@@ -5959,9 +6154,9 @@ window.app = {
         });
 
         var hasLocationFossils = fossils.filter(function(f) {
-            return (f.country && f.country.trim() !== '') || 
+            return !f.isCartItem && ((f.country && f.country.trim() !== '') || 
                    (f.location && f.location.trim() !== '') ||
-                   (f.formation && f.formation.trim() !== '');
+                   (f.formation && f.formation.trim() !== ''));
         });
 
         if (hasLocationFossils.length === 0) {
@@ -6488,9 +6683,28 @@ window.app = {
             fossils = allFossils;
             fossilsCacheLoaded = true;
             
+            var cartsContainer = document.getElementById('carts-container');
+            var grid = document.getElementById('fossil-grid');
+            var bannerEl = document.getElementById('view-info-banner');
+            var statsContainer = document.getElementById('stats-summary');
+            
+            if (currentView === 'carts') {
+                if (cartsContainer) cartsContainer.style.display = 'flex';
+                if (grid) grid.style.display = 'none';
+                if (bannerEl) bannerEl.style.display = 'none';
+                if (statsContainer) statsContainer.style.display = 'none';
+                window.app.hideNewVisualContainers('none');
+                window.app.renderCarts();
+                return;
+            } else {
+                if (cartsContainer) cartsContainer.style.display = 'none';
+                if (grid) grid.style.display = '';
+            }
+            
             // --- UPDATE DROPDOWN OPTIONS WITH COUNTS ---
             // Tally all specimens in active collection view (owned, sold, or wishlist)
             var activeCollectionFossils = fossils.filter(function(f) { 
+                if (f.isCartItem) return false;
                 if (currentView === 'sold') return !!f.isSold;
                 if (currentView === 'true') return !!f.isWishlist && !f.isSold;
                 if (currentView === 'sale') return !f.isWishlist && !f.isSold && !!f.isForSale;
@@ -6563,6 +6777,7 @@ window.app = {
 
             // --- FILTER ---
             var filtered = fossils.filter(function(f) {
+                if (f.isCartItem) return false;
                 var s = f.specimen ? f.specimen.toLowerCase() : '';
                 var a = f.anatomy  ? f.anatomy.toLowerCase()  : '';
                 var n = f.notes    ? f.notes.toLowerCase()    : '';
@@ -7828,19 +8043,20 @@ window.app = {
     },
 
     copyLLMContext: function() {
-        if (!fossils || fossils.length === 0) {
+        var exportable = fossils.filter(function(f) { return !f.isCartItem; });
+        if (exportable.length === 0) {
             window.app.showToast('No specimens in database to copy!', 'warning');
             return;
         }
 
         var text = '# Specimenry Personal Fossil Collection Database\n' +
                    'Exported on: ' + new Date().toLocaleDateString() + ' ' + new Date().toLocaleTimeString() + '\n' +
-                   'Total Specimens: ' + fossils.length + '\n\n' +
+                   'Total Specimens: ' + exportable.length + '\n\n' +
                    'This file contains the full curatorial context of all fossils in the user\'s private collection database. ' +
                    'Use this context to analyze, summarize, estimate scientific values, or answer general paleontological questions based on their specimens.\n\n' +
                    '==================================================\n\n';
 
-        fossils.forEach(function(f, idx) {
+        exportable.forEach(function(f, idx) {
             text += '## Specimen #' + (idx + 1) + ': ' + (f.specimen || 'Unnamed Specimen') + ' (' + (f.id || 'N/A') + ')\n';
             text += '- **Catalog ID**: ' + (f.id || 'N/A') + '\n';
             text += '- **Category**: ' + (f.category || 'N/A') + '\n';
@@ -8033,6 +8249,821 @@ window.app = {
                 }
             }
         }
+    },
+
+    // --- Draft Carts & Comparison Support ---
+    getCarts: function() {
+        var data = localStorage.getItem('fossil_carts');
+        if (!data) {
+            var defaultCarts = [{ id: 'cart_default', name: 'Main Comparison Cart' }];
+            localStorage.setItem('fossil_carts', JSON.stringify(defaultCarts));
+            return defaultCarts;
+        }
+        try {
+            return JSON.parse(data);
+        } catch (e) {
+            var defaultCarts = [{ id: 'cart_default', name: 'Main Comparison Cart' }];
+            localStorage.setItem('fossil_carts', JSON.stringify(defaultCarts));
+            return defaultCarts;
+        }
+    },
+
+    getActiveCartId: function() {
+        var id = localStorage.getItem('fossil_active_cart_id');
+        if (!id) {
+            var carts = this.getCarts();
+            var defaultId = carts[0].id;
+            localStorage.setItem('fossil_active_cart_id', defaultId);
+            return defaultId;
+        }
+        return id;
+    },
+
+    createCart: function() {
+        var name = prompt("Enter a name for the new draft cart:");
+        if (!name) return;
+        name = name.trim();
+        if (name.length === 0) return;
+
+        var carts = this.getCarts();
+        var id = 'cart_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+        carts.push({ id: id, name: name });
+        localStorage.setItem('fossil_carts', JSON.stringify(carts));
+        localStorage.setItem('fossil_active_cart_id', id);
+        
+        this.showToast('Cart "' + name + '" created.', 'success');
+        this.renderFossils();
+    },
+
+    renameCart: function() {
+        var carts = this.getCarts();
+        var activeId = this.getActiveCartId();
+        var cart = carts.find(function(c) { return c.id === activeId; });
+        if (!cart) return;
+
+        var name = prompt("Rename cart:", cart.name);
+        if (!name) return;
+        name = name.trim();
+        if (name.length === 0) return;
+
+        cart.name = name;
+        localStorage.setItem('fossil_carts', JSON.stringify(carts));
+        this.showToast('Cart renamed to "' + name + '".', 'success');
+        this.renderFossils();
+    },
+
+    deleteCart: function() {
+        var carts = this.getCarts();
+        if (carts.length <= 1) {
+            this.showToast('Cannot delete the last remaining cart. Create a new one first.', 'warning');
+            return;
+        }
+        var activeId = this.getActiveCartId();
+        var cart = carts.find(function(c) { return c.id === activeId; });
+        if (!cart) return;
+
+        if (!confirm('Are you sure you want to delete the cart "' + cart.name + '" and all its draft specimens?')) {
+            return;
+        }
+
+        var self = this;
+        getAllFossils().then(function(allFossils) {
+            var itemsToDelete = allFossils.filter(function(f) { return f.isCartItem && f.cartId === activeId; });
+            var deletePromises = itemsToDelete.map(function(f) { return deleteFossil(f.id); });
+            return Promise.all(deletePromises);
+        }).then(function() {
+            fossilsCacheLoaded = false;
+            
+            var newCarts = carts.filter(function(c) { return c.id !== activeId; });
+            localStorage.setItem('fossil_carts', JSON.stringify(newCarts));
+            localStorage.setItem('fossil_active_cart_id', newCarts[0].id);
+
+            self.showToast('Cart "' + cart.name + '" and its items deleted.', 'success');
+            self.renderFossils();
+        }).catch(function(err) {
+            console.error('Failed to delete cart items:', err);
+            self.showToast('Error deleting cart items.', 'danger');
+        });
+    },
+
+    switchCart: function(id) {
+        localStorage.setItem('fossil_active_cart_id', id);
+        this.renderFossils();
+    },
+
+    renderCarts: function() {
+        var carts = this.getCarts();
+        var activeId = this.getActiveCartId();
+        
+        var html = '';
+        
+        // Control Bar
+        html += '<div class="carts-control-bar">';
+        html += '  <div class="carts-selector-group">';
+        html += '    <label for="cart-select" style="font-size:0.8rem; font-weight:600; color:var(--text-secondary);">Active Cart:</label>';
+        html += '    <select id="cart-select" onchange="app.switchCart(this.value)">';
+        carts.forEach(function(c) {
+            html += '      <option value="' + escapeHtml(c.id) + '"' + (c.id === activeId ? ' selected' : '') + '>' + escapeHtml(c.name) + '</option>';
+        });
+        html += '    </select>';
+        html += '  </div>';
+        html += '  <div class="carts-actions-group">';
+        html += '    <button class="btn-secondary" onclick="app.createCart()">➕ Create Cart</button>';
+        html += '    <button class="btn-secondary" onclick="app.renameCart()">✏️ Rename</button>';
+        html += '    <button class="btn-secondary btn-danger" onclick="app.deleteCart()" style="color: black;">🗑️ Delete</button>';
+        html += '  </div>';
+        html += '</div>';
+
+        var activeCartItems = fossils.filter(function(f) {
+            return f.isCartItem && f.cartId === activeId;
+        });
+
+        var sortQ = document.getElementById('filter-sort') ? document.getElementById('filter-sort').value : 'newest';
+
+        var toSEK = function(f) {
+            if (!f.price) return 0;
+            var curr = f.currency || 'USD';
+            if (curr === 'SEK') return f.price;
+            if (exchangeRates && exchangeRates[curr]) {
+                return f.price / exchangeRates[curr];
+            }
+            if (curr === 'USD') return f.price * 10.50;
+            if (curr === 'EUR') return f.price * 11.50;
+            return f.price;
+        };
+
+        activeCartItems.sort(function(a, b) {
+            switch (sortQ) {
+                case 'name-asc':   return (a.specimen || '').localeCompare(b.specimen || '');
+                case 'name-desc':  return (b.specimen || '').localeCompare(a.specimen || '');
+                case 'age-asc':    return (a.ageMa || 0) - (b.ageMa || 0);
+                case 'age-desc':   return (b.ageMa || 0) - (a.ageMa || 0);
+                case 'price-asc':  return toSEK(a) - toSEK(b);
+                case 'price-desc': return toSEK(b) - toSEK(a);
+                case 'oldest':     return (a.createdAt || 0) - (b.createdAt || 0);
+                case 'newest':
+                default:           return (b.createdAt || 0) - (a.createdAt || 0);
+            }
+        });
+
+        var pricesByCurrency = {};
+        var count = 0;
+        activeCartItems.forEach(function(f) {
+            var priceVal = parseFloat(f.price) || 0;
+            if (priceVal > 0) {
+                var curr = (f.currency || 'USD').toUpperCase();
+                pricesByCurrency[curr] = (pricesByCurrency[curr] || 0) + priceVal;
+            }
+            count++;
+        });
+        
+        var breakdownParts = [];
+        var currencies = Object.keys(pricesByCurrency).sort();
+        currencies.forEach(function(curr) {
+            breakdownParts.push(Math.round(pricesByCurrency[curr]).toLocaleString() + ' ' + curr);
+        });
+        
+        var breakdownText = breakdownParts.length > 0 ? breakdownParts.join(' + ') : '—';
+        
+        var totalSEK = 0;
+        for (var curr in pricesByCurrency) {
+            var val = pricesByCurrency[curr];
+            if (curr === 'SEK') {
+                totalSEK += val;
+            } else if (exchangeRates && exchangeRates[curr]) {
+                totalSEK += val / exchangeRates[curr];
+            } else {
+                if (curr === 'USD') totalSEK += val * 10.50;
+                else if (curr === 'EUR') totalSEK += val * 11.50;
+                else totalSEK += val;
+            }
+        }
+        
+        var totalHtml = '';
+        if (breakdownParts.length === 0) {
+            totalHtml = 'Total Asking Price: <strong>—</strong>';
+        } else if (currencies.length === 1 && currencies[0] === 'SEK') {
+            totalHtml = 'Total Asking Price: <strong>' + breakdownText + '</strong>';
+        } else {
+            var normalizedText = ' (~' + Math.round(totalSEK).toLocaleString() + ' SEK)';
+            totalHtml = 'Total Asking Price: ' + breakdownText + ' <strong>' + normalizedText.trim() + '</strong>';
+        }
+
+        var activeCart = carts.find(function(c) { return c.id === activeId; }) || { name: 'Main Comparison Cart' };
+        
+        html += '<div class="cart-summary-card">';
+        html += '  <div class="cart-summary-left">';
+        html += '    <h2>' + escapeHtml(activeCart.name) + '</h2>';
+        html += '    <p>' + count + ' ' + (count === 1 ? 'draft specimen' : 'draft specimens') + '</p>';
+        html += '  </div>';
+        html += '  <div class="cart-summary-right">';
+        html += '    <div class="cart-summary-total">' + totalHtml + '</div>';
+        html += '    <button class="btn-primary" onclick="app.openCartItemModal()"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg> Add Draft Item</button>';
+        if (count >= 1) {
+            html += '    <button class="btn-secondary" onclick="app.startCartShowcase()"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg> Play Slideshow</button>';
+        }
+        if (count >= 2) {
+            html += '    <button class="btn-secondary" onclick="app.openCartComparison()"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="9" y1="3" x2="9" y2="21"></line><line x1="15" y1="3" x2="15" y2="21"></line></svg> Compare Side-by-Side</button>';
+        }
+        html += '  </div>';
+        html += '</div>';
+
+        html += '<div class="cart-grid">';
+        if (activeCartItems.length === 0) {
+            html += '  <div style="grid-column: 1 / -1; text-align: center; padding: 3rem; background: var(--bg-surface); border: 1px dashed var(--border-color); border-radius: var(--radius-md); color: var(--text-secondary);">';
+            html += '    <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round" style="opacity: 0.3; margin-bottom: 1rem;"><circle cx="9" cy="21" r="1"></circle><circle cx="20" cy="21" r="1"></circle><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"></path></svg>';
+            html += '    <p style="margin: 0; font-size: 0.95rem; font-weight: 500;">This cart is empty.</p>';
+            html += '    <p style="margin: 0.25rem 0 0; font-size: 0.8rem; opacity: 0.7;">Click "Add Draft Item" to add specimens for comparison.</p>';
+            html += '  </div>';
+        } else {
+            activeCartItems.forEach(function(f) {
+                var thumbUrl = (f.images && f.images.length > 0) ? f.images[0] : null;
+                var imgHtml = '';
+                if (thumbUrl) {
+                    var isVid = window.app.isVideo(thumbUrl);
+                    if (isVid) {
+                        imgHtml = '<video id="cart-card-img-' + f.id + '" src="' + escapeHtml(thumbUrl) + '" autoplay muted loop playsinline></video>';
+                    } else {
+                        imgHtml = '<img id="cart-card-img-' + f.id + '" src="' + escapeHtml(thumbUrl) + '" alt="' + escapeHtml(f.specimen) + '">';
+                    }
+                    if (f.images.length > 1) {
+                        imgHtml += '<button type="button" class="carousel-btn prev" onclick="event.stopPropagation(); window.app.changeCartImage(\'' + f.id + '\', -1)">&#10094;</button>' +
+                                   '<button type="button" class="carousel-btn next" onclick="event.stopPropagation(); window.app.changeCartImage(\'' + f.id + '\', 1)">&#10095;</button>' +
+                                   '<div class="photo-counter" id="counter-' + f.id + '">1 / ' + f.images.length + '</div>' +
+                                   '<div class="carousel-dots" id="dots-' + f.id + '">' +
+                                        f.images.map(function(_, i) { return '<span class="dot ' + (i === 0 ? 'active' : '') + '"></span>'; }).join('') +
+                                   '</div>';
+                    }
+                } else {
+                    imgHtml = '<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>';
+                }
+                
+                var priceStr = f.price ? f.price + ' ' + (f.currency || 'USD') : 'No Price';
+                var sizeStr = f.size ? f.size + ' ' + (f.sizeUnit || 'cm') : '';
+                
+                var containerClick = '';
+                var containerCursor = 'default';
+                if (thumbUrl) {
+                    containerClick = 'event.stopPropagation(); window.app.zoomCartImage(\'' + f.id + '\')';
+                    containerCursor = 'zoom-in';
+                } else {
+                    containerClick = 'window.app.openCartItemModal(\'' + f.id + '\')';
+                    containerCursor = 'pointer';
+                }
+
+                var isSelected = selectedFossils.has(f.id);
+                var cardClass = 'cart-card' + (isSelected ? ' picker-selected' : '');
+
+                html += '  <div class="' + cardClass + '" data-id="' + f.id + '">';
+                html += '    <div class="cart-card-img-container" data-current-index="0" onclick="' + containerClick + '" style="cursor: ' + containerCursor + '; position: relative;">';
+                html += '      <div class="checkbox-container" onclick="event.stopPropagation();" style="top: 8px; left: 8px;">';
+                html += '        <input type="checkbox" aria-label="Select ' + escapeHtml(f.specimen) + '" onchange="app.toggleSelectFossil(event, \'' + f.id + '\')" ' + (isSelected ? 'checked' : '') + '>';
+                html += '      </div>';
+                html += '      ' + imgHtml;
+                html += '    </div>';
+                html += '    <div class="cart-card-body">';
+                html += '      <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 0.5rem;">';
+                html += '        <h3 class="cart-card-title" onclick="app.openCartItemModal(\'' + f.id + '\')" style="cursor:pointer; margin:0; flex-grow: 1;">' + escapeHtml(f.specimen) + '</h3>';
+                html += '        <button onclick="app.openCartItemModal(\'' + f.id + '\')" title="Edit Draft Specimen" style="background: none; border: none; color: var(--text-secondary); cursor: pointer; padding: 2px 4px; display: inline-flex; align-items: center; transition: color 0.15s ease;" onmouseover="this.style.color=\'var(--accent)\'" onmouseout="this.style.color=\'var(--text-secondary)\'">';
+                html += '          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>';
+                html += '        </button>';
+                html += '      </div>';
+                html += '      <p class="cart-card-notes">' + escapeHtml(f.notes || 'No curator notes logged.') + '</p>';
+                html += '      <div class="cart-card-pills">';
+                if (f.price) {
+                    html += '        <span class="cart-card-pill price">' + escapeHtml(priceStr) + '</span>';
+                }
+                if (sizeStr) {
+                    html += '        <span class="cart-card-pill size">' + escapeHtml(sizeStr) + '</span>';
+                }
+                if (f.sourceUrl) {
+                    html += '        <a href="' + escapeHtml(f.sourceUrl) + '" target="_blank" class="cart-card-pill link" rel="noopener noreferrer">↗ View Source</a>';
+                }
+                html += '      </div>';
+                html += '    </div>';
+                html += '    <div class="cart-card-actions">';
+                html += '      <button class="btn-cart-promote" onclick="app.promoteCartItemToWishlist(\'' + f.id + '\')" title="Promote to Wishlist">⭐ Wishlist</button>';
+                html += '      <button class="btn-cart-promote btn-cart-acquire" onclick="app.promoteCartItemToCollection(\'' + f.id + '\')" title="Promote to Collection">🚀 Acquire</button>';
+                html += '      <button class="btn-cart-promote" onclick="app.duplicateCartItem(\'' + f.id + '\')" title="Duplicate Specimen" style="background: var(--bg-surface); border: 1px solid var(--border-color); color: var(--text-secondary);">👯 Duplicate</button>';
+                html += '      <button class="btn-cart-delete" onclick="app.deleteCartItem(\'' + f.id + '\')" title="Delete from Cart" style="grid-column: auto;">🗑️ Remove</button>';
+                html += '    </div>';
+                html += '  </div>';
+            });
+        }
+        html += '</div>';
+        
+        document.getElementById('carts-container').innerHTML = html;
+    },
+
+    openCartItemModal: function(id) {
+        var modal = document.getElementById('cart-item-modal');
+        var form = document.getElementById('cart-item-form');
+        if (!modal || !form) return;
+
+        form.reset();
+        document.getElementById('cart-item-id').value = id || '';
+        
+        var urlInput = document.getElementById('cart-f-photo-url-input');
+        if (urlInput) urlInput.value = '';
+
+        window.cartCurrentImages = [];
+
+        var titleEl = document.getElementById('cart-item-modal-title');
+
+        if (id) {
+            titleEl.innerText = 'Edit Draft Specimen';
+            var item = fossils.find(function(f) { return f.id === id; });
+            if (item) {
+                document.getElementById('cart-f-specimen').value = item.specimen || '';
+                document.getElementById('cart-f-price').value = item.price !== undefined && item.price !== null ? item.price : '';
+                document.getElementById('cart-f-currency').value = item.currency || 'USD';
+                document.getElementById('cart-f-size').value = item.size !== undefined && item.size !== null ? item.size : '';
+                document.getElementById('cart-f-size-unit').value = item.sizeUnit || 'cm';
+                document.getElementById('cart-f-link').value = item.sourceUrl || '';
+                document.getElementById('cart-f-notes').value = item.notes || '';
+                
+                window.cartCurrentImages = item.images ? JSON.parse(JSON.stringify(item.images)) : [];
+            }
+        } else {
+            titleEl.innerText = 'Add Draft Specimen';
+        }
+
+        this.renderCartImagePreview();
+        modal.showModal();
+    },
+
+    saveCartItem: function(event) {
+        event.preventDefault();
+        var id = document.getElementById('cart-item-id').value;
+        var name = document.getElementById('cart-f-specimen').value.trim();
+        if (!name) {
+            alert('Please enter a specimen name.');
+            return;
+        }
+
+        var priceVal = document.getElementById('cart-f-price').value;
+        var price = priceVal !== '' ? parseFloat(priceVal) : null;
+        var currency = document.getElementById('cart-f-currency').value;
+        var sizeVal = document.getElementById('cart-f-size').value;
+        var size = sizeVal !== '' ? parseFloat(sizeVal) : null;
+        var sizeUnit = document.getElementById('cart-f-size-unit').value;
+        var sourceUrl = document.getElementById('cart-f-link').value.trim();
+        var notes = document.getElementById('cart-f-notes').value.trim();
+        
+        var images = window.cartCurrentImages || [];
+
+        var activeId = this.getActiveCartId();
+        var self = this;
+
+        if (id) {
+            var item = fossils.find(function(f) { return f.id === id; });
+            if (item) {
+                item.specimen = name;
+                item.price = price;
+                item.currency = currency;
+                item.size = size;
+                item.sizeUnit = sizeUnit;
+                item.sourceUrl = sourceUrl;
+                item.notes = notes;
+                item.images = images;
+                
+                updateFossil(item).then(function() {
+                    fossilsCacheLoaded = false;
+                    self.showToast('Draft specimen updated.', 'success');
+                    document.getElementById('cart-item-modal').close();
+                    self.renderFossils();
+                }).catch(function(err) {
+                    console.error('Failed to update draft specimen:', err);
+                    self.showToast('Failed to update draft.', 'danger');
+                });
+            }
+        } else {
+            var newItem = {
+                id: generateId(),
+                specimen: name,
+                price: price,
+                currency: currency,
+                size: size,
+                sizeUnit: sizeUnit,
+                sourceUrl: sourceUrl,
+                notes: notes,
+                images: images,
+                isCartItem: true,
+                cartId: activeId,
+                createdAt: Date.now()
+            };
+            
+            addFossil(newItem).then(function() {
+                fossilsCacheLoaded = false;
+                self.showToast('Draft specimen added to cart.', 'success');
+                document.getElementById('cart-item-modal').close();
+                self.renderFossils();
+            }).catch(function(err) {
+                console.error('Failed to add draft specimen:', err);
+                self.showToast('Failed to save draft.', 'danger');
+            });
+        }
+    },
+
+    deleteCartItem: function(id) {
+        if (!confirm('Are you sure you want to remove this draft specimen from the cart?')) {
+            return;
+        }
+        var self = this;
+        deleteFossil(id).then(function() {
+            fossilsCacheLoaded = false;
+            self.showToast('Draft specimen removed.', 'success');
+            self.renderFossils();
+        }).catch(function(err) {
+            console.error('Failed to delete draft specimen:', err);
+            self.showToast('Error removing specimen.', 'danger');
+        });
+    },
+
+    handleCartImageUpload: function(event, index) {
+        var file = event.target.files[0];
+        if (!file) return;
+
+        var self = this;
+        var reader = new FileReader();
+        reader.onload = function(e) {
+            var dataUrl = e.target.result;
+            downscaleImage(dataUrl, 1200, 0.85).then(function(optimized) {
+                var suffix = index === 1 ? '-2' : '';
+                document.getElementById('cart-f-photo-base64' + suffix).value = optimized;
+                document.getElementById('cart-photo-preview' + suffix).src = optimized;
+                document.getElementById('cart-photo-preview-container' + suffix).style.display = 'flex';
+                document.getElementById('cart-f-photo-url' + suffix).value = '';
+            }).catch(function(err) {
+                console.error('Image optimization failed:', err);
+                var suffix = index === 1 ? '-2' : '';
+                document.getElementById('cart-f-photo-base64' + suffix).value = dataUrl;
+                document.getElementById('cart-photo-preview' + suffix).src = dataUrl;
+                document.getElementById('cart-photo-preview-container' + suffix).style.display = 'flex';
+                document.getElementById('cart-f-photo-url' + suffix).value = '';
+            });
+        };
+        reader.readAsDataURL(file);
+    },
+
+    clearCartPhotoPreview: function(index) {
+        var suffix = index === 1 ? '-2' : '';
+        document.getElementById('cart-f-photo-file' + suffix).value = '';
+        document.getElementById('cart-f-photo-base64' + suffix).value = '';
+        document.getElementById('cart-f-photo-url' + suffix).value = '';
+        document.getElementById('cart-photo-preview' + suffix).src = '';
+        document.getElementById('cart-photo-preview-container' + suffix).style.display = 'none';
+    },
+
+    promoteCartItemToWishlist: function(id) {
+        var self = this;
+        var item = fossils.find(function(f) { return f.id === id; });
+        if (!item) return;
+
+        var nextRank = 1;
+        var wlFossils = fossils.filter(function(f) { return f.isWishlist && !f.isSold; });
+        if (wlFossils.length > 0) {
+            nextRank = Math.max.apply(null, wlFossils.map(function(f) { return f.wishlistRank || 0; })) + 1;
+        }
+
+        item.isWishlist = true;
+        item.wishlistRank = nextRank;
+        delete item.isCartItem;
+        delete item.cartId;
+
+        updateFossil(item).then(function() {
+            fossilsCacheLoaded = false;
+            self.showToast('Specimen promoted to Wishlist!', 'success');
+            self.setView('true');
+        }).catch(function(err) {
+            console.error('Failed to promote specimen to wishlist:', err);
+            self.showToast('Failed to promote specimen.', 'danger');
+        });
+    },
+
+    promoteCartItemToCollection: function(id) {
+        var self = this;
+        var item = fossils.find(function(f) { return f.id === id; });
+        if (!item) return;
+
+        item.isWishlist = false;
+        item.isSold = false;
+        delete item.isCartItem;
+        delete item.cartId;
+
+        updateFossil(item).then(function() {
+            fossilsCacheLoaded = false;
+            self.showToast('Specimen acquired! Please complete curatorial details.', 'success');
+            self.setView('false');
+            self.openModal(id);
+        }).catch(function(err) {
+            console.error('Failed to promote specimen to collection:', err);
+            self.showToast('Failed to acquire specimen.', 'danger');
+        });
+    },
+
+    openCartComparison: function() {
+        var activeId = this.getActiveCartId();
+        var activeCartItems = fossils.filter(function(f) {
+            return f.isCartItem && f.cartId === activeId;
+        });
+        
+        var selectedItems = activeCartItems.filter(function(f) {
+            return selectedFossils.has(f.id);
+        });
+        
+        var listToCompare = selectedItems.length >= 2 ? selectedItems : activeCartItems;
+        
+        if (listToCompare.length < 2) {
+            this.showToast('Add or select at least 2 specimens to compare.', 'warning');
+            return;
+        }
+        
+        this.openCompareMode(listToCompare);
+    },
+
+    startCartShowcase: function() {
+        var activeId = this.getActiveCartId();
+        var activeCartItems = fossils.filter(function(f) {
+            return f.isCartItem && f.cartId === activeId;
+        });
+        
+        var sortQ = document.getElementById('filter-sort') ? document.getElementById('filter-sort').value : 'newest';
+        
+        var toSEK = function(f) {
+            if (!f.price) return 0;
+            var curr = f.currency || 'USD';
+            if (curr === 'SEK') return f.price;
+            if (exchangeRates && exchangeRates[curr]) {
+                return f.price / exchangeRates[curr];
+            }
+            if (curr === 'USD') return f.price * 10.50;
+            if (curr === 'EUR') return f.price * 11.50;
+            return f.price;
+        };
+
+        activeCartItems.sort(function(a, b) {
+            switch (sortQ) {
+                case 'name-asc':   return (a.specimen || '').localeCompare(b.specimen || '');
+                case 'name-desc':  return (b.specimen || '').localeCompare(a.specimen || '');
+                case 'age-asc':    return (a.ageMa || 0) - (b.ageMa || 0);
+                case 'age-desc':   return (b.ageMa || 0) - (a.ageMa || 0);
+                case 'price-asc':  return toSEK(a) - toSEK(b);
+                case 'price-desc': return toSEK(b) - toSEK(a);
+                case 'oldest':     return (a.createdAt || 0) - (b.createdAt || 0);
+                case 'newest':
+                default:           return (b.createdAt || 0) - (a.createdAt || 0);
+            }
+        });
+        
+        var selectedItems = activeCartItems.filter(function(f) {
+            return selectedFossils.has(f.id);
+        });
+        
+        var listToShow = selectedItems.length >= 1 ? selectedItems : activeCartItems;
+        
+        if (listToShow.length === 0) {
+            this.showToast('No specimens in this cart to showcase.', 'warning');
+            return;
+        }
+        
+        this.enterShowcaseMode(listToShow);
+    },
+
+    changeCartImage: function(id, dir) {
+        var f = fossils.find(function(x) { return x.id === id; });
+        if (!f || !f.images || f.images.length <= 1) return;
+        
+        var container = document.querySelector('.cart-card[data-id="' + id + '"] .cart-card-img-container');
+        if (!container) return;
+        
+        var currentIndex = parseInt(container.getAttribute('data-current-index') || '0');
+        var nextIndex = (currentIndex + dir + f.images.length) % f.images.length;
+        
+        container.setAttribute('data-current-index', nextIndex);
+        
+        var currentMedia = container.querySelector('img, video');
+        if (currentMedia) {
+            currentMedia.remove();
+        }
+        
+        var isVid = window.app.isVideo(f.images[nextIndex]);
+        var newMedia;
+        if (isVid) {
+            newMedia = document.createElement('video');
+            newMedia.id = 'cart-card-img-' + f.id;
+            newMedia.src = f.images[nextIndex];
+            newMedia.autoplay = true;
+            newMedia.muted = true;
+            newMedia.loop = true;
+            newMedia.playsInline = true;
+        } else {
+            newMedia = document.createElement('img');
+            newMedia.id = 'cart-card-img-' + f.id;
+            newMedia.src = f.images[nextIndex];
+        }
+        
+        container.insertBefore(newMedia, container.firstChild);
+        
+        var dots = document.querySelectorAll('#dots-' + id + ' .dot');
+        dots.forEach(function(dot, i) {
+            dot.classList.toggle('active', i === nextIndex);
+        });
+
+        var counter = document.getElementById('counter-' + id);
+        if (counter) {
+            counter.innerText = (nextIndex + 1) + ' / ' + f.images.length;
+        }
+    },
+
+    zoomCartImage: function(fossilId) {
+        var f = fossils.find(function(x) { return x.id === fossilId; });
+        if (!f || !f.images || f.images.length === 0) return;
+        
+        var imgEl = document.getElementById('cart-card-img-' + fossilId);
+        var src = imgEl ? imgEl.getAttribute('src') : f.images[0];
+        
+        var idx = f.images.indexOf(src);
+        if (idx === -1) idx = 0;
+        
+        this.openZoomOverlay(src, f.images, idx);
+    },
+
+    duplicateCartItem: function(fossilId) {
+        var item = fossils.find(function(f) { return f.id === fossilId; });
+        if (!item) return;
+
+        var clone = JSON.parse(JSON.stringify(item));
+        clone.id = generateId();
+        clone.specimen = clone.specimen + ' (Copy)';
+        clone.createdAt = Date.now();
+
+        var self = this;
+        addFossil(clone).then(function() {
+            fossilsCacheLoaded = false;
+            self.showToast('Specimen duplicated.', 'success');
+            self.renderFossils();
+        }).catch(function(err) {
+            console.error('Failed to duplicate specimen:', err);
+            self.showToast('Failed to duplicate specimen.', 'danger');
+        });
+    },
+
+    addCartPhotoUrl: function() {
+        var input = document.getElementById('cart-f-photo-url-input');
+        if (!input) return;
+        var url = input.value.trim();
+        if (url) {
+            if (!window.cartCurrentImages) {
+                window.cartCurrentImages = [];
+            }
+            window.cartCurrentImages.push(url);
+            input.value = '';
+            this.renderCartImagePreview();
+        }
+    },
+
+    handleCartMultipleImagesUpload: function(event) {
+        var files = event.target.files;
+        if (!files || files.length === 0) return;
+        
+        var self = this;
+        var promises = [];
+        
+        if (!window.cartCurrentImages) {
+            window.cartCurrentImages = [];
+        }
+        
+        for (var i = 0; i < files.length; i++) {
+            var file = files[i];
+            (function(f) {
+                var promise = new Promise(function(resolve) {
+                    var reader = new FileReader();
+                    reader.onload = function(e) {
+                        var dataUrl = e.target.result;
+                        if (f.type && f.type.startsWith('video/')) {
+                            window.cartCurrentImages.push(dataUrl);
+                            resolve();
+                        } else {
+                            downscaleImage(dataUrl, 1200, 0.85).then(function(optimized) {
+                                window.cartCurrentImages.push(optimized);
+                                resolve();
+                            }).catch(function(err) {
+                                console.error('Image downscale failed:', err);
+                                window.cartCurrentImages.push(dataUrl);
+                                resolve();
+                            });
+                        }
+                    };
+                    reader.readAsDataURL(f);
+                });
+                promises.push(promise);
+            })(file);
+        }
+        
+        Promise.all(promises).then(function() {
+            self.renderCartImagePreview();
+            event.target.value = ''; // reset
+        });
+    },
+
+    renderCartImagePreview: function() {
+        var container = document.getElementById('cart-images-preview-container');
+        if (!container) return;
+        container.innerHTML = '';
+        
+        if (!window.cartCurrentImages) {
+            window.cartCurrentImages = [];
+        }
+        
+        window.cartCurrentImages.forEach(function(imgSrc, index) {
+            var itemEl = document.createElement('div');
+            itemEl.className = 'cart-img-preview-item';
+            itemEl.style.cssText = 'position: relative; width: 80px; height: 80px; border: 1px solid var(--border-color); border-radius: var(--radius-sm); overflow: hidden; background: var(--bg-surface); display: flex; align-items: center; justify-content: center;';
+            
+            var isVid = window.app.isVideo(imgSrc);
+            var mediaEl;
+            if (isVid) {
+                mediaEl = document.createElement('video');
+                mediaEl.src = imgSrc;
+                mediaEl.style.cssText = 'width: 100%; height: 100%; object-fit: cover;';
+                mediaEl.muted = true;
+                mediaEl.autoplay = false;
+                mediaEl.playsInline = true;
+            } else {
+                mediaEl = document.createElement('img');
+                mediaEl.src = imgSrc;
+                mediaEl.style.cssText = 'width: 100%; height: 100%; object-fit: cover;';
+            }
+            
+            itemEl.appendChild(mediaEl);
+            
+            var removeBtn = document.createElement('button');
+            removeBtn.type = 'button';
+            removeBtn.innerHTML = '&times;';
+            removeBtn.style.cssText = 'position: absolute; top: 2px; right: 2px; background: rgba(0,0,0,0.6); color: white; border: none; border-radius: 50%; width: 18px; height: 18px; display: flex; align-items: center; justify-content: center; font-size: 0.75rem; cursor: pointer; font-weight: bold; z-index: 5; padding: 0; line-height: 1;';
+            removeBtn.onclick = function() {
+                window.cartCurrentImages.splice(index, 1);
+                window.app.renderCartImagePreview();
+            };
+            // Left (move back) button
+            if (index > 0) {
+                var leftBtn = document.createElement('button');
+                leftBtn.type = 'button';
+                leftBtn.innerHTML = '◀';
+                leftBtn.title = 'Move left';
+                leftBtn.style.cssText = 'position:absolute; bottom:4px; left:4px; background:rgba(0,0,0,0.7); color:#fff; border:none; width:18px; height:18px; border-radius:4px; z-index:10; cursor:pointer; font-size:8px; display:flex; align-items:center; justify-content:center; opacity:0.8; transition:opacity 0.2s, transform 0.1s;';
+                leftBtn.onmouseover = function() { this.style.opacity = '1'; this.style.transform = 'scale(1.1)'; };
+                leftBtn.onmouseout = function() { this.style.opacity = '0.8'; this.style.transform = 'scale(1)'; };
+                leftBtn.onclick = function(e) {
+                    e.stopPropagation();
+                    var temp = window.cartCurrentImages[index];
+                    window.cartCurrentImages[index] = window.cartCurrentImages[index - 1];
+                    window.cartCurrentImages[index - 1] = temp;
+                    window.app.renderCartImagePreview();
+                };
+                itemEl.appendChild(leftBtn);
+            }
+
+            // Right (move forward) button
+            if (index < window.cartCurrentImages.length - 1) {
+                var rightBtn = document.createElement('button');
+                rightBtn.type = 'button';
+                rightBtn.innerHTML = '▶';
+                rightBtn.title = 'Move right';
+                var leftPos = index > 0 ? '25px' : '4px';
+                rightBtn.style.cssText = 'position:absolute; bottom:4px; left:' + leftPos + '; background:rgba(0,0,0,0.7); color:#fff; border:none; width:18px; height:18px; border-radius:4px; z-index:10; cursor:pointer; font-size:8px; display:flex; align-items:center; justify-content:center; opacity:0.8; transition:opacity 0.2s, transform 0.1s;';
+                rightBtn.onmouseover = function() { this.style.opacity = '1'; this.style.transform = 'scale(1.1)'; };
+                rightBtn.onmouseout = function() { this.style.opacity = '0.8'; this.style.transform = 'scale(1)'; };
+                rightBtn.onclick = function(e) {
+                    e.stopPropagation();
+                    var temp = window.cartCurrentImages[index];
+                    window.cartCurrentImages[index] = window.cartCurrentImages[index + 1];
+                    window.cartCurrentImages[index + 1] = temp;
+                    window.app.renderCartImagePreview();
+                };
+                itemEl.appendChild(rightBtn);
+            }
+
+            if (index > 0) {
+                var coverBtn = document.createElement('button');
+                coverBtn.type = 'button';
+                coverBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"/></svg> Cover';
+                coverBtn.style.cssText = 'position:absolute; bottom:4px; right:4px; background:rgba(0,0,0,0.65); color:#fff; border:none; padding:2px 4px; font-size:8px; border-radius:4px; z-index:10; cursor:pointer; font-weight:700; text-transform:uppercase; letter-spacing:0.05em; display:flex; align-items:center; opacity:0.8; transition:opacity 0.2s;';
+                coverBtn.onmouseover = function() { this.style.opacity = '1'; };
+                coverBtn.onmouseout = function() { this.style.opacity = '0.8'; };
+                coverBtn.onclick = function(e) {
+                    e.stopPropagation();
+                    var clickedImg = window.cartCurrentImages.splice(index, 1)[0];
+                    window.cartCurrentImages.unshift(clickedImg);
+                    window.app.renderCartImagePreview();
+                };
+                itemEl.appendChild(coverBtn);
+            }
+            
+            itemEl.appendChild(removeBtn);
+            container.appendChild(itemEl);
+        });
     },
 
     exportData: function() {
@@ -8360,167 +9391,269 @@ window.app = {
         var container = document.getElementById('compare-columns-container');
         if (!modal || !container) return;
         
-        // Calculate highlight differences (size, age, weight)
-        // Size normalization: convert inches to cm if sizeUnit matches inches
-        var sizes = selectedList.map(function(f) {
-            if (!f.size) return 0;
-            var num = parseFloat(f.size);
-            if (isNaN(num)) return 0;
-            var su = (f.sizeUnit || 'cm').toLowerCase().trim();
-            var isInch = (su === 'inch' || su === 'in' || su === 'inches');
-            return isInch ? num * 2.54 : num;
-        });
-        var ages = selectedList.map(function(f) {
-            var num = parseFloat(f.ageMa);
-            return isNaN(num) ? 0 : num;
-        });
-        var weights = selectedList.map(function(f) {
-            var num = parseFloat(f.weight);
-            return isNaN(num) ? 0 : num;
-        });
+        window.app._currentCompareList = selectedList;
+        window.app._compareSpotlightActive = false;
         
-        var maxSizeIdx = -1;
-        var maxAgeIdx = -1;
-        var maxWeightIdx = -1;
-
-        if (sizes.some(function(s) { return s > 0; })) {
-            maxSizeIdx = sizes.indexOf(Math.max.apply(null, sizes));
-        }
-        if (ages.some(function(a) { return a > 0; })) {
-            maxAgeIdx = ages.indexOf(Math.max.apply(null, ages));
-        }
-        if (weights.some(function(w) { return w > 0; })) {
-            maxWeightIdx = weights.indexOf(Math.max.apply(null, weights));
+        var btn = document.getElementById('btn-compare-spotlight');
+        if (btn) {
+            btn.innerHTML = '<span class="spotlight-icon">💡</span> Spotlight Mode';
+            btn.classList.remove('active');
+            btn.style.background = 'var(--bg-surface)';
+            btn.style.borderColor = 'var(--border-color)';
+            btn.style.color = 'var(--text-primary)';
         }
         
-        var html = '';
-        selectedList.forEach(function(f, idx) {
-            var color = getEraColor(f.geologicalPeriod);
-            
-            // Construct highlight badges
-            var highlightsHtml = '<div class="compare-highlights">';
-            
-            if (idx === maxAgeIdx && ages[idx] > 0 && selectedList.length > 1) {
-                var otherAges = ages.filter(function(x, i) { return i !== idx && x > 0; });
-                if (otherAges.length > 0) {
-                    var ageDiff = (ages[idx] - Math.min.apply(null, otherAges)).toFixed(1);
-                    if (parseFloat(ageDiff) > 0) {
-                        highlightsHtml += '<span class="comp-badge older">⏳ Older (+' + ageDiff + ' Ma)</span>';
-                    }
-                }
-            }
-            if (idx === maxSizeIdx && sizes[idx] > 0 && selectedList.length > 1) {
-                var otherSizes = sizes.filter(function(x, i) { return i !== idx && x > 0; });
-                if (otherSizes.length > 0) {
-                    var sizeDiff = (sizes[idx] - Math.min.apply(null, otherSizes)).toFixed(1);
-                    if (parseFloat(sizeDiff) > 0) {
-                        highlightsHtml += '<span class="comp-badge larger">📐 Larger (+' + sizeDiff + ' cm)</span>';
-                    }
-                }
-            }
-            if (idx === maxWeightIdx && weights[idx] > 0 && selectedList.length > 1) {
-                var otherWeights = weights.filter(function(x, i) { return i !== idx && x > 0; });
-                if (otherWeights.length > 0) {
-                    var weightDiff = (weights[idx] - Math.min.apply(null, otherWeights)).toFixed(1);
-                    if (parseFloat(weightDiff) > 0) {
-                        highlightsHtml += '<span class="comp-badge heavier">⚖️ Heavier (+' + weightDiff + ' g)</span>';
-                    }
-                }
-            }
-            highlightsHtml += '</div>';
-            
-            // Standardize condition and treatments text
-            var cond = f.condition || {};
-            var condLabels = [];
-            if (cond.stable) condLabels.push('🟢 Stable');
-            if (cond.cracking) condLabels.push('⚡ Cracking');
-            if (cond.efflorescence) condLabels.push('⚪ Efflorescence');
-            if (cond.pyrite) condLabels.push('🔥 Pyrite Decay');
-            if (condLabels.length === 0) condLabels.push('🟢 Stable');
-            
-            var treat = f.treatment || {};
-            var treatLabels = [];
-            if (treat.paraloid) treatLabels.push('🧪 B-72');
-            if (treat.scribe) treatLabels.push('⛏️ Air Scribe');
-            if (treat.cyano) treatLabels.push('💧 Glued');
-            if (treat.water) treatLabels.push('🛡️ Stabilized');
-            
-            var imgHtml = '';
-            if (f.images && f.images.length > 0) {
-                var isVid = window.app.isVideo(f.images[0]);
-                if (isVid) {
-                    imgHtml = '<video id="compare-img-' + f.id + '" src="' + f.images[0] + '" class="compare-img" autoplay muted loop playsinline onclick="window.app.openZoomOverlay(this.src)"></video>';
-                } else {
-                    imgHtml = '<img id="compare-img-' + f.id + '" src="' + f.images[0] + '" class="compare-img" onclick="window.app.openZoomOverlay(this.src)">';
-                }
-                if (f.images.length > 1) {
-                    imgHtml += '<button type="button" class="compare-img-toggle-btn" onclick="window.app.toggleCompareImage(\'' + f.id + '\')" title="Toggle Fossil vs Life Reconstruction">🦴 Fossil View</button>';
-                }
-            } else {
-                imgHtml = '<div class="compare-img-placeholder" style="display:flex;align-items:center;justify-content:center;height:100%;background:rgba(255,255,255,0.02);color:rgba(255,255,255,0.2);">' +
-                          '<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>' +
-                          '</div>';
-            }
-            
-            var epochStage = [];
-            if (f.epoch) epochStage.push(f.epoch);
-            if (f.stratAge) epochStage.push(f.stratAge);
-            var epochStageText = epochStage.length > 0 ? epochStage.join(' · ') : 'N/A';
-
-            html += '<div class="compare-column-card">' +
-                        '<div class="compare-img-box" style="border-bottom-color: ' + color + ';">' +
-                            imgHtml +
-                        '</div>' +
-                        '<div class="compare-card-body">' +
-                            '<div class="compare-card-header">' +
-                                '<h4 class="compare-card-title">' + escapeHtml(f.specimen || 'Unnamed') + '</h4>' +
-                                '<p class="compare-card-subtitle">' + escapeHtml(f.anatomy || 'Specimen') + '</p>' +
-                            '</div>' +
-                            highlightsHtml +
-                            '<div class="compare-spec-section">' +
-                                '<h5>🧬 Classification & Timeline</h5>' +
-                                '<div class="compare-spec-row"><span class="compare-spec-label">Catalog ID</span><span class="compare-spec-value">' + escapeHtml(f.id || 'N/A') + '</span></div>' +
-                                '<div class="compare-spec-row"><span class="compare-spec-label">Category</span><span class="compare-spec-value">' + escapeHtml(f.category || 'N/A') + '</span></div>' +
-                                '<div class="compare-spec-row"><span class="compare-spec-label">Fossil Type</span><span class="compare-spec-value">' + escapeHtml(f.fossilType || 'N/A') + '</span></div>' +
-                                '<div class="compare-spec-row"><span class="compare-spec-label">Timeline</span><span class="compare-spec-value">' + escapeHtml(f.geologicalPeriod || 'N/A') + '</span></div>' +
-                                '<div class="compare-spec-row"><span class="compare-spec-label">Epoch / Stage</span><span class="compare-spec-value">' + escapeHtml(epochStageText) + '</span></div>' +
-                                '<div class="compare-spec-row"><span class="compare-spec-label">Est. Age</span><span class="compare-spec-value">' + (f.ageMa ? f.ageMa + ' Ma' : 'N/A') + '</span></div>' +
-                            '</div>' +
-                            '<div class="compare-spec-section">' +
-                                '<h5>📍 Geological Origin</h5>' +
-                                '<div class="compare-spec-row"><span class="compare-spec-label">Formation</span><span class="compare-spec-value">' + escapeHtml(f.formation || 'N/A') + '</span></div>' +
-                                '<div class="compare-spec-row"><span class="compare-spec-label">Location / Site</span><span class="compare-spec-value">' + escapeHtml(f.location || 'N/A') + '</span></div>' +
-                                '<div class="compare-spec-row"><span class="compare-spec-label">Country</span><span class="compare-spec-value">' + escapeHtml(f.country || 'N/A') + '</span></div>' +
-                            '</div>' +
-                            '<div class="compare-spec-section">' +
-                                '<h5>📐 Sizing & Curation</h5>' +
-                                '<div class="compare-spec-row"><span class="compare-spec-label">Specimen Size</span><span class="compare-spec-value">' + (f.size ? formatSpecimenDimensions(f) : 'N/A') + '</span></div>' +
-                                '<div class="compare-spec-row"><span class="compare-spec-label">Weight</span><span class="compare-spec-value">' + (f.weight ? formatSpecimenWeight(f.weight) : 'N/A') + '</span></div>' +
-                                '<div class="compare-spec-row"><span class="compare-spec-label">Est. Animal Size</span><span class="compare-spec-value">' + (f.animalSize ? f.animalSize + ' m' : 'N/A') + '</span></div>' +
-                                '<div class="compare-spec-row"><span class="compare-spec-label">Value</span><span class="compare-spec-value">' + (f.price ? f.price + ' ' + (f.currency || 'USD') : 'N/A') + '</span></div>' +
-                            '</div>' +
-                            (f.authority || f.description ? 
-                            '<div class="compare-spec-section">' +
-                                '<h5>🦕 Prehistoric Biology</h5>' +
-                                (f.authority ? '<div class="compare-spec-row"><span class="compare-spec-label">Named By / Authority</span><span class="compare-spec-value">' + escapeHtml(f.authority) + '</span></div>' : '') +
-                                (f.description ? '<div class="compare-notes-box" style="font-style: italic; line-height: 1.35; max-height: 80px; overflow-y: auto;">' + escapeHtml(f.description) + '</div>' : '') +
-                            '</div>' : '') +
-                            '<div class="compare-spec-section">' +
-                                '<h5>🩺 Curation & Preservation</h5>' +
-                                '<div class="compare-spec-row"><span class="compare-spec-label">Condition</span><span class="compare-spec-value">' + escapeHtml(condLabels.join(', ')) + (f.conditionTier ? getConditionTierBadgeHtml(f.conditionTier) : '') + '</span></div>' +
-                                '<div class="compare-spec-row"><span class="compare-spec-label">Treatments</span><span class="compare-spec-value">' + escapeHtml(treatLabels.join(', ') || 'None') + '</span></div>' +
-                            '</div>' +
-                            '<div class="compare-spec-section">' +
-                                '<h5>📝 Curatorial Notes</h5>' +
-                                '<div class="compare-notes-box">' + escapeHtml(f.notes || 'No notes logged.') + '</div>' +
-                            '</div>' +
-                        '</div>' +
-                    '</div>';
-        });
-        
-        container.innerHTML = html;
+        this.renderCompareColumns();
         modal.style.display = 'flex';
         document.body.style.overflow = 'hidden';
+    },
+
+    toggleCompareSpotlight: function() {
+        window.app._compareSpotlightActive = !window.app._compareSpotlightActive;
+        
+        var btn = document.getElementById('btn-compare-spotlight');
+        if (btn) {
+            if (window.app._compareSpotlightActive) {
+                btn.innerHTML = '<span class="spotlight-icon">📚</span> Curatorial Mode';
+                btn.classList.add('active');
+                btn.style.background = 'var(--accent)';
+                btn.style.borderColor = 'var(--accent)';
+                btn.style.color = 'var(--bg-surface)';
+            } else {
+                btn.innerHTML = '<span class="spotlight-icon">💡</span> Spotlight Mode';
+                btn.classList.remove('active');
+                btn.style.background = 'var(--bg-surface)';
+                btn.style.borderColor = 'var(--border-color)';
+                btn.style.color = 'var(--text-primary)';
+            }
+        }
+        
+        this.renderCompareColumns();
+    },
+
+    renderCompareColumns: function() {
+        var container = document.getElementById('compare-columns-container');
+        if (!container || !window.app._currentCompareList) return;
+        
+        var selectedList = window.app._currentCompareList;
+        var html = '';
+        
+        if (window.app._compareSpotlightActive) {
+            // RENDER SPOTLIGHT MODE (Focused aesthetic comparison for second opinion)
+            selectedList.forEach(function(f) {
+                var color = getEraColor(f.geologicalPeriod);
+                
+                var imgHtml = '';
+                if (f.images && f.images.length > 0) {
+                    var isVid = window.app.isVideo(f.images[0]);
+                    if (isVid) {
+                        imgHtml = '<video id="compare-img-' + f.id + '" src="' + f.images[0] + '" class="compare-img" autoplay muted loop playsinline onclick="window.app.openZoomOverlay(this.src)" style="height: 280px; object-fit: contain; cursor: zoom-in; width: 100%;"></video>';
+                    } else {
+                        imgHtml = '<img id="compare-img-' + f.id + '" src="' + f.images[0] + '" class="compare-img" onclick="window.app.openZoomOverlay(this.src)" style="height: 280px; object-fit: contain; cursor: zoom-in; width: 100%;">';
+                    }
+                    if (f.images.length > 1) {
+                        imgHtml += '<button type="button" class="compare-img-toggle-btn" onclick="window.app.toggleCompareImage(\'' + f.id + '\')" title="Toggle Fossil vs Life Reconstruction" style="bottom: 12px; right: 12px;">🦴 Fossil View</button>';
+                    }
+                } else {
+                    imgHtml = '<div class="compare-img-placeholder" style="display:flex;align-items:center;justify-content:center;height:280px;background:rgba(0,0,0,0.2);color:rgba(255,255,255,0.2);">' +
+                              '<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>' +
+                              '</div>';
+                }
+                
+                var priceVal = f.price ? f.price + ' ' + (f.currency || 'USD') : 'No Price';
+                var sizeVal = f.size ? formatSpecimenDimensions(f) : 'No Size';
+                
+                html += '<div class="compare-column-card" style="box-shadow: var(--shadow-lg); border: 2px solid ' + (color || 'var(--border-color)') + '; border-radius: var(--radius-md); overflow: hidden; background: var(--bg-surface); display: flex; flex-direction: column; height: 100%;">';
+                html += '  <div class="compare-img-box" style="height: 280px; border-bottom: 1px solid var(--border-color); background: #000; position: relative; display: flex; align-items: center; justify-content: center; overflow: hidden;">' + imgHtml + '</div>';
+                html += '  <div class="compare-card-body" style="padding: 1.5rem; display: flex; flex-direction: column; gap: 1.25rem; flex-grow: 1;">';
+                html += '    <div style="text-align: center; border-bottom: 1px solid var(--border-color); padding-bottom: 0.75rem;">';
+                html += '      <h3 style="margin: 0; font-size: 1.3rem; font-weight: 800; color: var(--text-primary);">' + escapeHtml(f.specimen || 'Unnamed') + '</h3>';
+                html += '      <p style="margin: 0.25rem 0 0; font-size: 0.85rem; color: var(--text-secondary); font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;">' + escapeHtml(f.anatomy || 'Specimen') + '</p>';
+                html += '    </div>';
+                
+                html += '    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; text-align: center;">';
+                html += '      <div style="background: rgba(229, 142, 38, 0.06); border: 1px solid rgba(229, 142, 38, 0.2); padding: 0.75rem; border-radius: 8px;">';
+                html += '        <div style="font-size: 0.75rem; font-weight: 700; color: var(--warning); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.15rem;">🏷️ Price</div>';
+                html += '        <div style="font-size: 1.15rem; font-weight: 800; color: var(--text-primary);">' + escapeHtml(priceVal) + '</div>';
+                html += '      </div>';
+                html += '      <div style="background: rgba(59, 130, 246, 0.06); border: 1px solid rgba(59, 130, 246, 0.2); padding: 0.75rem; border-radius: 8px;">';
+                html += '        <div style="font-size: 0.75rem; font-weight: 700; color: #3b82f6; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.15rem;">📐 Size</div>';
+                html += '        <div style="font-size: 1.15rem; font-weight: 800; color: var(--text-primary);">' + escapeHtml(sizeVal) + '</div>';
+                html += '      </div>';
+                html += '    </div>';
+                
+                html += '    <div style="background: var(--bg-warm); padding: 1rem; border-radius: 8px; border: 1px solid var(--border-color); flex-grow: 1; display: flex; flex-direction: column;">';
+                html += '      <h5 style="margin: 0 0 0.5rem 0; font-size: 0.85rem; font-weight: 700; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">Curator Notes & Details</h5>';
+                html += '      <p style="margin: 0; font-size: 0.9rem; line-height: 1.45; color: var(--text-primary); max-height: 150px; overflow-y: auto; white-space: pre-line; flex-grow: 1;">' + escapeHtml(f.notes || 'No curatorial details logged.') + '</p>';
+                html += '    </div>';
+                
+                if (f.sourceUrl) {
+                    html += '    <div style="text-align: center; margin-top: 0.5rem;">';
+                    html += '      <a href="' + escapeHtml(f.sourceUrl) + '" target="_blank" class="btn-primary" style="display: inline-flex; align-items: center; gap: 0.35rem; text-decoration: none; padding: 0.5rem 1.25rem; font-weight: 700; border-radius: 20px; font-size: 0.85rem;">View Original Listing ↗</a>';
+                    html += '    </div>';
+                }
+                
+                html += '  </div>';
+                html += '</div>';
+            });
+        } else {
+            // RENDER CURATOR MODE (Original logic)
+            var sizes = selectedList.map(function(f) {
+                if (!f.size) return 0;
+                var num = parseFloat(f.size);
+                if (isNaN(num)) return 0;
+                var su = (f.sizeUnit || 'cm').toLowerCase().trim();
+                var isInch = (su === 'inch' || su === 'in' || su === 'inches');
+                return isInch ? num * 2.54 : num;
+            });
+            var ages = selectedList.map(function(f) {
+                var num = parseFloat(f.ageMa);
+                return isNaN(num) ? 0 : num;
+            });
+            var weights = selectedList.map(function(f) {
+                var num = parseFloat(f.weight);
+                return isNaN(num) ? 0 : num;
+            });
+            
+            var maxSizeIdx = -1;
+            var maxAgeIdx = -1;
+            var maxWeightIdx = -1;
+
+            if (sizes.some(function(s) { return s > 0; })) {
+                maxSizeIdx = sizes.indexOf(Math.max.apply(null, sizes));
+            }
+            if (ages.some(function(a) { return a > 0; })) {
+                maxAgeIdx = ages.indexOf(Math.max.apply(null, ages));
+            }
+            if (weights.some(function(w) { return w > 0; })) {
+                maxWeightIdx = weights.indexOf(Math.max.apply(null, weights));
+            }
+            
+            selectedList.forEach(function(f, idx) {
+                var color = getEraColor(f.geologicalPeriod);
+                
+                var highlightsHtml = '<div class="compare-highlights">';
+                
+                if (idx === maxAgeIdx && ages[idx] > 0 && selectedList.length > 1) {
+                    var otherAges = ages.filter(function(x, i) { return i !== idx && x > 0; });
+                    if (otherAges.length > 0) {
+                        var ageDiff = (ages[idx] - Math.min.apply(null, otherAges)).toFixed(1);
+                        if (parseFloat(ageDiff) > 0) {
+                            highlightsHtml += '<span class="comp-badge older">⏳ Older (+' + ageDiff + ' Ma)</span>';
+                        }
+                    }
+                }
+                if (idx === maxSizeIdx && sizes[idx] > 0 && selectedList.length > 1) {
+                    var otherSizes = sizes.filter(function(x, i) { return i !== idx && x > 0; });
+                    if (otherSizes.length > 0) {
+                        var sizeDiff = (sizes[idx] - Math.min.apply(null, otherSizes)).toFixed(1);
+                        if (parseFloat(sizeDiff) > 0) {
+                            highlightsHtml += '<span class="comp-badge larger">📐 Larger (+' + sizeDiff + ' cm)</span>';
+                        }
+                    }
+                }
+                if (idx === maxWeightIdx && weights[idx] > 0 && selectedList.length > 1) {
+                    var otherWeights = weights.filter(function(x, i) { return i !== idx && x > 0; });
+                    if (otherWeights.length > 0) {
+                        var weightDiff = (weights[idx] - Math.min.apply(null, otherWeights)).toFixed(1);
+                        if (parseFloat(weightDiff) > 0) {
+                            highlightsHtml += '<span class="comp-badge heavier">⚖️ Heavier (+' + weightDiff + ' g)</span>';
+                        }
+                    }
+                }
+                highlightsHtml += '</div>';
+                
+                var cond = f.condition || {};
+                var condLabels = [];
+                if (cond.stable) condLabels.push('🟢 Stable');
+                if (cond.cracking) condLabels.push('⚡ Cracking');
+                if (cond.efflorescence) condLabels.push('⚪ Efflorescence');
+                if (cond.pyrite) condLabels.push('🔥 Pyrite Decay');
+                if (condLabels.length === 0) condLabels.push('🟢 Stable');
+                
+                var treat = f.treatment || {};
+                var treatLabels = [];
+                if (treat.paraloid) treatLabels.push('🧪 B-72');
+                if (treat.scribe) treatLabels.push('⛏️ Air Scribe');
+                if (treat.cyano) treatLabels.push('💧 Glued');
+                if (treat.water) treatLabels.push('🛡️ Stabilized');
+                
+                var imgHtml = '';
+                if (f.images && f.images.length > 0) {
+                    var isVid = window.app.isVideo(f.images[0]);
+                    if (isVid) {
+                        imgHtml = '<video id="compare-img-' + f.id + '" src="' + f.images[0] + '" class="compare-img" autoplay muted loop playsinline onclick="window.app.openZoomOverlay(this.src)"></video>';
+                    } else {
+                        imgHtml = '<img id="compare-img-' + f.id + '" src="' + f.images[0] + '" class="compare-img" onclick="window.app.openZoomOverlay(this.src)">';
+                    }
+                    if (f.images.length > 1) {
+                        imgHtml += '<button type="button" class="compare-img-toggle-btn" onclick="window.app.toggleCompareImage(\'' + f.id + '\')" title="Toggle Fossil vs Life Reconstruction">🦴 Fossil View</button>';
+                    }
+                } else {
+                    imgHtml = '<div class="compare-img-placeholder" style="display:flex;align-items:center;justify-content:center;height:100%;background:rgba(255,255,255,0.02);color:rgba(255,255,255,0.2);">' +
+                              '<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>' +
+                              '</div>';
+                }
+                
+                var epochStage = [];
+                if (f.epoch) epochStage.push(f.epoch);
+                if (f.stratAge) epochStage.push(f.stratAge);
+                var epochStageText = epochStage.length > 0 ? epochStage.join(' · ') : 'N/A';
+
+                html += '<div class="compare-column-card">' +
+                            '<div class="compare-img-box" style="border-bottom-color: ' + color + ';">' +
+                                imgHtml +
+                            '</div>' +
+                            '<div class="compare-card-body">' +
+                                '<div class="compare-card-header">' +
+                                    '<h4 class="compare-card-title">' + escapeHtml(f.specimen || 'Unnamed') + '</h4>' +
+                                    '<p class="compare-card-subtitle">' + escapeHtml(f.anatomy || 'Specimen') + '</p>' +
+                                '</div>' +
+                                highlightsHtml +
+                                '<div class="compare-spec-section">' +
+                                    '<h5>🧬 Classification & Timeline</h5>' +
+                                    '<div class="compare-spec-row"><span class="compare-spec-label">Catalog ID</span><span class="compare-spec-value">' + escapeHtml(f.id || 'N/A') + '</span></div>' +
+                                    '<div class="compare-spec-row"><span class="compare-spec-label">Category</span><span class="compare-spec-value">' + escapeHtml(f.category || 'N/A') + '</span></div>' +
+                                    '<div class="compare-spec-row"><span class="compare-spec-label">Fossil Type</span><span class="compare-spec-value">' + escapeHtml(f.fossilType || 'N/A') + '</span></div>' +
+                                    '<div class="compare-spec-row"><span class="compare-spec-label">Timeline</span><span class="compare-spec-value">' + escapeHtml(f.geologicalPeriod || 'N/A') + '</span></div>' +
+                                    '<div class="compare-spec-row"><span class="compare-spec-label">Epoch / Stage</span><span class="compare-spec-value">' + escapeHtml(epochStageText) + '</span></div>' +
+                                    '<div class="compare-spec-row"><span class="compare-spec-label">Est. Age</span><span class="compare-spec-value">' + (f.ageMa ? f.ageMa + ' Ma' : 'N/A') + '</span></div>' +
+                                '</div>' +
+                                '<div class="compare-spec-section">' +
+                                    '<h5>📍 Geological Origin</h5>' +
+                                    '<div class="compare-spec-row"><span class="compare-spec-label">Formation</span><span class="compare-spec-value">' + escapeHtml(f.formation || 'N/A') + '</span></div>' +
+                                    '<div class="compare-spec-row"><span class="compare-spec-label">Location / Site</span><span class="compare-spec-value">' + escapeHtml(f.location || 'N/A') + '</span></div>' +
+                                    '<div class="compare-spec-row"><span class="compare-spec-label">Country</span><span class="compare-spec-value">' + escapeHtml(f.country || 'N/A') + '</span></div>' +
+                                '</div>' +
+                                '<div class="compare-spec-section">' +
+                                    '<h5>📐 Sizing & Curation</h5>' +
+                                    '<div class="compare-spec-row"><span class="compare-spec-label">Specimen Size</span><span class="compare-spec-value">' + (f.size ? formatSpecimenDimensions(f) : 'N/A') + '</span></div>' +
+                                    '<div class="compare-spec-row"><span class="compare-spec-label">Weight</span><span class="compare-spec-value">' + (f.weight ? formatSpecimenWeight(f.weight) : 'N/A') + '</span></div>' +
+                                    '<div class="compare-spec-row"><span class="compare-spec-label">Est. Animal Size</span><span class="compare-spec-value">' + (f.animalSize ? f.animalSize + ' m' : 'N/A') + '</span></div>' +
+                                    '<div class="compare-spec-row"><span class="compare-spec-label">Value</span><span class="compare-spec-value">' + (f.price ? f.price + ' ' + (f.currency || 'USD') : 'N/A') + '</span></div>' +
+                                    (f.sourceUrl ? '<div class="compare-spec-row"><span class="compare-spec-label">Listing Link</span><span class="compare-spec-value"><a href="' + escapeHtml(f.sourceUrl) + '" target="_blank" style="color: #3b82f6; text-decoration: underline; font-weight: 600;">Open Listing ↗</a></span></div>' : '') +
+                                '</div>' +
+                                (f.authority || f.description ? 
+                                '<div class="compare-spec-section">' +
+                                    '<h5>🦕 Prehistoric Biology</h5>' +
+                                    (f.authority ? '<div class="compare-spec-row"><span class="compare-spec-label">Named By / Authority</span><span class="compare-spec-value">' + escapeHtml(f.authority) + '</span></div>' : '') +
+                                    (f.description ? '<div class="compare-notes-box" style="font-style: italic; line-height: 1.35; max-height: 80px; overflow-y: auto;">' + escapeHtml(f.description) + '</div>' : '') +
+                                '</div>' : '') +
+                                '<div class="compare-spec-section">' +
+                                    '<h5>🩺 Curation & Preservation</h5>' +
+                                    '<div class="compare-spec-row"><span class="compare-spec-label">Condition</span><span class="compare-spec-value">' + escapeHtml(condLabels.join(', ')) + (f.conditionTier ? getConditionTierBadgeHtml(f.conditionTier) : '') + '</span></div>' +
+                                    '<div class="compare-spec-row"><span class="compare-spec-label">Treatments</span><span class="compare-spec-value">' + escapeHtml(treatLabels.join(', ') || 'None') + '</span></div>' +
+                                '</div>' +
+                                '<div class="compare-spec-section">' +
+                                    '<h5>📝 Curatorial Notes</h5>' +
+                                    '<div class="compare-notes-box">' + escapeHtml(f.notes || 'No notes logged.') + '</div>' +
+                                '</div>' +
+                            '</div>' +
+                        '</div>';
+            });
+        }
+        
+        container.innerHTML = html;
     },
 
     closeCompareMode: function() {
@@ -8740,7 +9873,7 @@ window.app = {
         var picker = document.getElementById('deep-dive-picker');
         if (picker) {
             picker.innerHTML = '';
-            var ownedFossils = fossils.filter(function(x) { return !x.isWishlist && !x.isSold; });
+            var ownedFossils = fossils.filter(function(x) { return !x.isWishlist && !x.isSold && !x.isCartItem; });
             if (ownedFossils.length === 0) {
                 ownedFossils = fossils;
             }
@@ -9139,6 +10272,7 @@ window.app = {
             localCoexisting = fossils.filter(function(x) {
                 return x.id !== f.id && 
                        !x.isWishlist && 
+                       !x.isCartItem &&
                        (x.formation || '').trim().toLowerCase().indexOf(formationClean) !== -1;
             });
         }
@@ -9698,6 +10832,7 @@ function migrateToCatalogIds() {
         // Find fossils with UUID-like IDs or non-catalog IDs.
         // Catalog IDs follow the format: [PREFIX]-[3+ DIGITS]
         var toMigrate = allFossils.filter(function(f) {
+            if (f.isCartItem) return false;
             var id = f.id || "";
             var dashIndex = id.indexOf('-');
             if (dashIndex === -1) return true; // No dash = migrate
@@ -9992,7 +11127,7 @@ function enrichDatabaseInBackground() {
     if (!fossils || fossils.length === 0) return;
     
     var needy = fossils.filter(function(f) {
-        return !f.etymology || !f.animalSize;
+        return !f.isCartItem && (!f.etymology || !f.animalSize);
     });
     
     if (needy.length === 0) return;
