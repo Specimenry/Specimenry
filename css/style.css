@@ -2067,27 +2067,37 @@ dialog::backdrop {
         margin-top: 0.2rem;
     }
 
-    /* Segmented view controls - full-width inside the drawer with labels fully visible! */
+    /* Segmented view controls - horizontal scrolling on mobile to prevent cramming while keeping labels legible */
     .view-toggle-group {
         width: 100% !important;
+        overflow: hidden !important;
     }
     .view-toggle {
         width: 100% !important;
         display: flex !important;
         flex-shrink: 0 !important;
+        flex-wrap: nowrap !important;
+        overflow-x: auto !important;
+        -webkit-overflow-scrolling: touch !important;
+        scrollbar-width: none !important; /* Firefox */
         margin-bottom: 0.25rem !important;
         gap: 0.35rem !important;
+        padding-bottom: 2px !important;
+    }
+    .view-toggle::-webkit-scrollbar {
+        display: none !important; /* Chrome/Safari/Edge */
     }
 
     .view-toggle .btn-text {
-        display: inline !important; /* Keep My Collection, Wishlist, Sold text visible! */
+        display: inline !important;
         font-size: 0.78rem !important;
         font-weight: 700 !important;
+        white-space: nowrap !important;
     }
 
     .view-toggle .toggle-btn {
-        flex: 1 !important;
-        padding: 0.55rem !important;
+        flex: 0 0 auto !important; /* Keep natural size based on text, do not squeeze */
+        padding: 0.55rem 0.9rem !important;
         height: 38px !important;
         justify-content: center !important;
         align-items: center !important;
@@ -2120,6 +2130,26 @@ dialog::backdrop {
         height: 38px !important; /* comfortable touch target */
         border-radius: var(--radius-sm) !important;
         width: 100% !important;
+    }
+
+    /* Modal dialog tabs - scrollable and compact on mobile */
+    .modal-tabs {
+        display: flex !important;
+        flex-wrap: nowrap !important;
+        overflow-x: auto !important;
+        -webkit-overflow-scrolling: touch !important;
+        scrollbar-width: none !important; /* Firefox */
+        width: 100% !important;
+        padding: 0 0.75rem !important;
+    }
+    .modal-tabs::-webkit-scrollbar {
+        display: none !important; /* Chrome/Safari/Edge */
+    }
+    .modal-tab-btn {
+        flex: 0 0 auto !important;
+        white-space: nowrap !important;
+        padding: 0.75rem 0.65rem !important;
+        font-size: 0.75rem !important;
     }
 
     main {

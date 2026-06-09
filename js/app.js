@@ -1293,13 +1293,15 @@ window.addEventListener('DOMContentLoaded', function() {
     populateDropdowns();
     fetchExchangeRates();
     initDB().then(function() {
-        window.app.renderFossils();
-        // Run background check for bloated images 2 seconds after load
-        setTimeout(optimizeExistingDatabase, 2000);
-        // Automatic ID Migration (UUID -> Catalog) 1 second after load
-        setTimeout(migrateToCatalogIds, 1000);
-        // Automatic Background Data Enrichment 3 seconds after load
-        setTimeout(enrichDatabaseInBackground, 3000);
+        checkAndSeedFromServer().then(function() {
+            window.app.renderFossils();
+            // Run background check for bloated images 2 seconds after load
+            setTimeout(optimizeExistingDatabase, 2000);
+            // Automatic ID Migration (UUID -> Catalog) 1 second after load
+            setTimeout(migrateToCatalogIds, 1000);
+            // Automatic Background Data Enrichment 3 seconds after load
+            setTimeout(enrichDatabaseInBackground, 3000);
+        });
     });
 
     // Close dropdowns on outside clicks
@@ -5147,6 +5149,19 @@ window.app = {
         if (document.getElementById('btn-carts')) {
             document.getElementById('btn-carts').classList.toggle('active', view === 'carts');
         }
+
+        // Smoothly scroll active button into view on mobile view-toggle scrollable containers
+        var activeBtn = null;
+        if (view === 'false') activeBtn = document.getElementById('btn-collection');
+        else if (view === 'true') activeBtn = document.getElementById('btn-wishlist');
+        else if (view === 'sold') activeBtn = document.getElementById('btn-sold');
+        else if (view === 'sale') activeBtn = document.getElementById('btn-sale');
+        else if (view === 'carts') activeBtn = document.getElementById('btn-carts');
+
+        if (activeBtn && typeof activeBtn.scrollIntoView === 'function') {
+            activeBtn.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+        }
+
         window.app.renderFossils();
     },
 
@@ -9273,6 +9288,51 @@ window.app = {
         reader.readAsText(file);
     },
 
+    loadServerBackupManual: function() {
+        if (window.location.protocol === 'file:') {
+            this.showToast('Webbläsaren blockerar fetch-anrop via file:// av säkerhetsskäl. Kör via en lokal webbserver eller ladda upp till Netlify.', 'error');
+            return;
+        }
+        var msg = "Vill du läsa in 'fossils.json' från servern? Om du har befintliga fossiler med samma ID kommer dessa att uppdateras.";
+        if (!confirm(msg)) return;
+
+        var self = this;
+        self.showToast('Hämtar databas från servern...', 'info');
+
+        fetch('fossils.json')
+            .then(function(response) {
+                if (!response.ok) {
+                    throw new Error('Kunde inte hitta fossils.json på servern. Se till att du har laddat upp din .json-fil döpt till fossils.json.');
+                }
+                return response.json();
+            })
+            .then(function(data) {
+                if (!Array.isArray(data)) {
+                    throw new Error('Ogiltigt format: Förväntade en array av fossiler.');
+                }
+
+                var successCount = 0;
+                var chain = Promise.resolve();
+
+                data.forEach(function(fossil) {
+                    chain = chain.then(function() {
+                        return updateFossil(fossil).then(function() {
+                            successCount++;
+                        });
+                    });
+                });
+
+                return chain.then(function() {
+                    self.showToast('Lyckades läsa in ' + successCount + ' fossiler från servern!', 'success');
+                    fossilsCacheLoaded = false;
+                    self.renderFossils();
+                });
+            })
+            .catch(function(err) {
+                self.showToast('Fel vid inläsning: ' + err.message, 'error');
+            });
+    },
+
     autoFetchMissingTaxonomy: function(toFetchList) {
         if (isAutoFetching) return;
         
@@ -11375,5 +11435,63 @@ function enrichDatabaseInBackground() {
             });
         }
     })();
+}
+
+function checkAndSeedFromServer() {
+    if (window.location.protocol === 'file:') {
+        console.log('Skipping server seeding: running via file:// protocol.');
+        return Promise.resolve();
+    }
+    return getAllFossils().then(function(list) {
+        if (list && list.length > 0) {
+            // Already populated, skip seeding
+            return Promise.resolve();
+        }
+
+        // Try to fetch fossils.json from the server
+        return fetch('fossils.json')
+            .then(function(response) {
+                if (!response.ok) {
+                    throw new Error('No server backup file found');
+                }
+                return response.json();
+            })
+            .then(function(data) {
+                if (!Array.isArray(data)) {
+                    throw new Error('Invalid backup file format');
+                }
+
+                console.log('Found server backup fossils.json. Seeding local database...');
+                var successCount = 0;
+                var chain = Promise.resolve();
+
+                data.forEach(function(fossil) {
+                    chain = chain.then(function() {
+                        return updateFossil(fossil).then(function() {
+                            successCount++;
+                        });
+                    });
+                });
+
+                return chain.then(function() {
+                    console.log('Successfully seeded ' + successCount + ' fossil(s) from server backup!');
+                    fossilsCacheLoaded = false;
+                    return getAllFossils().then(function(seededList) {
+                        fossils = seededList;
+                        fossilsCacheLoaded = true;
+                        // Show a nice toast alert after seeding
+                        setTimeout(function() {
+                            if (window.app && typeof window.app.showToast === 'function') {
+                                window.app.showToast('Välkommen! Laddade automatiskt in ' + successCount + ' fossiler från servern.', 'success');
+                            }
+                        }, 500);
+                    });
+                });
+            })
+            .catch(function(err) {
+                console.log('Autoseed from server skipped or failed:', err.message);
+                return Promise.resolve();
+            });
+    });
 }
 
