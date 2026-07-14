@@ -1274,19 +1274,27 @@ window.addEventListener('DOMContentLoaded', function() {
         enrichLabel.innerHTML = '💡 Auto-Enhance Lighting: ' + (isAutoEnhanceActive ? 'On' : 'Off');
     }
 
-    // Backup Pulse logic
+    // Backup Pulse logic & warning banner
     var lastBackup = localStorage.getItem('last_backup');
     var sevenDaysMs = 7 * 24 * 60 * 60 * 1000;
     if (!lastBackup || Date.now() - parseInt(lastBackup, 10) > sevenDaysMs) {
         var exportBtn = document.getElementById('btn-export');
         if (exportBtn) {
             exportBtn.style.position = 'relative';
-            exportBtn.insertAdjacentHTML('beforeend', '<div class="pulse-dot" title="You haven\'t backed up in over 7 days!"></div>');
+            if (!exportBtn.querySelector('.pulse-dot')) {
+                exportBtn.insertAdjacentHTML('beforeend', '<div class="pulse-dot" title="You haven\'t backed up in over 7 days!"></div>');
+            }
         }
         var dbCenterBtn = document.getElementById('btn-db-center');
         if (dbCenterBtn) {
             dbCenterBtn.style.position = 'relative';
-            dbCenterBtn.insertAdjacentHTML('beforeend', '<div class="pulse-dot" title="You haven\'t backed up in over 7 days!"></div>');
+            if (!dbCenterBtn.querySelector('.pulse-dot')) {
+                dbCenterBtn.insertAdjacentHTML('beforeend', '<div class="pulse-dot" title="You haven\'t backed up in over 7 days!"></div>');
+            }
+        }
+        var warningBanner = document.getElementById('backup-warning-banner');
+        if (warningBanner) {
+            warningBanner.style.display = 'flex';
         }
     }
 
@@ -9247,6 +9255,10 @@ window.app = {
         }
         var pd = document.querySelector('#btn-export .pulse-dot');
         if (pd) pd.remove();
+        var pdCenter = document.querySelector('#btn-db-center .pulse-dot');
+        if (pdCenter) pdCenter.remove();
+        var warningBanner = document.getElementById('backup-warning-banner');
+        if (warningBanner) warningBanner.style.display = 'none';
         exportToJSON(); 
     },
 
@@ -11494,4 +11506,3 @@ function checkAndSeedFromServer() {
             });
     });
 }
-

@@ -2041,8 +2041,8 @@ dialog::backdrop {
         color: #fff !important;
     }
 
-    /* On mobile, keep Row 2 visible by default to show the view switcher */
-    .filter-row:last-of-type {
+    /* On mobile, keep Row 2 (view selector) visible by default */
+    .view-toggle-row {
         display: flex !important;
         flex-direction: column !important;
         align-items: stretch !important;
@@ -2050,21 +2050,20 @@ dialog::backdrop {
         margin-top: 0.5rem !important;
     }
 
-    /* Hide advanced select dropdowns by default on mobile */
-    .filter-row:last-of-type .filter-select {
+    /* Hide advanced dropdowns row by default on mobile */
+    .dropdowns-row {
         display: none !important;
     }
 
-    /* Display advanced select dropdowns vertically when filter bar is toggled */
-    .filter-bar.show-mobile-filters .filter-row:last-of-type .filter-select {
+    /* Display advanced dropdowns row vertically when filter bar is toggled */
+    .filter-bar.show-mobile-filters .dropdowns-row {
         display: flex !important;
-    }
-
-    /* Add a premium dashed divider above select inputs only when open */
-    .filter-bar.show-mobile-filters .filter-row:last-of-type .filter-select:first-of-type {
+        flex-direction: column !important;
+        align-items: stretch !important;
+        gap: 0.6rem !important;
+        margin-top: 0.5rem !important;
         border-top: 1px dashed var(--border-color);
         padding-top: 0.6rem;
-        margin-top: 0.2rem;
     }
 
     /* Segmented view controls - horizontal scrolling on mobile to prevent cramming while keeping labels legible */
@@ -2112,17 +2111,17 @@ dialog::backdrop {
         height: 13px !important;
     }
 
-    .filter-row:last-of-type .form-group {
+    .dropdowns-row .form-group {
         width: 100% !important;
         flex: none !important;
         gap: 0;
     }
 
-    .filter-row:last-of-type label {
+    .dropdowns-row label {
         display: none !important; /* Hide label to save vertical space */
     }
 
-    .filter-row:last-of-type select {
+    .dropdowns-row select {
         padding: 0.5rem 1.8rem 0.5rem 0.75rem !important;
         font-size: 0.82rem !important;
         background-position: right 0.75rem center !important;

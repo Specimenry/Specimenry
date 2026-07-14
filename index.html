@@ -27,6 +27,9 @@
                 <button id="btn-toggle-theme" class="btn-icon" onclick="app.toggleTheme()" title="Toggle Dark Mode" aria-label="Toggle Dark Mode">
                     <svg id="theme-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
                 </button>
+                <a href="https://ko-fi.com/specimenry" target="_blank" id="btn-support-project" class="desktop-only" title="Support Specimenry on Ko-fi" aria-label="Support Specimenry on Ko-fi" style="color: var(--text-primary); background: var(--bg-warm); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 0.35rem 0.65rem; font-size: 0.75rem; font-weight: 600; text-decoration: none; display: flex; align-items: center; gap: 0.35rem; transition: all 0.2s;" onmouseover="this.style.background='var(--border-color)'" onmouseout="this.style.background='var(--bg-warm)'">
+                    <span style="color: #ef4444;">❤️</span> Support
+                </a>
                 <div class="desktop-only" style="width: 1px; height: 20px; background-color: var(--border-color); margin-right: 0.5rem;"></div>
 
                 <!-- Unified Mobile Option Dropdown -->
@@ -78,6 +81,11 @@
                         <a href="#" onclick="app.closeMobileMenu(); document.getElementById('file-import').click(); return false;" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 1.25rem; font-size: 0.8rem; color: var(--text-primary); text-decoration: none; transition: background 0.15s;" onmouseover="this.style.background='var(--bg-warm)'" onmouseout="this.style.background='transparent'">
                             📄 Import Spreadsheet (CSV)
                         </a>
+                        <!-- Support Section -->
+                        <div style="padding: 0.4rem 1rem 0.2rem 1rem; font-size: 0.65rem; font-weight: 800; text-transform: uppercase; color: var(--text-secondary); letter-spacing: 0.05em; border-top: 1px solid var(--border-color); margin-top: 0.25rem;">Support</div>
+                        <a href="https://ko-fi.com/specimenry" target="_blank" onclick="app.closeMobileMenu();" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 1.25rem; font-size: 0.8rem; color: #ef4444; text-decoration: none; transition: background 0.15s; font-weight: 600;" onmouseover="this.style.background='var(--bg-warm)'" onmouseout="this.style.background='transparent'">
+                            ❤️ Support the Project
+                        </a>
                     </div>
                 </div>
 
@@ -101,6 +109,9 @@
                         </a>
                         <a href="#" onclick="app.copyLLMContext(); return false;" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.6rem 1rem; font-size: 0.8rem; color: var(--text-primary); text-decoration: none; transition: background 0.15s; border-top: 1px solid var(--border-color);" onmouseover="this.style.background='var(--bg-warm)'" onmouseout="this.style.background='transparent'">
                             🤖 Copy & Export for AI (LLM)
+                        </a>
+                        <a href="https://ko-fi.com/specimenry" target="_blank" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.6rem 1rem; font-size: 0.8rem; color: #ef4444; text-decoration: none; transition: background 0.15s; border-top: 1px solid var(--border-color); font-weight: 600;" onmouseover="this.style.background='var(--bg-warm)'" onmouseout="this.style.background='transparent'">
+                            ❤️ Support on Ko-fi
                         </a>
                     </div>
                 </div>
@@ -166,8 +177,8 @@
                 </button>
             </div>
 
-            <!-- Row 2: Filters -->
-            <div class="filter-row">
+            <!-- Row 2: Archive View Selector -->
+            <div class="filter-row view-toggle-row">
                 <div class="form-group view-toggle-group">
                     <label>Archive View</label>
                     <div class="view-toggle" role="group" aria-label="Switch between collection and wishlist">
@@ -193,7 +204,10 @@
                         </button>
                     </div>
                 </div>
+            </div>
 
+            <!-- Row 3: Filter Dropdowns -->
+            <div class="filter-row dropdowns-row">
                 <div class="form-group filter-select">
                     <label for="filter-category">Category</label>
                     <select id="filter-category" onchange="app.renderFossils()">
@@ -240,6 +254,19 @@
     </nav>
 
     <main>
+        <!-- Backup Warning / Reminder Banner -->
+        <div id="backup-warning-banner" class="warning-banner" style="display: none; align-items: center; justify-content: space-between; padding: 0.75rem 1.25rem; background: var(--bg-surface); border: 1px solid #ef4444; border-radius: var(--radius-md); margin-bottom: 1.5rem; color: var(--text-primary); font-size: 0.85rem; font-weight: 500; gap: 1rem; box-shadow: var(--shadow-sm);">
+            <div style="display: flex; align-items: center; gap: 0.75rem; flex: 1; flex-wrap: wrap;">
+                <span style="font-size: 1.2rem;">⚠️</span>
+                <span><strong>Backup Reminder:</strong> Your specimens are saved only in this browser's local cache. Clear your cache or reset your device and your collection will be permanently deleted. Back up your database now to keep it safe.</span>
+                <span style="opacity: 0.85;">• Love the app? Consider <a href="https://ko-fi.com/specimenry" target="_blank" style="color: #ef4444; font-weight: 600; text-decoration: underline;">supporting us on Ko-fi</a>!</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 0.75rem; flex-shrink: 0;">
+                <button type="button" class="btn-primary" onclick="app.exportData(); document.getElementById('backup-warning-banner').style.display = 'none';" style="padding: 0.4rem 0.8rem; font-size: 0.8rem; border-radius: var(--radius-sm); border: none; cursor: pointer; white-space: nowrap;">📥 Backup Now</button>
+                <button type="button" onclick="document.getElementById('backup-warning-banner').style.display = 'none';" style="background: transparent; border: none; color: var(--text-secondary); cursor: pointer; font-size: 1.25rem; line-height: 1; padding: 0.25rem; display: flex; align-items: center; justify-content: center;" title="Dismiss Reminder" aria-label="Dismiss">&times;</button>
+            </div>
+        </div>
+
         <div id="stats-summary" class="stats-summary" aria-live="polite">
             <div class="stats-header" style="display: flex; justify-content: space-between; align-items: flex-start; width: 100%; border-bottom: 1px solid var(--border-color); padding-bottom: 1rem; margin-bottom: 1rem;">
                 <div id="stats-summary-text" class="stats-text" style="flex: 1;"></div>
@@ -311,6 +338,9 @@
 
             <div id="portfolio-container" class="dashboard-visual-container" style="display: none;">
                 <!-- Portfolio dynamically rendered by JS -->
+            </div>
+            <div style="text-align: center; font-size: 0.75rem; color: var(--text-secondary); margin-top: 2rem; padding-top: 1rem; border-top: 1px solid var(--border-color); opacity: 0.8;">
+                Developed with ❤️ for fossil collectors. Love the app? Consider <a href="https://ko-fi.com/specimenry" target="_blank" style="color: #ef4444; font-weight: 600; text-decoration: underline;">supporting us on Ko-fi</a>!
             </div>
         </div>
         <div id="view-info-banner" class="view-info-banner" style="display: none;"></div>

@@ -1,5 +1,7 @@
 # Fossil Archive 🦖
 
+[![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/specimenry)
+
 A personal, high-performance web application designed for fossil collectors, sedimentologists, and paleontology enthusiasts to log, manage, and showcase their fossil specimens.
 
 The Fossil Archive is a fully offline-capable, local-first database built on standard web technologies (HTML, CSS, JS). All your sensitive data and images are securely stored entirely on your device using `IndexedDB`.
