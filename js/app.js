@@ -1,5 +1,6 @@
 // =========================================================================
 // SPECIMENRY — app.js
+// Copyright (c) 2026 Specimenry. All rights reserved.
 // Local-only fossil collection database
 // =========================================================================
 
