@@ -1285,6 +1285,20 @@ window.addEventListener('DOMContentLoaded', function() {
             if (cartsContainer) cartsContainer.style.display = 'none';
             if (grid) grid.style.display = '';
         }
+
+        // Restore Grid/List layout view
+        var layout = localStorage.getItem('fossil_layout_view') || 'grid';
+        var btnGrid = document.getElementById('btn-layout-grid');
+        var btnList = document.getElementById('btn-layout-list');
+        if (layout === 'list') {
+            if (grid) grid.classList.add('list-view-active');
+            if (btnGrid) btnGrid.classList.remove('active');
+            if (btnList) btnList.classList.add('active');
+        } else {
+            if (grid) grid.classList.remove('list-view-active');
+            if (btnGrid) btnGrid.classList.add('active');
+            if (btnList) btnList.classList.remove('active');
+        }
     } catch (e) {
         console.error('Failed to pre-sync active view:', e);
     }
@@ -2692,26 +2706,31 @@ window.app = {
         if (!f) return;
         
         var card = document.querySelector('[data-id="' + id + '"]');
+        if (!card) return;
         var tray = card.querySelector('.taxonomy-tray');
         var btn = card.querySelector('.btn-taxonomy');
+        if (!tray || !btn) return;
         
         if (expandedTaxonomyIds.has(id)) {
             expandedTaxonomyIds.delete(id);
             tray.classList.remove('active');
             btn.classList.remove('active');
+            tray.innerHTML = ''; // Clear DOM nodes to save memory when collapsed
             return;
         }
         
         expandedTaxonomyIds.add(id);
+        tray.classList.add('active');
+        btn.classList.add('active');
         
-        // If we already have the data, just show it
+        // If we already have the data, populate it immediately
         if (f.taxonomy) {
-            tray.classList.add('active');
-            btn.classList.add('active');
+            tray.innerHTML = getTaxonomyContentHtml(f);
             return;
         }
         
-        // Otherwise, fetch it
+        // Otherwise, show loading state and fetch it
+        tray.innerHTML = '<div class="taxonomy-placeholder">⏳ Fetching biological taxonomy data...</div>';
         btn.classList.add('loading');
         fetchTaxonomyData(f.specimen)
             .then(function(taxonomy) {
@@ -2720,14 +2739,18 @@ window.app = {
             })
             .then(function() {
                 btn.classList.remove('loading');
-                window.app.renderFossils(); 
+                if (expandedTaxonomyIds.has(id)) {
+                    tray.innerHTML = getTaxonomyContentHtml(f);
+                }
             })
             .catch(function(err) {
                 console.error("fetchTaxonomy Error:", err);
-                // Fail gracefully: stop loading but don't crash
-                document.getElementById('fetch-loader').style.display = 'none';
+                btn.classList.remove('loading');
+                if (expandedTaxonomyIds.has(id)) {
+                    tray.innerHTML = '<div class="taxonomy-placeholder" style="color: #ef4444;">❌ Failed to load taxonomy details. Click icon to retry.</div>';
+                }
                 if (window.app && window.app.showToast) {
-                    window.app.showToast("Taxonomy fetch failed. Check network.", 3000);
+                    window.app.showToast("Taxonomy fetch failed. Check network.", "error");
                 }
             });
     },
@@ -2747,7 +2770,518 @@ window.app = {
         });
 
         if (isStatsOpen) {
-            window.app.renderFossils();
+            var listToUse = (lightboxFilteredList && lightboxFilteredList.length > 0) ? lightboxFilteredList : fossils;
+            // Delay rendering slightly so the display:flex layout pass completes first.
+            // This avoids layout thrashing during Chart.js parent container size detection.
+            setTimeout(function() {
+                window.app.updateDashboardStats(listToUse);
+            }, 50);
+        }
+    },
+
+    updateDashboardStats: function(filtered) {
+        if (!filtered) filtered = [];
+        var statsContainer = document.getElementById('stats-summary');
+        if (!statsContainer) return;
+
+        if (filtered.length > 0) {
+            statsContainer.style.display = 'flex';
+
+            // GROUP AND TALLY VALUE
+            var valueByCurrency = {};
+            var estValueByCurrency = {};
+            
+            // Charts Data Arrays
+            var countryCounts = {};
+            var maxCountryCount = 0;
+            var mostCommonCountry = null;
+            var periodCounts = {};
+
+            var catCounts = {};
+            var maxCatCount = 0;
+            var mostCommonCat = null;
+
+            var totalWeight = 0;
+            var weightCount = 0;
+            var totalSizeCm = 0;
+            var sizeCount = 0;
+            var tagCounts = {};
+
+            for (var i = 0; i < filtered.length; i++) {
+                var f = filtered[i];
+
+                // Tally Category
+                var c = f.category;
+                if (c) {
+                    catCounts[c] = (catCounts[c] || 0) + 1;
+                    if (catCounts[c] > maxCatCount) {
+                        maxCatCount = catCounts[c];
+                        mostCommonCat = c;
+                    }
+                }
+
+                // Tally Purchase Value
+                if (f.price > 0) {
+                    var curr = f.currency || 'USD';
+                    valueByCurrency[curr] = (valueByCurrency[curr] || 0) + f.price;
+                }
+
+                // Tally Estimated Value
+                if (f.estimatedValue > 0) {
+                    var estCurr = f.estimatedCurrency || 'USD';
+                    estValueByCurrency[estCurr] = (estValueByCurrency[estCurr] || 0) + f.estimatedValue;
+                }
+
+                // Tally Country
+                var cntry = f.country ? f.country.trim() : 'Unknown';
+                if (cntry.length === 0) cntry = 'Unknown';
+                countryCounts[cntry] = (countryCounts[cntry] || 0) + 1;
+                if (countryCounts[cntry] > maxCountryCount && cntry !== 'Unknown') {
+                    maxCountryCount = countryCounts[cntry];
+                    mostCommonCountry = cntry;
+                }
+
+                // Tally Period
+                var per = f.geologicalPeriod ? f.geologicalPeriod : 'Unknown';
+                periodCounts[per] = (periodCounts[per] || 0) + 1;
+
+                // Tally Weight
+                if (f.weight > 0) {
+                    totalWeight += f.weight;
+                    weightCount++;
+                }
+
+                // Tally Size (Normalize to cm)
+                if (f.size > 0) {
+                    var s = f.size;
+                    var su = (f.sizeUnit || '').toLowerCase().trim();
+                    if (su === 'inch' || su === 'in' || su === 'inches') {
+                        s *= 2.54;
+                    }
+                    totalSizeCm += s;
+                    sizeCount++;
+                }
+
+                // Tally Tags
+                if (f.tags && Array.isArray(f.tags)) {
+                    f.tags.forEach(function(t) {
+                        tagCounts[t] = (tagCounts[t] || 0) + 1;
+                    });
+                }
+            }
+            
+            function calculateTotalSEK(map) {
+                var total = 0;
+                for (var k in map) {
+                    var val = map[k];
+                    if (exchangeRates && exchangeRates[k]) {
+                        total += val / exchangeRates[k];
+                    } else {
+                        if (k === 'USD') total += val * 10.50;
+                        else if (k === 'EUR') total += val * 11.50;
+                        else total += val;
+                    }
+                }
+                return total;
+            }
+
+            var totalCostSEK = calculateTotalSEK(valueByCurrency);
+            var totalEstSEK = calculateTotalSEK(estValueByCurrency);
+            var totalAppreciation = totalEstSEK - totalCostSEK;
+
+            // Redesigned Quick Stats (Better visuals)
+            var statsHtml = '<div class="stats-summary-pills" style="display: flex; flex-wrap: wrap; gap: 0.65rem; align-items: center; justify-content: flex-start;">';
+            
+            if (currentView === 'sold') {
+                var saleValueByCurrency = {};
+                filtered.forEach(function(f) {
+                    if (f.isSold && f.salePrice > 0) {
+                        var saleCurr = f.saleCurrency || 'USD';
+                        saleValueByCurrency[saleCurr] = (saleValueByCurrency[saleCurr] || 0) + f.salePrice;
+                    }
+                });
+                var totalSaleSEK = calculateTotalSEK(saleValueByCurrency);
+                var totalProfitSEK = totalSaleSEK - totalCostSEK;
+
+                // Count Pill
+                statsHtml += '<div class="stats-pill" style="display: flex; align-items: center; gap: 0.5rem; background: var(--bg-warm); padding: 0.4rem 0.85rem; border-radius: 2rem; border: 1px solid var(--border-color); font-size: 0.85rem; font-weight: 500;">' +
+                                '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2v11z"/></svg>' +
+                                '<span><strong>' + filtered.length + '</strong> Sold Specimens</span>' +
+                              '</div>';
+
+                // Acquisition Cost Pill
+                if (totalCostSEK > 0) {
+                    statsHtml += '<div class="stats-pill" style="display: flex; align-items: center; gap: 0.5rem; background: var(--bg-warm); padding: 0.4rem 0.85rem; border-radius: 2rem; border: 1px solid var(--border-color); font-size: 0.85rem; font-weight: 500;">' +
+                                    '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6b5d4d" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M16 8l-8 8M8 8l8 8"/></svg>' +
+                                    '<span>Acquisition Cost: <strong>' + Math.round(totalCostSEK).toLocaleString() + ' SEK</strong></span>' +
+                                  '</div>';
+                }
+
+                // Sales Revenue Pill
+                if (totalSaleSEK > 0) {
+                    statsHtml += '<div class="stats-pill" style="display: flex; align-items: center; gap: 0.5rem; background: var(--bg-warm); padding: 0.4rem 0.85rem; border-radius: 2rem; border: 1px solid var(--border-color); font-size: 0.85rem; font-weight: 500;">' +
+                                    '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>' +
+                                    '<span>Sales Revenue: <strong>' + Math.round(totalSaleSEK).toLocaleString() + ' SEK</strong></span>' +
+                                  '</div>';
+                }
+
+                // Net Profit / ROI Pill
+                if (totalSaleSEK > 0 && totalCostSEK > 0) {
+                    var percentProfit = Math.round((totalProfitSEK / totalCostSEK) * 100);
+                    var profitColor = totalProfitSEK >= 0 ? '#439775' : '#b33a3a';
+                    var profitBg = totalProfitSEK >= 0 ? 'rgba(67, 151, 117, 0.1)' : 'rgba(179, 58, 58, 0.1)';
+                    var profitBorder = totalProfitSEK >= 0 ? 'rgba(67, 151, 117, 0.2)' : 'rgba(179, 58, 58, 0.2)';
+                    statsHtml += '<div class="stats-pill" style="display: flex; align-items: center; gap: 0.5rem; background: ' + profitBg + '; color: ' + profitColor + '; padding: 0.4rem 0.85rem; border-radius: 2rem; border: 1px solid ' + profitBorder + '; font-size: 0.85rem; font-weight: 700;">' +
+                                    '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>' +
+                                    '<span>Net Profit: ' + (totalProfitSEK >= 0 ? '+' : '') + Math.round(totalProfitSEK).toLocaleString() + ' SEK (' + (totalProfitSEK >= 0 ? '↑' : '↓') + percentProfit + '%)</span>' +
+                                  '</div>';
+                }
+            } else {
+                // Count Pill
+                statsHtml += '<div class="stats-pill" style="display: flex; align-items: center; gap: 0.5rem; background: var(--bg-warm); padding: 0.4rem 0.85rem; border-radius: 2rem; border: 1px solid var(--border-color); font-size: 0.85rem; font-weight: 500;">' +
+                                '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2v11z"/></svg>' +
+                                '<span><strong>' + filtered.length + '</strong> Specimens</span>' +
+                              '</div>';
+
+                // Top Origin Pill
+                if (mostCommonCountry && mostCommonCountry !== 'Unknown') {
+                    var summaryFlag = getFlagHtml(mostCommonCountry);
+                    statsHtml += '<div class="stats-pill" style="display: flex; align-items: center; gap: 0.5rem; background: var(--bg-warm); padding: 0.4rem 0.85rem; border-radius: 2rem; border: 1px solid var(--border-color); font-size: 0.85rem; font-weight: 500;">' +
+                                    summaryFlag + '<span>Top Origin: <strong>' + escapeHtml(mostCommonCountry) + '</strong></span>' +
+                                  '</div>';
+                }
+
+                // Pricing Pillar (Cost)
+                if (totalCostSEK > 0) {
+                    statsHtml += '<div class="stats-pill" style="display: flex; align-items: center; gap: 0.5rem; background: var(--bg-warm); padding: 0.4rem 0.85rem; border-radius: 2rem; border: 1px solid var(--border-color); font-size: 0.85rem; font-weight: 500;">' +
+                                    '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6b5d4d" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M16 8l-8 8M8 8l8 8"/></svg>' +
+                                    '<span>Cost: <strong>' + Math.round(totalCostSEK).toLocaleString() + ' SEK</strong></span>' +
+                                  '</div>';
+                }
+
+                // Value Pillar (Total Estimated Value)
+                if (totalEstSEK > 0) {
+                    statsHtml += '<div class="stats-pill" style="display: flex; align-items: center; gap: 0.5rem; background: var(--bg-warm); padding: 0.4rem 0.85rem; border-radius: 2rem; border: 1px solid var(--border-color); font-size: 0.85rem; font-weight: 500;">' +
+                                    '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#e6a817" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v12M17 12H7"/></svg>' +
+                                    '<span>Value: <strong>' + Math.round(totalEstSEK).toLocaleString() + ' SEK</strong></span>' +
+                                  '</div>';
+                }
+
+                // Appreciation Pill
+                if (totalAppreciation > 0) {
+                    var percentGain = Math.round((totalAppreciation / totalCostSEK) * 100);
+                    statsHtml += '<div class="stats-pill" style="display: flex; align-items: center; gap: 0.5rem; background: rgba(67, 151, 117, 0.1); color: #439775; padding: 0.4rem 0.85rem; border-radius: 2rem; border: 1px solid rgba(67, 151, 117, 0.2); font-size: 0.85rem; font-weight: 700;">' +
+                                    '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>' +
+                                    '<span>Appreciation: +' + Math.round(totalAppreciation).toLocaleString() + ' SEK (↑' + percentGain + '%)</span>' +
+                                  '</div>';
+                }
+            }
+            
+            statsHtml += '</div>';
+
+            var textContainer = document.getElementById('stats-summary-text');
+            if (textContainer) {
+                textContainer.innerHTML = statsHtml;
+            }
+
+            // Compressed Horizontal Legend with Flags
+            var countryListHtml = '<div class="dashboard-custom-legend" style="margin-top: 1rem; display: flex; flex-wrap: wrap; gap: 0.5rem; justify-content: center; align-items: center;">';
+            var sortedCountries = Object.entries(countryCounts).sort(function(a,b){ return b[1] - a[1]; });
+            var chartColors = ['#4e79a7', '#f28e2c', '#e15759', '#76b7b2', '#59a14f', '#edc949', '#af7aa1', '#ff9da7', '#9c755f', '#bab0ab'];
+            
+            sortedCountries.forEach(function(entry, idx) {
+                var cName = entry[0];
+                var cValue = entry[1];
+                var cFlagHtml = getFlagHtml(cName);
+                var color = chartColors[idx % chartColors.length];
+                
+                countryListHtml += '<div style="display: flex; align-items: center; gap: 0.4rem; font-size: 0.75rem; background: var(--bg-warm); padding: 0.25rem 0.6rem; border-radius: 1rem; border: 1px solid var(--border-color); white-space: nowrap;">' +
+                                    '<div style="width: 8px; height: 8px; border-radius: 50%; background: ' + color + '; flex-shrink: 0;"></div>' +
+                                    cFlagHtml.replace('margin-right: 0.4rem;', 'margin-right: 0;') + 
+                                    '<span style="font-weight: 600;">' + escapeHtml(cName) + '</span>' +
+                                    '<span style="opacity: 0.6; font-weight: 700; color: var(--accent); margin-left: 0.15rem;">' + cValue + '</span>' +
+                                  '</div>';
+            });
+            countryListHtml += '</div>';
+
+            var countryChartElem = document.getElementById('chart-country');
+            if (countryChartElem && countryChartElem.parentElement) {
+                var countryChartWrapper = countryChartElem.parentElement;
+                var existingList = countryChartWrapper.querySelector('.dashboard-country-list') || countryChartWrapper.querySelector('.dashboard-custom-legend');
+                if (existingList) existingList.remove();
+                countryChartWrapper.insertAdjacentHTML('beforeend', countryListHtml);
+            }
+
+            // Compressed Horizontal Legend for PERIODS
+            var periodListHtml = '<div class="dashboard-custom-legend" style="margin-top: 1rem; display: flex; flex-wrap: wrap; gap: 0.5rem; justify-content: center; align-items: center;">';
+            var sortedPeriods = Object.entries(periodCounts).sort(function(a,b){ return b[1] - a[1]; });
+            
+            sortedPeriods.forEach(function(entry, idx) {
+                var pName = entry[0];
+                var pValue = entry[1];
+                var color = chartColors[idx % chartColors.length];
+                
+                periodListHtml += '<div style="display: flex; align-items: center; gap: 0.4rem; font-size: 0.75rem; background: var(--bg-warm); padding: 0.25rem 0.6rem; border-radius: 1rem; border: 1px solid var(--border-color); white-space: nowrap;">' +
+                                    '<div style="width: 8px; height: 8px; border-radius: 50%; background: ' + color + '; flex-shrink: 0;"></div>' +
+                                    '<span style="font-weight: 600;">' + escapeHtml(pName) + '</span>' +
+                                    '<span style="opacity: 0.6; font-weight: 700; color: var(--accent); margin-left: 0.15rem;">' + pValue + '</span>' +
+                                  '</div>';
+            });
+            periodListHtml += '</div>';
+
+            var periodChartElem = document.getElementById('chart-period');
+            if (periodChartElem && periodChartElem.parentElement) {
+                var periodChartWrapper = periodChartElem.parentElement;
+                var existingList = periodChartWrapper.querySelector('.dashboard-custom-legend');
+                if (existingList) existingList.remove();
+                periodChartWrapper.insertAdjacentHTML('beforeend', periodListHtml);
+            }
+
+            // --- DATA INSIGHTS VIEW ---
+            var dataContainer = document.getElementById('data-insights-container');
+            if (dataContainer) {
+                var dataHtml = '';
+
+                if (currentView === 'true') {
+                    // Wishlist-Specific Data Insights
+                    var targetBudgetEst = totalEstSEK;
+                    var targetBudgetCost = totalCostSEK;
+                    var totalBudget = targetBudgetEst > 0 ? targetBudgetEst : targetBudgetCost;
+                    var missingCount = filtered.length;
+                    
+                    var topWantedCats = Object.entries(catCounts)
+                        .sort(function(a, b) { return b[1] - a[1]; })
+                        .slice(0, 4);
+
+                    dataHtml = '<div class="data-insights-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.5rem; padding: 1rem 0;">' +
+                                    // Budget Card
+                                    '<div class="data-card" style="background: var(--bg-warm); padding: 1.5rem; border-radius: 1rem; border: 1px solid var(--border-color); text-align: center; box-shadow: var(--shadow-sm);">' +
+                                        '<div style="color: var(--accent); margin-bottom: 0.5rem;"><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></div>' +
+                                        '<div style="font-size: 0.9rem; opacity: 0.7; font-weight: 600; text-transform: uppercase;">Total Target Budget</div>' +
+                                        '<div style="font-size: 2.25rem; font-weight: 800; color: var(--text-main); margin-top: 0.5rem;">' + Math.round(totalBudget).toLocaleString() + ' SEK</div>' +
+                                        '<div style="font-size: 0.8rem; opacity: 0.6; margin-top: 0.25rem;">For ' + missingCount + ' tracked specimens</div>' +
+                                    '</div>' +
+                                    // Most Wanted Card
+                                    '<div class="data-card" style="background: var(--bg-warm); padding: 1.5rem; border-radius: 1rem; border: 1px solid var(--border-color); text-align: left; box-shadow: var(--shadow-sm);">' +
+                                        '<div style="color: var(--accent); margin-bottom: 0.5rem;"><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg></div>' +
+                                        '<div style="font-size: 0.9rem; opacity: 0.7; font-weight: 600; text-transform: uppercase; margin-bottom: 1rem;">Most Wanted Categories</div>';
+                                        
+                                        topWantedCats.forEach(function(cat) {
+                                            dataHtml += '<div style="margin-bottom: 0.5rem; display: flex; justify-content: space-between; border-bottom: 1px dashed var(--border-color); padding-bottom: 0.25rem;">' +
+                                                            '<span style="font-weight: 600; opacity: 0.8;">' + cat[0] + '</span>' +
+                                                            '<span class="badge badge-wishlist">' + cat[1] + '</span>' +
+                                                        '</div>';
+                                        });
+                                        if (topWantedCats.length === 0) dataHtml += '<div style="font-size: 0.85rem; opacity: 0.6;">No categories found.</div>';
+                                        
+                    dataHtml +=     '</div></div>';
+                } else {
+                    // Standard Collection Data Insights
+                    var avgSize = sizeCount > 0 ? (totalSizeCm / sizeCount).toFixed(2) : 0;
+                    var weightStr = totalWeight >= 1000 ? (totalWeight / 1000).toFixed(2) + ' kg' : totalWeight.toFixed(1) + ' g';
+                    
+                    // --- CALCULATE MISSING PERIODS ---
+                    var missingByEra = {};
+                    var totalMissing = 0;
+                    for (var era in PERIODS_AND_EPOCHS) {
+                        var eraMissing = [];
+                        for (var per in PERIODS_AND_EPOCHS[era]) {
+                            if (!periodCounts[per]) {
+                                eraMissing.push(per);
+                                totalMissing++;
+                            }
+                        }
+                        if (eraMissing.length > 0) {
+                            missingByEra[era] = eraMissing;
+                        }
+                    }
+
+                    // --- CALCULATE TOP TAGS ---
+                    var topTags = Object.entries(tagCounts)
+                        .sort(function(a, b) { return b[1] - a[1]; })
+                        .slice(0, 8);
+
+                    // --- CALCULATE FIELD DISCOVERY SCORE ---
+                    var overallOwned = fossils.filter(function(f) { return !f.isWishlist && !f.isSold && !f.isDream; });
+                    var ownedCount = overallOwned.length;
+                    var selfFoundCount = overallOwned.filter(function(f) { return !!f.isSelfFound; }).length;
+                    var selfFoundPercent = ownedCount > 0 ? Math.round((selfFoundCount / ownedCount) * 100) : 0;
+                    
+                    var rankTitle = 'Curator';
+                    var rankEmoji = '🏛️';
+                    if (selfFoundCount >= 25) {
+                        rankTitle = 'Veteran Prospector';
+                        rankEmoji = '🦖';
+                    } else if (selfFoundCount >= 10) {
+                        rankTitle = 'Field Paleontologist';
+                        rankEmoji = '🔨';
+                    } else if (selfFoundCount >= 3) {
+                        rankTitle = 'Fossil Hunter';
+                        rankEmoji = '🥾';
+                    } else if (selfFoundCount >= 1) {
+                        rankTitle = 'Novice Explorer';
+                        rankEmoji = '🧭';
+                    } else {
+                        rankTitle = 'Museum Curator';
+                        rankEmoji = '🏛️';
+                    }
+
+                    dataHtml = '<div class="data-insights-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.5rem; padding: 1rem 0;">' +
+                                    // Weight Card
+                                    '<div class="data-card" style="background: var(--bg-warm); padding: 1.5rem; border-radius: 1rem; border: 1px solid var(--border-color); text-align: center; box-shadow: var(--shadow-sm);">' +
+                                        '<div style="color: var(--accent); margin-bottom: 0.5rem;"><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg></div>' +
+                                        '<div style="font-size: 0.9rem; opacity: 0.7; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;">Total Collection Weight</div>' +
+                                        '<div style="font-size: 2.25rem; font-weight: 800; color: var(--text-main); margin-top: 0.5rem;">' + weightStr + '</div>' +
+                                        '<div style="font-size: 0.8rem; opacity: 0.6; margin-top: 0.25rem;">From ' + weightCount + ' weighed specimens</div>' +
+                                    '</div>' +
+                                    // Size Card
+                                    '<div class="data-card" style="background: var(--bg-warm); padding: 1.5rem; border-radius: 1rem; border: 1px solid var(--border-color); text-align: center; box-shadow: var(--shadow-sm);">' +
+                                        '<div style="color: var(--accent); margin-bottom: 0.5rem;"><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg></div>' +
+                                        '<div style="font-size: 0.9rem; opacity: 0.7; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;">Average Specimen Size</div>' +
+                                        '<div style="font-size: 2.25rem; font-weight: 800; color: var(--text-main); margin-top: 0.5rem;">' + avgSize + ' cm</div>' +
+                                        '<div style="font-size: 0.8rem; opacity: 0.6; margin-top: 0.25rem;">Based on ' + sizeCount + ' measured specimens</div>' +
+                                    '</div>' +
+                                    // Missing Periods Card
+                                    '<div class="data-card" style="background: var(--bg-warm); padding: 1.5rem; border-radius: 1rem; border: 1px solid var(--border-color); text-align: left; box-shadow: var(--shadow-sm);">' +
+                                        '<div style="color: var(--danger); margin-bottom: 0.5rem;"><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></div>' +
+                                        '<div style="font-size: 0.9rem; opacity: 0.7; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;">Lacking Fossils From</div>' +
+                                        '<div style="margin-top: 1rem; max-height: 120px; overflow-y: auto; padding-right: 0.5rem;">';
+                                        
+                                        for (var era in missingByEra) {
+                                            dataHtml += '<div style="margin-bottom: 0.5rem;">' +
+                                                            '<div style="font-size: 0.7rem; font-weight: 800; color: var(--accent); text-transform: uppercase; margin-bottom: 0.25rem;">' + era + '</div>' +
+                                                            '<div style="font-size: 0.85rem; color: var(--text-primary); opacity: 0.9;">' + missingByEra[era].join(', ') + '</div>' +
+                                                        '</div>';
+                                        }
+                                        if (totalMissing === 0) {
+                                            dataHtml += '<div style="font-size: 0.85rem; color: #439775; font-weight: 600;">You collection is geologically complete!</div>';
+                                        }
+
+                    dataHtml +=         '</div>' +
+                                    '</div>' +
+                                    // Top Tags Card
+                                    '<div class="data-card" style="background: var(--bg-warm); padding: 1.5rem; border-radius: 1rem; border: 1px solid var(--border-color); text-align: left; box-shadow: var(--shadow-sm);">' +
+                                        '<div style="color: var(--accent); margin-bottom: 0.5rem;"><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg></div>' +
+                                        '<div style="font-size: 0.9rem; opacity: 0.7; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;">Most Frequent Tags</div>' +
+                                        '<div style="margin-top: 1rem; display: flex; flex-wrap: wrap; gap: 0.5rem;">';
+                                        
+                                        topTags.forEach(function(tagPair) {
+                                            dataHtml += '<span class="tag-pill" style="margin: 0; background: var(--bg-surface); border: 1px solid var(--border-color); cursor: pointer;" onclick="document.getElementById(\'search\').value = \'#' + tagPair[0] + '\'; app.renderFossils();">#' + tagPair[0] + ' <small style="opacity: 0.6; margin-left: 2px;">' + tagPair[1] + '</small></span>';
+                                        });
+                                        if (topTags.length === 0) {
+                                            dataHtml += '<div style="font-size: 0.85rem; opacity: 0.6;">No tags used yet.</div>';
+                                        }
+
+                    dataHtml +=         '</div>' +
+                                    '</div>' +
+                                    // Paleontological Field Score Card
+                                    '<div class="data-card" style="background: var(--bg-warm); padding: 1.5rem; border-radius: 1rem; border: 1px solid var(--border-color); text-align: center; box-shadow: var(--shadow-sm); display: flex; flex-direction: column; justify-content: space-between;">' +
+                                        '<div>' +
+                                            '<div style="color: #e6a817; margin-bottom: 0.5rem;"><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"></polygon></svg></div>' +
+                                            '<div style="font-size: 0.9rem; opacity: 0.7; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;">Field Discovery Score</div>' +
+                                            '<div style="font-size: 2.25rem; font-weight: 800; color: var(--text-main); margin-top: 0.5rem;">' + selfFoundPercent + '%</div>' +
+                                            '<div class="badge" style="display: inline-flex; align-items: center; gap: 0.25rem; background: var(--bg-surface); border: 1px solid var(--border-color); color: #e6a817; font-weight: 700; font-size: 0.85rem; padding: 0.25rem 0.75rem; border-radius: 2rem; margin-top: 0.5rem; text-transform: uppercase; letter-spacing: 0.03em;">' + rankEmoji + ' ' + rankTitle + '</div>' +
+                                        '</div>' +
+                                        '<div>' +
+                                            '<div style="background: var(--border-color); border-radius: 9999px; height: 8px; margin-top: 1.25rem; overflow: hidden; position: relative;" title="' + selfFoundPercent + '% field discoveries">' +
+                                                '<div style="background: linear-gradient(90deg, #e6a817, #f7d070); height: 100%; width: ' + selfFoundPercent + '%; border-radius: 9999px; transition: width 0.6s ease;"></div>' +
+                                            '</div>' +
+                                            '<div style="font-size: 0.8rem; opacity: 0.6; margin-top: 0.75rem;">You collected ' + selfFoundCount + ' of your ' + ownedCount + ' active specimens personally in the field.</div>' +
+                                        '</div>' +
+                                    '</div>' +
+                                   '</div>';
+                }
+                dataContainer.innerHTML = dataHtml;
+            }
+
+            // --- STRATIGRAPHIC COLUMN ---
+            if (isStatsOpen) {
+                statsContainer.style.display = 'flex';
+                
+                if (isFossilMapOpen) {
+                    window.app.drawMapMarkers();
+                } else if (isDataInsightsOpen) {
+                    // Handled above
+                } else if (isTreemapOpen) {
+                    window.app.renderMissingSpecimens();
+                } else if (isEarthHistoryOpen) {
+                    var activePeriodBtn = document.querySelector('.geological-sidebar button[style*="background: var(--accent-bg)"]');
+                    var activePeriod = activePeriodBtn ? activePeriodBtn.textContent.trim().split('\n')[0].trim() : 'Quaternary';
+                    window.app.renderEarthHistory(activePeriod);
+                } else {
+                    // Render Charts with Dynamic In-Place Caching (MASSIVE Speed Boost!)
+                    try {
+                        var isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+                        var chartBorderColor = isDark ? '#141d26' : '#ffffff';
+
+                        if (chartCountry) {
+                            chartCountry.data.labels = Object.keys(countryCounts);
+                            chartCountry.data.datasets[0].data = Object.values(countryCounts);
+                            chartCountry.data.datasets[0].borderColor = chartBorderColor;
+                            chartCountry.update('none');
+                        } else {
+                            var ctxCountry = document.getElementById('chart-country').getContext('2d');
+                            chartCountry = new Chart(ctxCountry, {
+                                type: 'pie',
+                                data: {
+                                    labels: Object.keys(countryCounts),
+                                    datasets: [{
+                                        data: Object.values(countryCounts),
+                                        backgroundColor: ['#4e79a7', '#f28e2c', '#e15759', '#76b7b2', '#59a14f', '#edc949', '#af7aa1', '#ff9da7', '#9c755f', '#bab0ab'],
+                                        borderColor: chartBorderColor,
+                                        borderWidth: 1.5
+                                    }]
+                                },
+                                options: { 
+                                    responsive: true, 
+                                    maintainAspectRatio: true,
+                                    aspectRatio: 1.15,
+                                    animation: false,
+                                    plugins: { 
+                                        legend: { display: false }, 
+                                        title: { display: false } 
+                                    } 
+                                }
+                            });
+                        }
+
+                        if (chartPeriod) {
+                            chartPeriod.data.labels = Object.keys(periodCounts);
+                            chartPeriod.data.datasets[0].data = Object.values(periodCounts);
+                            chartPeriod.data.datasets[0].borderColor = chartBorderColor;
+                            chartPeriod.update('none');
+                        } else {
+                            var ctxPeriod = document.getElementById('chart-period').getContext('2d');
+                            chartPeriod = new Chart(ctxPeriod, {
+                                type: 'pie',
+                                data: {
+                                    labels: Object.keys(periodCounts),
+                                    datasets: [{
+                                        data: Object.values(periodCounts),
+                                        backgroundColor: ['#4e79a7', '#f28e2c', '#e15759', '#76b7b2', '#59a14f', '#edc949', '#af7aa1', '#ff9da7', '#9c755f', '#bab0ab'],
+                                        borderColor: chartBorderColor,
+                                        borderWidth: 1.5
+                                    }]
+                                },
+                                options: { 
+                                    responsive: true, 
+                                    maintainAspectRatio: true,
+                                    aspectRatio: 1.15,
+                                    animation: false,
+                                    plugins: { 
+                                        legend: { display: false }, 
+                                        title: { display: false } 
+                                    } 
+                                }
+                            });
+                        }
+                    } catch (e) {
+                        console.error('Chart.js update error:', e);
+                    }
+                }
+            }
+        } else {
+            statsContainer.style.display = 'none';
         }
     },
 
@@ -6221,7 +6755,7 @@ window.app = {
     },
 
     batchAutoEnrichAll: async function() {
-        if (!confirm('Start batch Auto-Enrichment?\n\nThis will scan your entire archive database and automatically fetch missing Sizes, Wikipedia Etymologies, Taxonomic Authorities, Biology Descriptions, and location coordinates in parallel.\n\nNote: We respect API rate limits with polite request throttling.')) {
+        if (!confirm('Start auto-filling scientific data?\n\nThis will scan your entire archive database and automatically fetch missing Sizes, Wikipedia Etymologies, Taxonomic Authorities, Biology Descriptions, and location coordinates in parallel.\n\nNote: We respect API rate limits with polite request throttling.')) {
             return;
         }
 
@@ -6233,11 +6767,11 @@ window.app = {
 
         var count = 0;
         var i = 0;
-        window.app.showBatchProgress('⚡ Auto-Enriching Database', 0, total);
+        window.app.showBatchProgress('⚡ Auto-Filling Scientific Data', 0, total);
 
         for (var f of fossils) {
             i++;
-            window.app.showBatchProgress('⚡ Auto-Enriching Database', i, total);
+            window.app.showBatchProgress('⚡ Auto-Filling Scientific Data', i, total);
 
             var genus = (f.specimen || '').split(' ')[0];
             if (!genus) continue;
@@ -7205,515 +7739,14 @@ window.app = {
                 });
             }
 
-            // --- STATS DASHBOARD (OPTIMIZED: Execute ONLY if open to ensure instant tab-switching) ---
-            var statsContainer = document.getElementById('stats-summary');
-            if (!isStatsOpen) {
-                if (statsContainer) statsContainer.style.display = 'none';
+            // --- STATS DASHBOARD ---
+            if (isStatsOpen) {
+                window.app.updateDashboardStats(filtered);
             } else {
-                if (filtered.length > 0) {
-                    statsContainer.style.display = 'flex';
-
-                    // GROUP AND TALLY VALUE
-                    var valueByCurrency = {};
-                    var estValueByCurrency = {};
-                    
-                    // Charts Data Arrays
-                    var countryCounts = {};
-                    var maxCountryCount = 0;
-                    var mostCommonCountry = null;
-                    var periodCounts = {};
-
-                    var catCounts = {};
-                    var maxCatCount = 0;
-                    var mostCommonCat = null;
-
-                    var totalWeight = 0;
-                    var weightCount = 0;
-                    var totalSizeCm = 0;
-                    var sizeCount = 0;
-                    var tagCounts = {};
-
-                    for (var i = 0; i < filtered.length; i++) {
-                        var f = filtered[i];
-
-                        // Tally Category
-                        var c = f.category;
-                        if (c) {
-                            catCounts[c] = (catCounts[c] || 0) + 1;
-                            if (catCounts[c] > maxCatCount) {
-                                maxCatCount = catCounts[c];
-                                mostCommonCat = c;
-                            }
-                        }
-
-                        // Tally Purchase Value
-                        if (f.price > 0) {
-                            var curr = f.currency || 'USD';
-                            valueByCurrency[curr] = (valueByCurrency[curr] || 0) + f.price;
-                        }
-
-                        // Tally Estimated Value
-                        if (f.estimatedValue > 0) {
-                            var estCurr = f.estimatedCurrency || 'USD';
-                            estValueByCurrency[estCurr] = (estValueByCurrency[estCurr] || 0) + f.estimatedValue;
-                        }
-
-                        // Tally Country
-                        var cntry = f.country ? f.country.trim() : 'Unknown';
-                        if (cntry.length === 0) cntry = 'Unknown';
-                        countryCounts[cntry] = (countryCounts[cntry] || 0) + 1;
-                        if (countryCounts[cntry] > maxCountryCount && cntry !== 'Unknown') {
-                            maxCountryCount = countryCounts[cntry];
-                            mostCommonCountry = cntry;
-                        }
-
-                        // Tally Period
-                        var per = f.geologicalPeriod ? f.geologicalPeriod : 'Unknown';
-                        periodCounts[per] = (periodCounts[per] || 0) + 1;
-
-                        // Tally Weight
-                        if (f.weight > 0) {
-                            totalWeight += f.weight;
-                            weightCount++;
-                        }
-
-                        // Tally Size (Normalize to cm)
-                        if (f.size > 0) {
-                            var s = f.size;
-                            var su = (f.sizeUnit || '').toLowerCase().trim();
-                            if (su === 'inch' || su === 'in' || su === 'inches') {
-                                s *= 2.54;
-                            }
-                            totalSizeCm += s;
-                            sizeCount++;
-                        }
-
-                        // Tally Tags
-                        if (f.tags && Array.isArray(f.tags)) {
-                            f.tags.forEach(function(t) {
-                                tagCounts[t] = (tagCounts[t] || 0) + 1;
-                            });
-                        }
-                    }
-                    
-                    function calculateTotalSEK(map) {
-                        var total = 0;
-                        for (var k in map) {
-                            var val = map[k];
-                            if (exchangeRates && exchangeRates[k]) {
-                                total += val / exchangeRates[k];
-                            } else {
-                                if (k === 'USD') total += val * 10.50;
-                                else if (k === 'EUR') total += val * 11.50;
-                                else total += val;
-                            }
-                        }
-                        return total;
-                    }
-
-                    var totalCostSEK = calculateTotalSEK(valueByCurrency);
-                    var totalEstSEK = calculateTotalSEK(estValueByCurrency);
-                    var totalAppreciation = totalEstSEK - totalCostSEK;
-
-                    // Redesigned Quick Stats (Better visuals)
-                    var statsHtml = '<div class="stats-summary-pills" style="display: flex; flex-wrap: wrap; gap: 0.65rem; align-items: center; justify-content: flex-start;">';
-                    
-                    if (currentView === 'sold') {
-                        var saleValueByCurrency = {};
-                        filtered.forEach(function(f) {
-                            if (f.isSold && f.salePrice > 0) {
-                                var saleCurr = f.saleCurrency || 'USD';
-                                saleValueByCurrency[saleCurr] = (saleValueByCurrency[saleCurr] || 0) + f.salePrice;
-                            }
-                        });
-                        var totalSaleSEK = calculateTotalSEK(saleValueByCurrency);
-                        var totalProfitSEK = totalSaleSEK - totalCostSEK;
-
-                        // Count Pill
-                        statsHtml += '<div class="stats-pill" style="display: flex; align-items: center; gap: 0.5rem; background: var(--bg-warm); padding: 0.4rem 0.85rem; border-radius: 2rem; border: 1px solid var(--border-color); font-size: 0.85rem; font-weight: 500;">' +
-                                        '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2v11z"/></svg>' +
-                                        '<span><strong>' + filtered.length + '</strong> Sold Specimens</span>' +
-                                      '</div>';
-
-                        // Acquisition Cost Pill
-                        if (totalCostSEK > 0) {
-                            statsHtml += '<div class="stats-pill" style="display: flex; align-items: center; gap: 0.5rem; background: var(--bg-warm); padding: 0.4rem 0.85rem; border-radius: 2rem; border: 1px solid var(--border-color); font-size: 0.85rem; font-weight: 500;">' +
-                                            '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6b5d4d" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M16 8l-8 8M8 8l8 8"/></svg>' +
-                                            '<span>Acquisition Cost: <strong>' + Math.round(totalCostSEK).toLocaleString() + ' SEK</strong></span>' +
-                                          '</div>';
-                        }
-
-                        // Sales Revenue Pill
-                        if (totalSaleSEK > 0) {
-                            statsHtml += '<div class="stats-pill" style="display: flex; align-items: center; gap: 0.5rem; background: var(--bg-warm); padding: 0.4rem 0.85rem; border-radius: 2rem; border: 1px solid var(--border-color); font-size: 0.85rem; font-weight: 500;">' +
-                                            '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>' +
-                                            '<span>Sales Revenue: <strong>' + Math.round(totalSaleSEK).toLocaleString() + ' SEK</strong></span>' +
-                                          '</div>';
-                        }
-
-                        // Net Profit / ROI Pill
-                        if (totalSaleSEK > 0 && totalCostSEK > 0) {
-                            var percentProfit = Math.round((totalProfitSEK / totalCostSEK) * 100);
-                            var profitColor = totalProfitSEK >= 0 ? '#439775' : '#b33a3a';
-                            var profitBg = totalProfitSEK >= 0 ? 'rgba(67, 151, 117, 0.1)' : 'rgba(179, 58, 58, 0.1)';
-                            var profitBorder = totalProfitSEK >= 0 ? 'rgba(67, 151, 117, 0.2)' : 'rgba(179, 58, 58, 0.2)';
-                            statsHtml += '<div class="stats-pill" style="display: flex; align-items: center; gap: 0.5rem; background: ' + profitBg + '; color: ' + profitColor + '; padding: 0.4rem 0.85rem; border-radius: 2rem; border: 1px solid ' + profitBorder + '; font-size: 0.85rem; font-weight: 700;">' +
-                                            '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>' +
-                                            '<span>Net Profit: ' + (totalProfitSEK >= 0 ? '+' : '') + Math.round(totalProfitSEK).toLocaleString() + ' SEK (' + (totalProfitSEK >= 0 ? 'â†‘' : 'â†“') + percentProfit + '%)</span>' +
-                                          '</div>';
-                        }
-                    } else {
-                        // Count Pill
-                        statsHtml += '<div class="stats-pill" style="display: flex; align-items: center; gap: 0.5rem; background: var(--bg-warm); padding: 0.4rem 0.85rem; border-radius: 2rem; border: 1px solid var(--border-color); font-size: 0.85rem; font-weight: 500;">' +
-                                        '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2v11z"/></svg>' +
-                                        '<span><strong>' + filtered.length + '</strong> Specimens</span>' +
-                                      '</div>';
-
-                        // Top Origin Pill
-                        if (mostCommonCountry && mostCommonCountry !== 'Unknown') {
-                            var summaryFlag = getFlagHtml(mostCommonCountry);
-                            statsHtml += '<div class="stats-pill" style="display: flex; align-items: center; gap: 0.5rem; background: var(--bg-warm); padding: 0.4rem 0.85rem; border-radius: 2rem; border: 1px solid var(--border-color); font-size: 0.85rem; font-weight: 500;">' +
-                                            summaryFlag + '<span>Top Origin: <strong>' + (window.escapeHtml ? escapeHtml(mostCommonCountry) : mostCommonCountry) + '</strong></span>' +
-                                          '</div>';
-                        }
-
-                        // Pricing Pillar (Cost)
-                        if (totalCostSEK > 0) {
-                            statsHtml += '<div class="stats-pill" style="display: flex; align-items: center; gap: 0.5rem; background: var(--bg-warm); padding: 0.4rem 0.85rem; border-radius: 2rem; border: 1px solid var(--border-color); font-size: 0.85rem; font-weight: 500;">' +
-                                            '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6b5d4d" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M16 8l-8 8M8 8l8 8"/></svg>' +
-                                            '<span>Cost: <strong>' + Math.round(totalCostSEK).toLocaleString() + ' SEK</strong></span>' +
-                                          '</div>';
-                        }
-
-                        // Value Pillar (Total Estimated Value)
-                        if (totalEstSEK > 0) {
-                            statsHtml += '<div class="stats-pill" style="display: flex; align-items: center; gap: 0.5rem; background: var(--bg-warm); padding: 0.4rem 0.85rem; border-radius: 2rem; border: 1px solid var(--border-color); font-size: 0.85rem; font-weight: 500;">' +
-                                            '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#e6a817" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v12M17 12H7"/></svg>' +
-                                            '<span>Value: <strong>' + Math.round(totalEstSEK).toLocaleString() + ' SEK</strong></span>' +
-                                          '</div>';
-                        }
-
-                        // Appreciation Pill
-                        if (totalAppreciation > 0) {
-                            var percentGain = Math.round((totalAppreciation / totalCostSEK) * 100);
-                            statsHtml += '<div class="stats-pill" style="display: flex; align-items: center; gap: 0.5rem; background: rgba(67, 151, 117, 0.1); color: #439775; padding: 0.4rem 0.85rem; border-radius: 2rem; border: 1px solid rgba(67, 151, 117, 0.2); font-size: 0.85rem; font-weight: 700;">' +
-                                            '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>' +
-                                            '<span>Appreciation: +' + Math.round(totalAppreciation).toLocaleString() + ' SEK (\u2191' + percentGain + '%)</span>' +
-                                          '</div>';
-                        }
-                    }
-                    
-                    statsHtml += '</div>';
-
-                    var textContainer = document.getElementById('stats-summary-text');
-                    if (textContainer) {
-                        textContainer.innerHTML = statsHtml;
-                    }
-
-                    // Compressed Horizontal Legend with Flags
-                    var countryListHtml = '<div class="dashboard-custom-legend" style="margin-top: 1rem; display: flex; flex-wrap: wrap; gap: 0.5rem; justify-content: center; align-items: center;">';
-                    var sortedCountries = Object.entries(countryCounts).sort(function(a,b){ return b[1] - a[1]; });
-                    var chartColors = ['#4e79a7', '#f28e2c', '#e15759', '#76b7b2', '#59a14f', '#edc949', '#af7aa1', '#ff9da7', '#9c755f', '#bab0ab'];
-                    
-                    sortedCountries.forEach(function(entry, idx) {
-                        var cName = entry[0];
-                        var cValue = entry[1];
-                        var cFlagHtml = getFlagHtml(cName);
-                        var color = chartColors[idx % chartColors.length];
-                        
-                        countryListHtml += '<div style="display: flex; align-items: center; gap: 0.4rem; font-size: 0.75rem; background: var(--bg-warm); padding: 0.25rem 0.6rem; border-radius: 1rem; border: 1px solid var(--border-color); white-space: nowrap;">' +
-                                            '<div style="width: 8px; height: 8px; border-radius: 50%; background: ' + color + '; flex-shrink: 0;"></div>' +
-                                            cFlagHtml.replace('margin-right: 0.4rem;', 'margin-right: 0;') + 
-                                            '<span style="font-weight: 600;">' + (window.escapeHtml ? escapeHtml(cName) : cName) + '</span>' +
-                                            '<span style="opacity: 0.6; font-weight: 700; color: var(--accent); margin-left: 0.15rem;">' + cValue + '</span>' +
-                                          '</div>';
-                    });
-                    countryListHtml += '</div>';
-
-                    var countryChartElem = document.getElementById('chart-country');
-                    if (countryChartElem && countryChartElem.parentElement) {
-                        var countryChartWrapper = countryChartElem.parentElement;
-                        var existingList = countryChartWrapper.querySelector('.dashboard-country-list') || countryChartWrapper.querySelector('.dashboard-custom-legend');
-                        if (existingList) existingList.remove();
-                        countryChartWrapper.insertAdjacentHTML('beforeend', countryListHtml);
-                    }
-
-                    // Compressed Horizontal Legend for PERIODS
-                    var periodListHtml = '<div class="dashboard-custom-legend" style="margin-top: 1rem; display: flex; flex-wrap: wrap; gap: 0.5rem; justify-content: center; align-items: center;">';
-                    var sortedPeriods = Object.entries(periodCounts).sort(function(a,b){ return b[1] - a[1]; });
-                    
-                    sortedPeriods.forEach(function(entry, idx) {
-                        var pName = entry[0];
-                        var pValue = entry[1];
-                        var color = chartColors[idx % chartColors.length];
-                        
-                        periodListHtml += '<div style="display: flex; align-items: center; gap: 0.4rem; font-size: 0.75rem; background: var(--bg-warm); padding: 0.25rem 0.6rem; border-radius: 1rem; border: 1px solid var(--border-color); white-space: nowrap;">' +
-                                            '<div style="width: 8px; height: 8px; border-radius: 50%; background: ' + color + '; flex-shrink: 0;"></div>' +
-                                            '<span style="font-weight: 600;">' + (window.escapeHtml ? escapeHtml(pName) : pName) + '</span>' +
-                                            '<span style="opacity: 0.6; font-weight: 700; color: var(--accent); margin-left: 0.15rem;">' + pValue + '</span>' +
-                                          '</div>';
-                    });
-                    periodListHtml += '</div>';
-
-                    var periodChartElem = document.getElementById('chart-period');
-                    if (periodChartElem && periodChartElem.parentElement) {
-                        var periodChartWrapper = periodChartElem.parentElement;
-                        var existingList = periodChartWrapper.querySelector('.dashboard-custom-legend');
-                        if (existingList) existingList.remove();
-                        periodChartWrapper.insertAdjacentHTML('beforeend', periodListHtml);
-                    }
-
-                    // --- DATA INSIGHTS VIEW ---
-                    var dataContainer = document.getElementById('data-insights-container');
-                    if (dataContainer) {
-                        var dataHtml = '';
-
-                        if (currentView === 'true') {
-                            // Wishlist-Specific Data Insights
-                            var targetBudgetEst = totalEstSEK;
-                            var targetBudgetCost = totalCostSEK;
-                            var totalBudget = targetBudgetEst > 0 ? targetBudgetEst : targetBudgetCost;
-                            var missingCount = filtered.length;
-                            
-                            var topWantedCats = Object.entries(catCounts)
-                                .sort(function(a, b) { return b[1] - a[1]; })
-                                .slice(0, 4);
-
-                            dataHtml = '<div class="data-insights-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.5rem; padding: 1rem 0;">' +
-                                            // Budget Card
-                                            '<div class="data-card" style="background: var(--bg-warm); padding: 1.5rem; border-radius: 1rem; border: 1px solid var(--border-color); text-align: center; box-shadow: var(--shadow-sm);">' +
-                                                '<div style="color: var(--accent); margin-bottom: 0.5rem;"><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></div>' +
-                                                '<div style="font-size: 0.9rem; opacity: 0.7; font-weight: 600; text-transform: uppercase;">Total Target Budget</div>' +
-                                                '<div style="font-size: 2.25rem; font-weight: 800; color: var(--text-main); margin-top: 0.5rem;">' + Math.round(totalBudget).toLocaleString() + ' SEK</div>' +
-                                                '<div style="font-size: 0.8rem; opacity: 0.6; margin-top: 0.25rem;">For ' + missingCount + ' tracked specimens</div>' +
-                                            '</div>' +
-                                            // Most Wanted Card
-                                            '<div class="data-card" style="background: var(--bg-warm); padding: 1.5rem; border-radius: 1rem; border: 1px solid var(--border-color); text-align: left; box-shadow: var(--shadow-sm);">' +
-                                                '<div style="color: var(--accent); margin-bottom: 0.5rem;"><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg></div>' +
-                                                '<div style="font-size: 0.9rem; opacity: 0.7; font-weight: 600; text-transform: uppercase; margin-bottom: 1rem;">Most Wanted Categories</div>';
-                                                
-                                                topWantedCats.forEach(function(cat) {
-                                                    dataHtml += '<div style="margin-bottom: 0.5rem; display: flex; justify-content: space-between; border-bottom: 1px dashed var(--border-color); padding-bottom: 0.25rem;">' +
-                                                                    '<span style="font-weight: 600; opacity: 0.8;">' + cat[0] + '</span>' +
-                                                                    '<span class="badge badge-wishlist">' + cat[1] + '</span>' +
-                                                                '</div>';
-                                                });
-                                                if (topWantedCats.length === 0) dataHtml += '<div style="font-size: 0.85rem; opacity: 0.6;">No categories found.</div>';
-                                                
-                            dataHtml +=     '</div></div>';
-                        } else {
-                            // Standard Collection Data Insights
-                            var avgSize = sizeCount > 0 ? (totalSizeCm / sizeCount).toFixed(2) : 0;
-                            var weightStr = totalWeight >= 1000 ? (totalWeight / 1000).toFixed(2) + ' kg' : totalWeight.toFixed(1) + ' g';
-                            
-                            // --- CALCULATE MISSING PERIODS ---
-                            var missingByEra = {};
-                            var totalMissing = 0;
-                            for (var era in PERIODS_AND_EPOCHS) {
-                                var eraMissing = [];
-                                for (var per in PERIODS_AND_EPOCHS[era]) {
-                                    if (!periodCounts[per]) {
-                                        eraMissing.push(per);
-                                        totalMissing++;
-                                    }
-                                }
-                                if (eraMissing.length > 0) {
-                                    missingByEra[era] = eraMissing;
-                                }
-                            }
-
-                            // --- CALCULATE TOP TAGS ---
-                            var topTags = Object.entries(tagCounts)
-                                .sort(function(a, b) { return b[1] - a[1]; })
-                                .slice(0, 8);
-
-                            // --- CALCULATE FIELD DISCOVERY SCORE ---
-                            var overallOwned = fossils.filter(function(f) { return !f.isWishlist && !f.isSold && !f.isDream; });
-                            var ownedCount = overallOwned.length;
-                            var selfFoundCount = overallOwned.filter(function(f) { return !!f.isSelfFound; }).length;
-                            var selfFoundPercent = ownedCount > 0 ? Math.round((selfFoundCount / ownedCount) * 100) : 0;
-                            
-                            var rankTitle = 'Curator';
-                            var rankEmoji = 'ðŸ›ï¸';
-                            if (selfFoundCount >= 25) {
-                                rankTitle = 'Veteran Prospector';
-                                rankEmoji = 'ðŸ¦–';
-                            } else if (selfFoundCount >= 10) {
-                                rankTitle = 'Field Paleontologist';
-                                rankEmoji = 'âš’ï¸';
-                            } else if (selfFoundCount >= 3) {
-                                rankTitle = 'Fossil Hunter';
-                                rankEmoji = 'ðŸ¥¾';
-                            } else if (selfFoundCount >= 1) {
-                                rankTitle = 'Novice Explorer';
-                                rankEmoji = 'ðŸ§­';
-                            } else {
-                                rankTitle = 'Museum Curator';
-                                rankEmoji = 'ðŸ›ï¸';
-                            }
-
-                            dataHtml = '<div class="data-insights-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.5rem; padding: 1rem 0;">' +
-                                            // Weight Card
-                                            '<div class="data-card" style="background: var(--bg-warm); padding: 1.5rem; border-radius: 1rem; border: 1px solid var(--border-color); text-align: center; box-shadow: var(--shadow-sm);">' +
-                                                '<div style="color: var(--accent); margin-bottom: 0.5rem;"><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg></div>' +
-                                                '<div style="font-size: 0.9rem; opacity: 0.7; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;">Total Collection Weight</div>' +
-                                                '<div style="font-size: 2.25rem; font-weight: 800; color: var(--text-main); margin-top: 0.5rem;">' + weightStr + '</div>' +
-                                                '<div style="font-size: 0.8rem; opacity: 0.6; margin-top: 0.25rem;">From ' + weightCount + ' weighed specimens</div>' +
-                                            '</div>' +
-                                            // Size Card
-                                            '<div class="data-card" style="background: var(--bg-warm); padding: 1.5rem; border-radius: 1rem; border: 1px solid var(--border-color); text-align: center; box-shadow: var(--shadow-sm);">' +
-                                                '<div style="color: var(--accent); margin-bottom: 0.5rem;"><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg></div>' +
-                                                '<div style="font-size: 0.9rem; opacity: 0.7; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;">Average Specimen Size</div>' +
-                                                '<div style="font-size: 2.25rem; font-weight: 800; color: var(--text-main); margin-top: 0.5rem;">' + avgSize + ' cm</div>' +
-                                                '<div style="font-size: 0.8rem; opacity: 0.6; margin-top: 0.25rem;">Based on ' + sizeCount + ' measured specimens</div>' +
-                                            '</div>' +
-                                            // Missing Periods Card
-                                            '<div class="data-card" style="background: var(--bg-warm); padding: 1.5rem; border-radius: 1rem; border: 1px solid var(--border-color); text-align: left; box-shadow: var(--shadow-sm);">' +
-                                                '<div style="color: var(--danger); margin-bottom: 0.5rem;"><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></div>' +
-                                                '<div style="font-size: 0.9rem; opacity: 0.7; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;">Lacking Fossils From</div>' +
-                                                '<div style="margin-top: 1rem; max-height: 120px; overflow-y: auto; padding-right: 0.5rem;">';
-                                                
-                                                for (var era in missingByEra) {
-                                                    dataHtml += '<div style="margin-bottom: 0.5rem;">' +
-                                                                    '<div style="font-size: 0.7rem; font-weight: 800; color: var(--accent); text-transform: uppercase; margin-bottom: 0.25rem;">' + era + '</div>' +
-                                                                    '<div style="font-size: 0.85rem; color: var(--text-primary); opacity: 0.9;">' + missingByEra[era].join(', ') + '</div>' +
-                                                                '</div>';
-                                                }
-                                                if (totalMissing === 0) {
-                                                    dataHtml += '<div style="font-size: 0.85rem; color: #439775; font-weight: 600;">You collection is geologically complete!</div>';
-                                                }
-
-                            dataHtml +=         '</div>' +
-                                            '</div>' +
-                                            // Top Tags Card
-                                            '<div class="data-card" style="background: var(--bg-warm); padding: 1.5rem; border-radius: 1rem; border: 1px solid var(--border-color); text-align: left; box-shadow: var(--shadow-sm);">' +
-                                                '<div style="color: var(--accent); margin-bottom: 0.5rem;"><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg></div>' +
-                                                '<div style="font-size: 0.9rem; opacity: 0.7; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;">Most Frequent Tags</div>' +
-                                                '<div style="margin-top: 1rem; display: flex; flex-wrap: wrap; gap: 0.5rem;">';
-                                                
-                                                topTags.forEach(function(tagPair) {
-                                                    dataHtml += '<span class="tag-pill" style="margin: 0; background: var(--bg-surface); border: 1px solid var(--border-color); cursor: pointer;" onclick="document.getElementById(\'search\').value = \'#' + tagPair[0] + '\'; app.renderFossils();">#' + tagPair[0] + ' <small style="opacity: 0.6; margin-left: 2px;">' + tagPair[1] + '</small></span>';
-                                                });
-                                                if (topTags.length === 0) {
-                                                    dataHtml += '<div style="font-size: 0.85rem; opacity: 0.6;">No tags used yet.</div>';
-                                                }
-
-                            dataHtml +=         '</div>' +
-                                            '</div>' +
-                                            // Paleontological Field Score Card
-                                            '<div class="data-card" style="background: var(--bg-warm); padding: 1.5rem; border-radius: 1rem; border: 1px solid var(--border-color); text-align: center; box-shadow: var(--shadow-sm); display: flex; flex-direction: column; justify-content: space-between;">' +
-                                                '<div>' +
-                                                    '<div style="color: #e6a817; margin-bottom: 0.5rem;"><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"></polygon></svg></div>' +
-                                                    '<div style="font-size: 0.9rem; opacity: 0.7; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;">Field Discovery Score</div>' +
-                                                    '<div style="font-size: 2.25rem; font-weight: 800; color: var(--text-main); margin-top: 0.5rem;">' + selfFoundPercent + '%</div>' +
-                                                    '<div class="badge" style="display: inline-flex; align-items: center; gap: 0.25rem; background: var(--bg-surface); border: 1px solid var(--border-color); color: #e6a817; font-weight: 700; font-size: 0.85rem; padding: 0.25rem 0.75rem; border-radius: 2rem; margin-top: 0.5rem; text-transform: uppercase; letter-spacing: 0.03em;">' + rankEmoji + ' ' + rankTitle + '</div>' +
-                                                '</div>' +
-                                                '<div>' +
-                                                    '<div style="background: var(--border-color); border-radius: 9999px; height: 8px; margin-top: 1.25rem; overflow: hidden; position: relative;" title="' + selfFoundPercent + '% field discoveries">' +
-                                                        '<div style="background: linear-gradient(90deg, #e6a817, #f7d070); height: 100%; width: ' + selfFoundPercent + '%; border-radius: 9999px; transition: width 0.6s ease;"></div>' +
-                                                    '</div>' +
-                                                    '<div style="font-size: 0.8rem; opacity: 0.6; margin-top: 0.75rem;">You collected ' + selfFoundCount + ' of your ' + ownedCount + ' active specimens personally in the field.</div>' +
-                                                '</div>' +
-                                            '</div>' +
-                                           '</div>';
-                        }
-                        dataContainer.innerHTML = dataHtml;
-                    }
-
-                    // --- STRATIGRAPHIC COLUMN ---
-                    // (Existing strat logic follows...)
-
-                    if (isStatsOpen) {
-                        statsContainer.style.display = 'flex';
-                        
-                        if (isFossilMapOpen) {
-                            window.app.drawMapMarkers();
-                        } else if (isDataInsightsOpen) {
-                            // Logic is already handled above in the inline section
-                        } else if (isTreemapOpen) {
-                            window.app.renderMissingSpecimens();
-                        } else if (isEarthHistoryOpen) {
-                            // Refresh represented specimens list in earth history based on currently selected period
-                            var activePeriodBtn = document.querySelector('.geological-sidebar button[style*="background: var(--accent-bg)"]');
-                            var activePeriod = activePeriodBtn ? activePeriodBtn.textContent.trim().split('\n')[0].trim() : 'Quaternary';
-                            window.app.renderEarthHistory(activePeriod);
-                        } else {
-                            // Render Charts with Dynamic In-Place Caching (MASSIVE Speed Boost!)
-                            try {
-                                var isDark = document.documentElement.getAttribute('data-theme') === 'dark';
-                                var chartBorderColor = isDark ? '#141d26' : '#ffffff';
-
-                                if (chartCountry) {
-                                    // Efficient dynamic update instead of expensive destroy-recreate cycle!
-                                    chartCountry.data.labels = Object.keys(countryCounts);
-                                    chartCountry.data.datasets[0].data = Object.values(countryCounts);
-                                    chartCountry.data.datasets[0].borderColor = chartBorderColor;
-                                    chartCountry.update('none'); // silent update without layout shifts
-                                } else {
-                                    var ctxCountry = document.getElementById('chart-country').getContext('2d');
-                                    chartCountry = new Chart(ctxCountry, {
-                                        type: 'pie',
-                                        data: {
-                                            labels: Object.keys(countryCounts),
-                                            datasets: [{
-                                                data: Object.values(countryCounts),
-                                                backgroundColor: ['#4e79a7', '#f28e2c', '#e15759', '#76b7b2', '#59a14f', '#edc949', '#af7aa1', '#ff9da7', '#9c755f', '#bab0ab'],
-                                                borderColor: chartBorderColor,
-                                                borderWidth: 1.5
-                                            }]
-                                        },
-                                        options: { 
-                                            responsive: true, 
-                                            maintainAspectRatio: true,
-                                            aspectRatio: 1.15,
-                                            plugins: { 
-                                                legend: { display: false }, 
-                                                title: { display: false } 
-                                            } 
-                                        }
-                                    });
-                                }
-
-                                if (chartPeriod) {
-                                    chartPeriod.data.labels = Object.keys(periodCounts);
-                                    chartPeriod.data.datasets[0].data = Object.values(periodCounts);
-                                    chartPeriod.data.datasets[0].borderColor = chartBorderColor;
-                                    chartPeriod.update('none');
-                                } else {
-                                    var ctxPeriod = document.getElementById('chart-period').getContext('2d');
-                                    chartPeriod = new Chart(ctxPeriod, {
-                                        type: 'pie',
-                                        data: {
-                                            labels: Object.keys(periodCounts),
-                                            datasets: [{
-                                                data: Object.values(periodCounts),
-                                                backgroundColor: ['#4e79a7', '#f28e2c', '#e15759', '#76b7b2', '#59a14f', '#edc949', '#af7aa1', '#ff9da7', '#9c755f', '#bab0ab'],
-                                                borderColor: chartBorderColor,
-                                                borderWidth: 1.5
-                                            }]
-                                        },
-                                        options: { 
-                                            responsive: true, 
-                                            maintainAspectRatio: true,
-                                            aspectRatio: 1.15,
-                                            plugins: { 
-                                                legend: { display: false }, 
-                                                title: { display: false } 
-                                            } 
-                                        }
-                                    });
-                                }
-                            } catch (e) {
-                                console.error('Chart.js update error:', e);
-                            }
-                        }
-                    } else {
-                        statsContainer.style.display = 'none';
-                    }
-                } else {
-                    statsContainer.style.display = 'none';
-                }
-            }// --- RENDER CARDS ---
+                var statsContainer = document.getElementById('stats-summary');
+                if (statsContainer) statsContainer.style.display = 'none';
+            }
+            // --- RENDER CARDS ---
             grid.classList.toggle('wishlist-mode', wlQ);
             var fragment = document.createDocumentFragment();
 
@@ -9765,51 +9798,6 @@ window.app = {
         reader.readAsText(file);
     },
 
-    loadServerBackupManual: function() {
-        if (window.location.protocol === 'file:') {
-            this.showToast('Webbläsaren blockerar fetch-anrop via file:// av säkerhetsskäl. Kör via en lokal webbserver eller ladda upp till Netlify.', 'error');
-            return;
-        }
-        var msg = "Vill du läsa in 'fossils.json' från servern? Om du har befintliga fossiler med samma ID kommer dessa att uppdateras.";
-        if (!confirm(msg)) return;
-
-        var self = this;
-        self.showToast('Hämtar databas från servern...', 'info');
-
-        fetch('fossils.json')
-            .then(function(response) {
-                if (!response.ok) {
-                    throw new Error('Kunde inte hitta fossils.json på servern. Se till att du har laddat upp din .json-fil döpt till fossils.json.');
-                }
-                return response.json();
-            })
-            .then(function(data) {
-                if (!Array.isArray(data)) {
-                    throw new Error('Ogiltigt format: Förväntade en array av fossiler.');
-                }
-
-                var successCount = 0;
-                var chain = Promise.resolve();
-
-                data.forEach(function(fossil) {
-                    chain = chain.then(function() {
-                        return updateFossil(fossil).then(function() {
-                            successCount++;
-                        });
-                    });
-                });
-
-                return chain.then(function() {
-                    self.showToast('Lyckades läsa in ' + successCount + ' fossiler från servern!', 'success');
-                    fossilsCacheLoaded = false;
-                    self.renderFossils();
-                });
-            })
-            .catch(function(err) {
-                self.showToast('Fel vid inläsning: ' + err.message, 'error');
-            });
-    },
-
     autoFetchMissingTaxonomy: function(toFetchList) {
         if (isAutoFetching) return;
         
@@ -10018,6 +10006,35 @@ window.app = {
             .catch(function(error) {
                 console.warn('Could not fetch source thumb for:', f.specimen, error);
             });
+    },
+
+    showCSVInstructions: function() {
+        var modal = document.getElementById('csv-import-instructions-modal');
+        if (modal) {
+            modal.showModal();
+        }
+    },
+
+    downloadCSVTemplate: function() {
+        var csvContent = "Specimen Name,Category,Geological Period,Epoch,Stage,Size,Size Unit,Weight,Price,Currency,Notes,Is Wishlist,Is Sold,Is Dream\n" +
+                         "Tyrannosaurus Rex Tooth,Vertebrate,Cretaceous,Late Cretaceous,Maastrichtian,8.5,cm,,1200,USD,Beautiful serrated theropod tooth with minimal restoration.,false,false,false\n" +
+                         "Phacops Rana Trilobite,Invertebrate,Devonian,Middle Devonian,,5.2,cm,,150,USD,Complete rolled specimen showing outstanding facet eyes.,true,false,false";
+        
+        try {
+            var blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            var link = document.createElement("a");
+            var url = URL.createObjectURL(blob);
+            link.setAttribute("href", url);
+            link.setAttribute("download", "fossil_import_template.csv");
+            link.style.visibility = 'hidden';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            window.app.showToast('Template downloaded successfully.', 'success');
+        } catch (e) {
+            console.error('Failed to download CSV template:', e);
+            window.app.showToast('Failed to download template.', 'error');
+        }
     },
 
     importCSV: function(event) {
@@ -11486,51 +11503,221 @@ window.app = {
         nextBtn.innerText = this.tourStepIndex === steps.length - 1 ? 'Finish' : 'Next';
         var targetEl = currentStep.target ? document.querySelector(currentStep.target) : null;
         var arrow = document.getElementById('tour-arrow');
+        
+        // Reset dynamic styles
+        card.style.position = '';
         card.style.top = '';
+        card.style.bottom = '';
         card.style.left = '';
+        card.style.right = '';
+        card.style.margin = '';
         card.style.transform = '';
-        if (targetEl && targetEl.offsetWidth > 0 && targetEl.offsetHeight > 0) {
-            targetEl.classList.add('tour-highlighted');
-            var rect = targetEl.getBoundingClientRect();
-            var cardTop = rect.bottom + window.scrollY + 12;
-            var cardLeft = rect.left + window.scrollX + (rect.width / 2) - 160;
-            if (cardLeft < 10) cardLeft = 10;
-            if (cardLeft + 330 > window.innerWidth) cardLeft = window.innerWidth - 330;
-            if (rect.bottom + 200 > window.innerHeight) {
-                cardTop = rect.top + window.scrollY - 180;
-                if (arrow) {
-                    arrow.style.bottom = '-6px';
-                    arrow.style.top = 'auto';
-                    arrow.style.transform = 'rotate(225deg)';
-                }
-            } else {
-                if (arrow) {
-                    arrow.style.top = '-6px';
-                    arrow.style.bottom = 'auto';
-                    arrow.style.transform = 'rotate(45deg)';
-                }
-            }
-            card.style.top = cardTop + 'px';
-            card.style.left = cardLeft + 'px';
-            if (arrow) {
-                arrow.style.display = 'block';
-                var arrowLeft = rect.left + window.scrollX + (rect.width / 2) - cardLeft - 5;
-                arrow.style.left = arrowLeft + 'px';
+        card.style.width = '';
+        card.style.height = '';
+        
+        if (arrow) {
+            arrow.style.top = '';
+            arrow.style.bottom = '';
+            arrow.style.left = '';
+            arrow.style.transform = '';
+            arrow.style.display = 'none';
+        }
+
+        var isMobile = window.innerWidth <= 500;
+
+        if (isMobile) {
+            // Mobile format: cleanly anchor the tour card at the bottom of the viewport
+            card.style.position = 'fixed';
+            card.style.top = 'auto';
+            card.style.bottom = '20px';
+            card.style.left = '50%';
+            card.style.transform = 'translateX(-50%)';
+            card.style.width = 'calc(100% - 32px)';
+            
+            if (targetEl && targetEl.offsetWidth > 0 && targetEl.offsetHeight > 0) {
+                targetEl.classList.add('tour-highlighted');
+                targetEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
             }
         } else {
-            card.style.top = '50%';
-            card.style.left = '50%';
-            card.style.transform = 'translate(-50%, -50%)';
-            if (arrow) arrow.style.display = 'none';
+            // Desktop format
+            if (targetEl && targetEl.offsetWidth > 0 && targetEl.offsetHeight > 0) {
+                card.style.position = 'absolute';
+                targetEl.classList.add('tour-highlighted');
+                
+                var rect = targetEl.getBoundingClientRect();
+                var cardTop = rect.bottom + window.scrollY + 12;
+                var cardLeft = rect.left + window.scrollX + (rect.width / 2) - 160;
+                
+                if (cardLeft < 10) cardLeft = 10;
+                if (cardLeft + 330 > window.innerWidth) cardLeft = window.innerWidth - 330;
+                
+                if (rect.bottom + 200 > window.innerHeight) {
+                    cardTop = rect.top + window.scrollY - 180;
+                    if (arrow) {
+                        arrow.style.bottom = '-6px';
+                        arrow.style.top = 'auto';
+                        arrow.style.transform = 'rotate(225deg)';
+                    }
+                } else {
+                    if (arrow) {
+                        arrow.style.top = '-6px';
+                        arrow.style.bottom = 'auto';
+                        arrow.style.transform = 'rotate(45deg)';
+                    }
+                }
+                card.style.top = cardTop + 'px';
+                card.style.left = cardLeft + 'px';
+                if (arrow) {
+                    arrow.style.display = 'block';
+                    var arrowLeft = rect.left + window.scrollX + (rect.width / 2) - cardLeft - 5;
+                    arrow.style.left = arrowLeft + 'px';
+                }
+            } else {
+                // Centered modal layout for untargeted step (Welcome step)
+                // Using margin: auto positioning to bypass scale animation transform overrides
+                card.style.position = 'fixed';
+                card.style.top = '0px';
+                card.style.bottom = '0px';
+                card.style.left = '0px';
+                card.style.right = '0px';
+                card.style.margin = 'auto';
+                card.style.width = '320px';
+                card.style.height = 'fit-content';
+            }
         }
+    },
+
+    openBugReportModal: function() {
+        var modal = document.getElementById('bug-report-modal');
+        if (!modal) return;
+        
+        var diagInput = document.getElementById('bug-diagnostics');
+        if (diagInput) {
+            var dbSize = (typeof fossils !== 'undefined') ? fossils.length : 0;
+            var details = 
+                "User Agent: " + navigator.userAgent + "\n" +
+                "Screen Resolution: " + window.screen.width + "x" + window.screen.height + "\n" +
+                "Viewport: " + window.innerWidth + "x" + window.innerHeight + "\n" +
+                "DB Specimen Count: " + dbSize + "\n" +
+                "Theme: " + (document.body.classList.contains('dark-theme') ? 'Dark' : 'Light') + "\n" +
+                "URL Protocol: " + window.location.protocol;
+            diagInput.value = details;
+        }
+        
+        var form = document.getElementById('bug-report-form');
+        if (form) form.reset();
+        
+        var statusEl = document.getElementById('bug-report-status');
+        if (statusEl) {
+            statusEl.style.display = 'none';
+            statusEl.innerText = '';
+        }
+        
+        modal.showModal();
+    },
+    
+    closeBugReportModal: function() {
+        var modal = document.getElementById('bug-report-modal');
+        if (modal) modal.close();
+    },
+    
+    submitBugReport: function(e) {
+        e.preventDefault();
+        var form = document.getElementById('bug-report-form');
+        if (!form) return;
+        
+        var statusEl = document.getElementById('bug-report-status');
+        var submitBtn = form.querySelector('button[type="submit"]');
+        
+        if (statusEl) {
+            statusEl.style.display = 'block';
+            statusEl.style.background = 'var(--bg-warm)';
+            statusEl.style.border = '1px solid var(--border-color)';
+            statusEl.style.color = 'var(--text-primary)';
+            statusEl.innerText = '⏳ Submitting report...';
+        }
+        
+        if (submitBtn) submitBtn.disabled = true;
+        
+        var formData = new FormData(form);
+        
+        fetch('https://formspree.io/f/mrenevnk', {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'Accept': 'application/json'
+            }
+        })
+        .then(function(response) {
+            if (response.ok) {
+                if (statusEl) {
+                    statusEl.style.background = 'rgba(16, 185, 129, 0.1)';
+                    statusEl.style.border = '1px solid #10b981';
+                    statusEl.style.color = '#10b981';
+                    statusEl.innerText = '✅ Thank you! Your bug report has been sent successfully.';
+                }
+                form.reset();
+                setTimeout(function() {
+                    window.app.closeBugReportModal();
+                }, 2500);
+            } else {
+                return response.json().then(function(data) {
+                    throw new Error(data.error || 'Server returned an error.');
+                });
+            }
+        })
+        .catch(function(error) {
+            if (statusEl) {
+                statusEl.style.background = 'rgba(239, 68, 68, 0.1)';
+                statusEl.style.border = '1px solid #ef4444';
+                statusEl.style.color = '#ef4444';
+                statusEl.innerText = '❌ Oops! There was a problem: ' + error.message;
+            }
+        })
+        .finally(function() {
+            if (submitBtn) submitBtn.disabled = false;
+        });
+    },
+
+    setLayoutView: function(view) {
+        var grid = document.getElementById('fossil-grid');
+        var btnGrid = document.getElementById('btn-layout-grid');
+        var btnList = document.getElementById('btn-layout-list');
+        if (!grid) return;
+        
+        // Apply smooth transition opacity fade out
+        grid.style.transition = 'opacity 0.12s ease';
+        grid.style.opacity = '0';
+        
+        setTimeout(function() {
+            if (view === 'grid') {
+                grid.classList.remove('list-view-active');
+                if (btnGrid) btnGrid.classList.add('active');
+                if (btnList) btnList.classList.remove('active');
+                localStorage.setItem('fossil_layout_view', 'grid');
+            } else {
+                grid.classList.add('list-view-active');
+                if (btnGrid) btnGrid.classList.remove('active');
+                if (btnList) btnList.classList.add('active');
+                localStorage.setItem('fossil_layout_view', 'list');
+            }
+            
+            // Allow DOM layout update then fade back in
+            setTimeout(function() {
+                grid.style.opacity = '1';
+                setTimeout(function() {
+                    // Clean up inline styles
+                    grid.style.transition = '';
+                    grid.style.opacity = '';
+                }, 130);
+            }, 30);
+        }, 120);
     }
 };
 
-function getFullTaxonomyTray(f) {
+function getTaxonomyContentHtml(f) {
     if (!f) return '';
-    var isActive = expandedTaxonomyIds.has(f.id) ? 'active' : '';
-    var html = '<div class="taxonomy-tray ' + isActive + '">';
-    
+    var html = '';
     if (f.taxonomy) {
         html += '<div class="taxonomy-content">';
         html += '<h4 class="taxonomy-header">Taxonomic Hierarchy</h4>';
@@ -11550,9 +11737,14 @@ function getFullTaxonomyTray(f) {
     } else {
         html += '<div class="taxonomy-placeholder">Click the taxonomy icon to load biological hierarchy...</div>';
     }
-    
-    html += '</div>';
     return html;
+}
+
+function getFullTaxonomyTray(f) {
+    if (!f) return '';
+    var isActive = expandedTaxonomyIds.has(f.id) ? 'active' : '';
+    var content = expandedTaxonomyIds.has(f.id) ? getTaxonomyContentHtml(f) : '';
+    return '<div class="taxonomy-tray ' + isActive + '">' + content + '</div>';
 }
 
 

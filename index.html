@@ -34,7 +34,7 @@
                 <a href="https://ko-fi.com/specimenry" target="_blank" id="btn-support-project" class="desktop-only" title="Support Specimenry on Ko-fi" aria-label="Support Specimenry on Ko-fi" style="color: var(--text-primary); background: var(--bg-warm); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 0.35rem 0.65rem; font-size: 0.75rem; font-weight: 600; text-decoration: none; display: flex; align-items: center; gap: 0.35rem; transition: all 0.2s;" onmouseover="this.style.background='var(--border-color)'" onmouseout="this.style.background='var(--bg-warm)'">
                     <span style="color: #ef4444;">❤️</span> Support
                 </a>
-                <a href="https://github.com/specimenry/FossilArchiveApp/issues/new" target="_blank" id="btn-report-bug-header" class="desktop-only" title="Report a Bug on GitHub" aria-label="Report a Bug on GitHub" style="color: var(--text-primary); background: var(--bg-warm); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 0.35rem 0.65rem; font-size: 0.75rem; font-weight: 600; text-decoration: none; display: flex; align-items: center; gap: 0.35rem; transition: all 0.2s; margin-left: 0.5rem;" onmouseover="this.style.background='var(--border-color)'" onmouseout="this.style.background='var(--bg-warm)'">
+                <a href="#" onclick="app.openBugReportModal(); return false;" id="btn-report-bug-header" class="desktop-only" title="Report a Bug" aria-label="Report a Bug" style="color: var(--text-primary); background: var(--bg-warm); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 0.35rem 0.65rem; font-size: 0.75rem; font-weight: 600; text-decoration: none; display: flex; align-items: center; gap: 0.35rem; transition: all 0.2s; margin-left: 0.5rem;" onmouseover="this.style.background='var(--border-color)'" onmouseout="this.style.background='var(--bg-warm)'">
                     <span>🐛</span> Report Bug
                 </a>
                 <div class="desktop-only" style="width: 1px; height: 20px; background-color: var(--border-color); margin-right: 0.5rem; margin-left: 0.5rem;"></div>
@@ -68,7 +68,7 @@
                             💡 Auto-Enhance Lighting
                         </a>
                         <a href="#" onclick="app.closeMobileMenu(); app.batchAutoEnrichAll(); return false;" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 1.25rem; font-size: 0.8rem; color: var(--text-primary); text-decoration: none; transition: background 0.15s; font-weight: 600; border-bottom: 1px solid var(--border-color);" onmouseover="this.style.background='var(--bg-warm)'" onmouseout="this.style.background='transparent'">
-                            ⚡ Auto-Enrich All Archive Data
+                            ⚡ Auto-Fill Scientific Data
                         </a>
 
                         <!-- Database Section -->
@@ -82,10 +82,7 @@
                         <a href="#" onclick="app.closeMobileMenu(); document.getElementById('file-restore-json').click(); return false;" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 1.25rem; font-size: 0.8rem; color: var(--text-primary); text-decoration: none; transition: background 0.15s;" onmouseover="this.style.background='var(--bg-warm)'" onmouseout="this.style.background='transparent'">
                             📤 Restore DB (JSON)
                         </a>
-                        <a href="#" onclick="app.closeMobileMenu(); app.loadServerBackupManual(); return false;" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 1.25rem; font-size: 0.8rem; color: var(--text-primary); text-decoration: none; transition: background 0.15s;" onmouseover="this.style.background='var(--bg-warm)'" onmouseout="this.style.background='transparent'">
-                            🔄 Load Server Backup (JSON)
-                        </a>
-                        <a href="#" onclick="app.closeMobileMenu(); document.getElementById('file-import').click(); return false;" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 1.25rem; font-size: 0.8rem; color: var(--text-primary); text-decoration: none; transition: background 0.15s;" onmouseover="this.style.background='var(--bg-warm)'" onmouseout="this.style.background='transparent'">
+                        <a href="#" onclick="app.closeMobileMenu(); app.showCSVInstructions(); return false;" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 1.25rem; font-size: 0.8rem; color: var(--text-primary); text-decoration: none; transition: background 0.15s;" onmouseover="this.style.background='var(--bg-warm)'" onmouseout="this.style.background='transparent'">
                             📄 Import Spreadsheet (CSV)
                         </a>
                         <!-- Support Section -->
@@ -93,7 +90,7 @@
                         <a href="https://ko-fi.com/specimenry" target="_blank" onclick="app.closeMobileMenu();" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 1.25rem; font-size: 0.8rem; color: #ef4444; text-decoration: none; transition: background 0.15s; font-weight: 600;" onmouseover="this.style.background='var(--bg-warm)'" onmouseout="this.style.background='transparent'">
                             ❤️ Support the Project
                         </a>
-                        <a href="https://github.com/specimenry/FossilArchiveApp/issues/new" target="_blank" onclick="app.closeMobileMenu();" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 1.25rem; font-size: 0.8rem; color: var(--text-primary); text-decoration: none; transition: background 0.15s;" onmouseover="this.style.background='var(--bg-warm)'" onmouseout="this.style.background='transparent'">
+                        <a href="#" onclick="app.closeMobileMenu(); app.openBugReportModal(); return false;" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 1.25rem; font-size: 0.8rem; color: var(--text-primary); text-decoration: none; transition: background 0.15s;" onmouseover="this.style.background='var(--bg-warm)'" onmouseout="this.style.background='transparent'">
                             🐛 Report a Bug
                         </a>
                         <a href="#" onclick="app.closeMobileMenu(); app.startTour(); return false;" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 1.25rem; font-size: 0.8rem; color: var(--text-primary); text-decoration: none; transition: background 0.15s;" onmouseover="this.style.background='var(--bg-warm)'" onmouseout="this.style.background='transparent'">
@@ -106,6 +103,7 @@
                     <button type="button" id="btn-db-center" class="btn-secondary" onclick="app.toggleDbDropdown(event)" title="Database Options" style="white-space: nowrap; display: flex; align-items: center; gap: 0.25rem;">
                         <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/><path d="M3 12c0 1.66 4 3 9 3s9-1.34 9-3"/></svg>
                         <span class="btn-text">Database</span>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="opacity: 0.7; margin-left: 0.1rem; flex-shrink: 0;"><polyline points="6 9 12 15 18 9"/></svg>
                     </button>
                     <div id="db-dropdown" class="dropdown-menu" style="display: none; position: absolute; right: 0; top: 105%; background: var(--bg-surface); border: 1px solid var(--border-color); border-radius: var(--radius-md); box-shadow: var(--shadow-md); z-index: 1000; min-width: 200px; padding: 0.5rem 0;">
                         <a href="#" id="btn-export" onclick="app.exportData(); return false;" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.6rem 1rem; font-size: 0.8rem; color: var(--text-primary); text-decoration: none; transition: background 0.15s;" onmouseover="this.style.background='var(--bg-warm)'" onmouseout="this.style.background='transparent'">
@@ -114,10 +112,7 @@
                         <a href="#" onclick="document.getElementById('file-restore-json').click(); return false;" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.6rem 1rem; font-size: 0.8rem; color: var(--text-primary); text-decoration: none; transition: background 0.15s;" onmouseover="this.style.background='var(--bg-warm)'" onmouseout="this.style.background='transparent'">
                             📤 Restore Database (JSON)
                         </a>
-                        <a href="#" onclick="app.loadServerBackupManual(); return false;" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.6rem 1rem; font-size: 0.8rem; color: var(--text-primary); text-decoration: none; transition: background 0.15s;" onmouseover="this.style.background='var(--bg-warm)'" onmouseout="this.style.background='transparent'">
-                            🔄 Load Server Backup (JSON)
-                        </a>
-                        <a href="#" onclick="document.getElementById('file-import').click(); return false;" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.6rem 1rem; font-size: 0.8rem; color: var(--text-primary); text-decoration: none; transition: background 0.15s;" onmouseover="this.style.background='var(--bg-warm)'" onmouseout="this.style.background='transparent'">
+                        <a href="#" onclick="app.showCSVInstructions(); return false;" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.6rem 1rem; font-size: 0.8rem; color: var(--text-primary); text-decoration: none; transition: background 0.15s;" onmouseover="this.style.background='var(--bg-warm)'" onmouseout="this.style.background='transparent'">
                             📄 Import Spreadsheet (CSV)
                         </a>
                         <a href="#" onclick="app.copyLLMContext(); return false;" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.6rem 1rem; font-size: 0.8rem; color: var(--text-primary); text-decoration: none; transition: background 0.15s; border-top: 1px solid var(--border-color);" onmouseover="this.style.background='var(--bg-warm)'" onmouseout="this.style.background='transparent'">
@@ -135,10 +130,11 @@
                     <button type="button" id="btn-enrich-center" class="btn-secondary" onclick="app.toggleEnrichDropdown(event)" title="Archive Utilities Menu" style="white-space: nowrap; display: flex; align-items: center; gap: 0.25rem;">
                         <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg> 
                         <span class="btn-text">Utilities</span>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="opacity: 0.7; margin-left: 0.1rem; flex-shrink: 0;"><polyline points="6 9 12 15 18 9"/></svg>
                     </button>
                     <div id="enrich-dropdown" class="dropdown-menu" style="display: none; position: absolute; right: 0; top: 105%; background: var(--bg-surface); border: 1px solid var(--border-color); border-radius: var(--radius-md); box-shadow: var(--shadow-md); z-index: 1000; min-width: 200px; padding: 0.5rem 0;">
                         <a href="#" onclick="app.batchAutoEnrichAll(); return false;" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.6rem 1rem; font-size: 0.8rem; color: var(--text-primary); text-decoration: none; transition: background 0.15s; font-weight: 600;" onmouseover="this.style.background='var(--bg-warm)'" onmouseout="this.style.background='transparent'">
-                            ⚡ Auto-Enrich All Archive Data
+                            ⚡ Auto-Fill Scientific Data
                         </a>
                         <a href="#" onclick="app.enterShowcaseMode(); return false;" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.6rem 1rem; font-size: 0.8rem; color: var(--text-primary); text-decoration: none; transition: background 0.15s; border-top: 1px solid var(--border-color);" onmouseover="this.style.background='var(--bg-warm)'" onmouseout="this.style.background='transparent'">
                             🏛️ Museum Showcase Mode
@@ -152,7 +148,7 @@
                         <a href="#" onclick="app.openDeepDive(); return false;" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.6rem 1rem; font-size: 0.8rem; color: var(--text-primary); text-decoration: none; transition: background 0.15s; border-top: 1px solid var(--border-color);" onmouseover="this.style.background='var(--bg-warm)'" onmouseout="this.style.background='transparent'">
                             🦕 Paleo Deep Dive
                         </a>
-                        <a href="https://github.com/specimenry/FossilArchiveApp/issues/new" target="_blank" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.6rem 1rem; font-size: 0.8rem; color: var(--text-primary); text-decoration: none; transition: background 0.15s; border-top: 1px solid var(--border-color);" onmouseover="this.style.background='var(--bg-warm)'" onmouseout="this.style.background='transparent'">
+                        <a href="#" onclick="app.openBugReportModal(); return false;" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.6rem 1rem; font-size: 0.8rem; color: var(--text-primary); text-decoration: none; transition: background 0.15s; border-top: 1px solid var(--border-color);" onmouseover="this.style.background='var(--bg-warm)'" onmouseout="this.style.background='transparent'">
                             🐛 Report a Bug
                         </a>
                         <a href="#" onclick="app.startTour(); return false;" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.6rem 1rem; font-size: 0.8rem; color: var(--text-primary); text-decoration: none; transition: background 0.15s; border-top: 1px solid var(--border-color);" onmouseover="this.style.background='var(--bg-warm)'" onmouseout="this.style.background='transparent'">
@@ -163,9 +159,6 @@
 
 
 
-                <button id="btn-toggle-compare-picker" class="btn-secondary desktop-only" onclick="app.toggleComparePickerMode()" title="Interactive Compare Selector Mode" style="margin-right: 0.5rem;">
-                    ⚖️ Compare
-                </button>
                 <button class="btn-primary" onclick="app.openModal()" id="btn-add-fossil" title="Add Fossil">
                     <span class="btn-text">+ Add Fossil</span>
                     <svg class="mobile-only" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
@@ -286,6 +279,25 @@
                         <option value="tier-asc">Preservation Tier (D to S)</option>
                     </select>
                 </div>
+                
+                <div class="form-group compare-toggle-wrapper desktop-only" style="min-width: 100px;">
+                    <label style="visibility: hidden; user-select: none;">Compare</label>
+                    <button id="btn-toggle-compare-picker" class="btn-secondary" onclick="app.toggleComparePickerMode()" title="Interactive Compare Selector Mode" style="height: 38px; display: flex; align-items: center; justify-content: center; gap: 0.35rem; font-size: 0.8rem; font-weight: 600; border-radius: var(--radius-sm); border: 1px solid var(--border-color); background: var(--bg-surface); color: var(--text-primary); cursor: pointer; transition: var(--transition); width: 100%;">
+                        ⚖️ Compare
+                    </button>
+                </div>
+
+                <div class="form-group layout-toggle-wrapper desktop-only" style="min-width: 80px;">
+                    <label style="visibility: hidden; user-select: none;">View</label>
+                    <div class="layout-toggle-group" style="height: 38px; display: inline-flex; align-items: center; border: 1px solid var(--border-color); border-radius: var(--radius-sm); background: var(--bg-surface); padding: 3px; gap: 2px; box-sizing: border-box; width: 100%;">
+                        <button type="button" id="btn-layout-grid" class="layout-toggle-btn active" onclick="app.setLayoutView('grid')" title="Grid View" style="height: 30px; flex: 1; display: flex; align-items: center; justify-content: center; border: none; background: transparent; border-radius: 4px; cursor: pointer; transition: all 0.15s; color: var(--text-secondary); padding: 0;">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+                        </button>
+                        <button type="button" id="btn-layout-list" class="layout-toggle-btn" onclick="app.setLayoutView('list')" title="List View" style="height: 30px; flex: 1; display: flex; align-items: center; justify-content: center; border: none; background: transparent; border-radius: 4px; cursor: pointer; transition: all 0.15s; color: var(--text-secondary); padding: 0;">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+                        </button>
+                    </div>
+                </div>
             </div>
             
             <!-- Row 3: Active Badges -->
@@ -385,7 +397,7 @@
                 <span>Developed with ❤️ for fossil collectors.</span>
                 <span>Love the app? Consider <a href="https://ko-fi.com/specimenry" target="_blank" style="color: #ef4444; font-weight: 600; text-decoration: underline;">supporting us on Ko-fi</a>!</span>
                 <span>•</span>
-                <span>Found a bug? <a href="https://github.com/specimenry/FossilArchiveApp/issues/new" target="_blank" style="color: var(--text-primary); font-weight: 600; text-decoration: underline;">Report a Bug</a></span>
+                <span>Found a bug? <a href="#" onclick="app.openBugReportModal(); return false;" style="color: var(--text-primary); font-weight: 600; text-decoration: underline;">Report a Bug</a></span>
             </div>
         </div>
         <div id="view-info-banner" class="view-info-banner" style="display: none;"></div>
@@ -1042,6 +1054,48 @@
         </div>
     </dialog>
 
+    <!-- CSV Import Instructions Dialog -->
+    <dialog id="csv-import-instructions-modal" style="width: 95%; max-width: 550px; border: 1px solid var(--border-color); border-radius: var(--radius-md); background: var(--bg-surface); padding: 1.5rem; box-shadow: var(--shadow-lg); color: var(--text-primary); outline: none;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; border-bottom: 1px solid var(--border-color); padding-bottom: 0.75rem;">
+            <h3 style="margin: 0; font-size: 1.1rem; font-weight: 700; display: flex; align-items: center; gap: 0.5rem; color: var(--text-primary);">
+                📥 Import Spreadsheet (CSV)
+            </h3>
+            <button type="button" class="btn-icon" onclick="document.getElementById('csv-import-instructions-modal').close()" style="background: none; border: none; cursor: pointer; color: var(--text-secondary); display: flex; align-items: center; justify-content: center; font-size: 1.25rem;">&times;</button>
+        </div>
+        
+        <div style="margin-bottom: 1.5rem; font-size: 0.85rem; line-height: 1.5; color: var(--text-secondary);">
+            <p style="margin-top: 0; margin-bottom: 0.75rem;">
+                You can bulk-import specimens into your archive using a <strong>CSV (Comma-Separated Values)</strong> file. 
+                The importer supports flexible column header mapping:
+            </p>
+            
+            <div style="background: var(--bg-warm); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 0.75rem; margin-bottom: 1rem; font-family: monospace; font-size: 0.75rem; color: var(--text-primary); overflow-x: auto; white-space: nowrap;">
+                <strong>Headers:</strong> Specimen Name | Category | Period | Epoch | Stage | Size | Unit | Price | Currency | Notes | Wishlist | Sold | Dream
+            </div>
+
+            <ul style="margin: 0 0 1rem 1.25rem; padding: 0; display: flex; flex-direction: column; gap: 0.35rem;">
+                <li><strong>Required:</strong> <code>Specimen Name</code> (or <code>Name</code>) to identify the fossil.</li>
+                <li><strong>Taxonomy & Origin:</strong> <code>Category</code>, <code>Geological Period</code>, <code>Epoch</code>, <code>Stage</code>, <code>Country</code>, <code>Location</code>, and <code>Formation</code>.</li>
+                <li><strong>Status Flags:</strong> Mark items as <code>Is Wishlist</code>, <code>Is Sold</code>, or <code>Is Dream</code> with <code>true</code> or <code>false</code>.</li>
+                <li><strong>Valuation & Size:</strong> Numeric values for <code>Size</code>, <code>Weight</code>, <code>Price</code>, and <code>Sale Price</code>.</li>
+            </ul>
+
+            <p style="margin-bottom: 0.5rem;">For best results, download our pre-formatted template, fill it in, and upload it:</p>
+        </div>
+        
+        <div style="display: flex; gap: 0.75rem; justify-content: space-between; align-items: center; flex-wrap: wrap;">
+            <button class="btn-secondary" onclick="app.downloadCSVTemplate()" style="font-size: 0.8rem; padding: 0.6rem 1rem; font-weight: 600; display: flex; align-items: center; gap: 0.35rem; cursor: pointer; border-color: var(--border-color); background: none; border: 1px solid var(--border-color); color: var(--text-primary); border-radius: var(--radius-sm); transition: var(--transition);">
+                📂 Download Template CSV
+            </button>
+            <div style="display: flex; gap: 0.5rem;">
+                <button class="btn-secondary" onclick="document.getElementById('csv-import-instructions-modal').close()" style="font-size: 0.8rem; padding: 0.6rem 1rem; font-weight: 600; cursor: pointer; background: none; border: 1px solid var(--border-color); color: var(--text-secondary); border-radius: var(--radius-sm); transition: var(--transition);">Cancel</button>
+                <button class="btn-primary" onclick="document.getElementById('csv-import-instructions-modal').close(); document.getElementById('file-import').click();" style="font-size: 0.8rem; padding: 0.6rem 1rem; font-weight: 700; display: flex; align-items: center; gap: 0.35rem; background: var(--accent); color: var(--bg-surface); border: none; border-radius: var(--radius-sm); cursor: pointer; transition: var(--transition);">
+                    ⚡ Select File & Import
+                </button>
+            </div>
+        </div>
+    </dialog>
+
     <!-- AI Export Dialog -->
     <dialog id="ai-export-modal" style="width: 95%; max-width: 650px; border: 1px solid var(--border-color); border-radius: var(--radius-md); background: var(--bg-surface); padding: 1.5rem; box-shadow: var(--shadow-lg); color: var(--text-primary); outline: none;">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; border-bottom: 1px solid var(--border-color); padding-bottom: 0.75rem;">
@@ -1236,6 +1290,52 @@
             <div class="modal-footer">
                 <button type="button" class="btn-secondary" onclick="document.getElementById('dream-item-modal').close()">Cancel</button>
                 <button type="submit" class="btn-primary">Save Specimen</button>
+            </div>
+        </form>
+    </dialog>
+
+    <!-- Bug Report Modal -->
+    <dialog id="bug-report-modal" style="width: 95%; max-width: 500px; border: 1px solid var(--border-color); border-radius: var(--radius-md); background: var(--bg-surface); padding: 1.5rem; box-shadow: var(--shadow-lg); color: var(--text-primary); outline: none;">
+        <form id="bug-report-form" onsubmit="app.submitBugReport(event)">
+            <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 0.75rem; margin-bottom: 1.25rem;">
+                <h2 style="font-size: 1.1rem; font-weight: 700; margin: 0; display: flex; align-items: center; gap: 0.5rem;">🐛 Report a Bug</h2>
+                <button type="button" class="btn-icon" aria-label="Close dialog" onclick="app.closeBugReportModal()" style="border: none; background: transparent; color: var(--text-secondary); cursor: pointer; display: flex; align-items: center; justify-content: center; padding: 0.25rem; border-radius: 50%;">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                </button>
+            </div>
+
+            <div style="display: flex; flex-direction: column; gap: 1rem; margin-bottom: 1.5rem;">
+                <p style="font-size: 0.8rem; line-height: 1.4; color: var(--text-secondary); margin: 0;">
+                    Help us improve Specimenry! Fill out this form to send a bug report directly to our development team.
+                </p>
+
+                <!-- Hidden parameters -->
+                <input type="hidden" name="tags" value="bug, anonymous">
+                <input type="hidden" id="bug-diagnostics" name="diagnostics">
+
+                <div class="form-group">
+                    <label for="bug-subject">Summary / Title</label>
+                    <input type="text" id="bug-subject" name="subject" placeholder="Briefly describe the issue..." required style="width: 100%;">
+                </div>
+
+                <div class="form-group">
+                    <label for="bug-email">Your Email Address (Optional)</label>
+                    <input type="email" id="bug-email" name="email" placeholder="e.g. collector@example.com" style="width: 100%;">
+                    <small style="font-size: 0.65rem; color: var(--text-secondary); opacity: 0.8; margin-top: -0.25rem;">Provide your email if you'd like us to follow up with questions.</small>
+                </div>
+
+                <div class="form-group">
+                    <label for="bug-message">Steps to Reproduce & Details</label>
+                    <textarea id="bug-message" name="message" rows="4" placeholder="What were you doing? What did you expect to happen? What actually happened?" required style="width: 100%; font-family: inherit; font-size: 0.8rem;"></textarea>
+                </div>
+
+                <!-- Status Message -->
+                <div id="bug-report-status" style="display: none; padding: 0.75rem; border-radius: var(--radius-sm); font-size: 0.75rem; font-weight: 500; line-height: 1.4;"></div>
+            </div>
+
+            <div class="modal-footer" style="display: flex; justify-content: flex-end; gap: 0.5rem; border-top: 1px solid var(--border-color); padding-top: 0.75rem;">
+                <button type="button" class="btn-secondary" onclick="app.closeBugReportModal()">Cancel</button>
+                <button type="submit" class="btn-primary">Submit Report</button>
             </div>
         </form>
     </dialog>
