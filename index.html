@@ -7,7 +7,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="Personal fossil collection archive and database">
+    <meta name="description" content="Specimenry — local-first fossil & mineral collection database. Your data stays in your browser. Free to use. Export backups regularly.">
     <title>Specimenry — Personal Collection Database</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -94,11 +94,17 @@
                         <a href="#" onclick="app.closeMobileMenu(); app.copyLLMContext(); return false;" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 1.25rem; font-size: 0.8rem; color: var(--text-primary); text-decoration: none; transition: background 0.15s;" onmouseover="this.style.background='var(--bg-warm)'" onmouseout="this.style.background='transparent'">
                             🤖 Copy & Export for AI (LLM)
                         </a>
-                        <a href="#" onclick="app.closeMobileMenu(); app.exportData(); return false;" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 1.25rem; font-size: 0.8rem; color: var(--text-primary); text-decoration: none; transition: background 0.15s;" onmouseover="this.style.background='var(--bg-warm)'" onmouseout="this.style.background='transparent'">
-                            📥 Backup DB (JSON)
+                        <a href="#" onclick="app.closeMobileMenu(); app.openShareCatalogModal(); return false;" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 1.25rem; font-size: 0.8rem; color: var(--text-primary); text-decoration: none; transition: background 0.15s;" onmouseover="this.style.background='var(--bg-warm)'" onmouseout="this.style.background='transparent'">
+                            📖 Export Shareable Catalog
                         </a>
-                        <a href="#" onclick="app.closeMobileMenu(); document.getElementById('file-restore-json').click(); return false;" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 1.25rem; font-size: 0.8rem; color: var(--text-primary); text-decoration: none; transition: background 0.15s;" onmouseover="this.style.background='var(--bg-warm)'" onmouseout="this.style.background='transparent'">
-                            📤 Restore DB (JSON)
+                        <a href="#" onclick="app.closeMobileMenu(); app.toggleFieldDiaryModal(); return false;" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 1.25rem; font-size: 0.8rem; color: var(--text-primary); text-decoration: none; transition: background 0.15s;" onmouseover="this.style.background='var(--bg-warm)'" onmouseout="this.style.background='transparent'">
+                            📓 Field Diary (Trip Log)
+                        </a>
+                        <a href="#" onclick="app.closeMobileMenu(); app.openBackupCenter(); return false;" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 1.25rem; font-size: 0.8rem; color: var(--text-primary); text-decoration: none; transition: background 0.15s;" onmouseover="this.style.background='var(--bg-warm)'" onmouseout="this.style.background='transparent'">
+                            📥 Backup &amp; Restore
+                        </a>
+                        <a href="#" onclick="app.closeMobileMenu(); app.openAboutSpecimenry(); return false;" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 1.25rem; font-size: 0.8rem; color: var(--text-primary); text-decoration: none; transition: background 0.15s;" onmouseover="this.style.background='var(--bg-warm)'" onmouseout="this.style.background='transparent'">
+                            ℹ️ About &amp; Privacy
                         </a>
                         <a href="#" onclick="app.closeMobileMenu(); app.showCSVInstructions(); return false;" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 1.25rem; font-size: 0.8rem; color: var(--text-primary); text-decoration: none; transition: background 0.15s;" onmouseover="this.style.background='var(--bg-warm)'" onmouseout="this.style.background='transparent'">
                             📄 Import Spreadsheet (CSV)
@@ -127,17 +133,20 @@
                         <a href="#" onclick="app.toggleCloudSyncModal(); return false;" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.6rem 1rem; font-size: 0.8rem; color: var(--text-primary); text-decoration: none; transition: background 0.15s; font-weight: 600; border-bottom: 1px solid var(--border-color);" onmouseover="this.style.background='var(--bg-warm)'" onmouseout="this.style.background='transparent'">
                             🔄 Sync Center (Cloud & P2P)
                         </a>
-                        <a href="#" id="btn-export" onclick="app.exportData(); return false;" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.6rem 1rem; font-size: 0.8rem; color: var(--text-primary); text-decoration: none; transition: background 0.15s;" onmouseover="this.style.background='var(--bg-warm)'" onmouseout="this.style.background='transparent'">
-                            📥 Backup Database (JSON)
+                        <a href="#" id="btn-export" onclick="app.openBackupCenter(); return false;" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.6rem 1rem; font-size: 0.8rem; color: var(--text-primary); text-decoration: none; transition: background 0.15s;" onmouseover="this.style.background='var(--bg-warm)'" onmouseout="this.style.background='transparent'">
+                            📥 Backup &amp; Restore
                         </a>
-                        <a href="#" onclick="document.getElementById('file-restore-json').click(); return false;" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.6rem 1rem; font-size: 0.8rem; color: var(--text-primary); text-decoration: none; transition: background 0.15s;" onmouseover="this.style.background='var(--bg-warm)'" onmouseout="this.style.background='transparent'">
-                            📤 Restore Database (JSON)
+                        <a href="#" onclick="app.openAboutSpecimenry(); return false;" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.6rem 1rem; font-size: 0.8rem; color: var(--text-primary); text-decoration: none; transition: background 0.15s;" onmouseover="this.style.background='var(--bg-warm)'" onmouseout="this.style.background='transparent'">
+                            ℹ️ About &amp; Privacy
                         </a>
                         <a href="#" onclick="app.showCSVInstructions(); return false;" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.6rem 1rem; font-size: 0.8rem; color: var(--text-primary); text-decoration: none; transition: background 0.15s;" onmouseover="this.style.background='var(--bg-warm)'" onmouseout="this.style.background='transparent'">
                             📄 Import Spreadsheet (CSV)
                         </a>
                         <a href="#" onclick="app.copyLLMContext(); return false;" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.6rem 1rem; font-size: 0.8rem; color: var(--text-primary); text-decoration: none; transition: background 0.15s; border-top: 1px solid var(--border-color);" onmouseover="this.style.background='var(--bg-warm)'" onmouseout="this.style.background='transparent'">
                             🤖 Copy & Export for AI (LLM)
+                        </a>
+                        <a href="#" onclick="app.openShareCatalogModal(); return false;" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.6rem 1rem; font-size: 0.8rem; color: var(--text-primary); text-decoration: none; transition: background 0.15s;" onmouseover="this.style.background='var(--bg-warm)'" onmouseout="this.style.background='transparent'">
+                            📖 Export Shareable Catalog
                         </a>
                         <a href="https://ko-fi.com/specimenry" target="_blank" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.6rem 1rem; font-size: 0.8rem; color: #ef4444; text-decoration: none; transition: background 0.15s; border-top: 1px solid var(--border-color); font-weight: 600;" onmouseover="this.style.background='var(--bg-warm)'" onmouseout="this.style.background='transparent'">
                             ❤️ Support on Ko-fi
@@ -159,6 +168,9 @@
                         </a>
                         <a href="#" onclick="app.enterShowcaseMode(); return false;" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.6rem 1rem; font-size: 0.8rem; color: var(--text-primary); text-decoration: none; transition: background 0.15s; border-top: 1px solid var(--border-color);" onmouseover="this.style.background='var(--bg-warm)'" onmouseout="this.style.background='transparent'">
                             🏛️ Museum Showcase Mode
+                        </a>
+                        <a href="#" onclick="app.toggleFieldDiaryModal(); return false;" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.6rem 1rem; font-size: 0.8rem; color: var(--text-primary); text-decoration: none; transition: background 0.15s; border-top: 1px solid var(--border-color);" onmouseover="this.style.background='var(--bg-warm)'" onmouseout="this.style.background='transparent'">
+                            📓 Field Diary (Trip Log)
                         </a>
                         <a href="#" id="toggle-enrich-lighting" onclick="app.toggleAutoEnhance(); return false;" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.6rem 1rem; font-size: 0.8rem; color: var(--text-primary); text-decoration: none; transition: background 0.15s; border-top: 1px solid var(--border-color);" onmouseover="this.style.background='var(--bg-warm)'" onmouseout="this.style.background='transparent'">
                             💡 Auto-Enhance Lighting: Off
@@ -357,11 +369,10 @@
         <div id="backup-warning-banner" class="warning-banner" style="display: none; align-items: center; justify-content: space-between; padding: 0.75rem 1.25rem; background: var(--bg-surface); border: 1px solid #ef4444; border-radius: var(--radius-md); margin-bottom: 1.5rem; color: var(--text-primary); font-size: 0.85rem; font-weight: 500; gap: 1rem; box-shadow: var(--shadow-sm);">
             <div style="display: flex; align-items: center; gap: 0.75rem; flex: 1; flex-wrap: wrap;">
                 <span style="font-size: 1.2rem;">⚠️</span>
-                <span><strong>Backup Reminder:</strong> Your specimens are saved only in this browser's local cache. Clear your cache or reset your device and your collection will be permanently deleted. Back up your database now to keep it safe.</span>
-                <span style="opacity: 0.85;">• Love the app? Consider <a href="https://ko-fi.com/specimenry" target="_blank" style="color: #ef4444; font-weight: 600; text-decoration: underline;">supporting us on Ko-fi</a>!</span>
+                <span id="backup-warning-message"><strong>Your data lives in this browser</strong> — clear site data or switch devices and it can disappear. Export a backup (specimens + field diary trips) to keep it safe.</span>
             </div>
             <div style="display: flex; align-items: center; gap: 0.75rem; flex-shrink: 0;">
-                <button type="button" class="btn-primary" onclick="app.exportData();" style="padding: 0.4rem 0.8rem; font-size: 0.8rem; border-radius: var(--radius-sm); border: none; cursor: pointer; white-space: nowrap;">📥 Backup Now</button>
+                <button type="button" class="btn-primary" onclick="app.openBackupCenter();" style="padding: 0.4rem 0.8rem; font-size: 0.8rem; border-radius: var(--radius-sm); border: none; cursor: pointer; white-space: nowrap;">📥 Backup &amp; Restore</button>
                 <button type="button" onclick="app.dismissBackupBanner();" style="background: transparent; border: none; color: var(--text-secondary); cursor: pointer; font-size: 1.25rem; line-height: 1; padding: 0.25rem; display: flex; align-items: center; justify-content: center;" title="Dismiss Reminder" aria-label="Dismiss">&times;</button>
             </div>
         </div>
@@ -461,8 +472,15 @@
                 <h2 id="modal-title">Add New Fossil</h2>
                 <input type="checkbox" id="f-quick-add" style="display: none;">
                 <div class="editor-mode-toggle" style="display: flex; align-items: center; border: 1px solid var(--border-color); border-radius: var(--radius-sm); background: var(--bg-warm); padding: 2px; margin-right: auto; margin-left: 1.5rem; overflow: hidden; height: 28px;">
-                    <button type="button" id="btn-editor-simple" onclick="app.setEditorMode('simple')" style="border: none; border-radius: calc(var(--radius-sm) - 2px); padding: 0.2rem 0.6rem; font-size: 0.72rem; font-weight: 700; cursor: pointer; transition: all 0.2s; background: var(--bg-surface); color: var(--text-primary); height: 100%;">Simple</button>
+                    <button type="button" id="btn-editor-simple" onclick="app.setEditorMode('simple')" title="Field mode: name, photo, location, notes" style="border: none; border-radius: calc(var(--radius-sm) - 2px); padding: 0.2rem 0.6rem; font-size: 0.72rem; font-weight: 700; cursor: pointer; transition: all 0.2s; background: var(--bg-surface); color: var(--text-primary); height: 100%;">Simple</button>
                     <button type="button" id="btn-editor-advanced" onclick="app.setEditorMode('advanced')" style="border: none; border-radius: calc(var(--radius-sm) - 2px); padding: 0.2rem 0.6rem; font-size: 0.72rem; font-weight: 700; cursor: pointer; transition: all 0.2s; background: transparent; color: var(--text-secondary); height: 100%;">Advanced</button>
+                </div>
+                <div class="dictate-header-cluster" title="On-device dictation">
+                    <span id="dictation-offline-badge" class="dictation-offline-badge dictation-needs-download" title="On-device speech model status">…</span>
+                    <label class="dictate-lang-header" title="Dictation language / Dikteringsspråk">
+                        <span aria-hidden="true">🎙️</span>
+                        <select id="dictate-lang-select" class="dictate-lang-select" onchange="app.setDictationLanguage(this.value)" aria-label="Dictation language"></select>
+                    </label>
                 </div>
                 <button type="button" class="btn-icon" aria-label="Close dialog" onclick="app.closeModal()">
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
@@ -482,14 +500,14 @@
                     <!-- Section 1: Classification -->
                     <div id="tab-classification" class="tab-content active">
                     <div class="form-grid">
-                        <div class="form-group quick-add-visible">
+                        <div class="form-group">
                             <label for="f-type-select">Specimen Type</label>
                             <select id="f-type-select" onchange="app.handleSpecimenTypeChange()">
                                 <option value="fossil">Fossil</option>
                                 <option value="mineral">Mineral</option>
                             </select>
                         </div>
-
+                        <p class="simple-mode-hint">Field log — name, photo, place, note, save.</p>
                         <div class="form-group" id="f-anatomy-part-col">
                             <label for="f-anatomy">Anatomy / Part</label>
                             <input type="text" id="f-anatomy" placeholder="e.g. Anterior Tooth, Thoracic Vertebra, Leaf Impression...">
@@ -498,7 +516,7 @@
                         <div class="form-group full-width quick-add-visible">
                             <label for="f-specimen">Specimen Name *</label>
                             <div style="display: flex; gap: 0.5rem;">
-                                <input type="text" id="f-specimen" required placeholder="e.g. Megalodon or Amethyst" style="flex: 1;" oninput="window.app.autoSizeLookup()">
+                                <input type="text" id="f-specimen" required placeholder="e.g. Megalodon or Amethyst" style="flex: 1;" oninput="window.app.autoSizeLookup(); window.app.updateMineralCarePanel()">
                                 <button type="button" id="btn-auto-fetch-all" class="btn-primary" onclick="window.app.autoFetchAllSpecimenData(event)" title="⚡ Auto-Fetch all Taxonomy, Authority, Biology, Etymology & Coordinates" style="padding: 0.4rem 0.8rem; font-size: 0.75rem; white-space: nowrap; display: flex; align-items: center; gap: 0.35rem; background: linear-gradient(135deg, var(--accent) 0%, #3a86c8 100%); color: white; border: none; border-radius: var(--radius-sm); font-weight: 600; cursor: pointer; transition: all 0.2s ease; box-shadow: 0 4px 10px rgba(0,0,0,0.15);">
                                     ⚡ Auto-Fetch All
                                 </button>
@@ -525,7 +543,7 @@
                         <div id="mineral-class-group" class="form-contents-subgroup full-width" style="display: none;">
                             <div class="form-group">
                                 <label for="f-formula">Chemical Formula</label>
-                                <input type="text" id="f-formula" placeholder="e.g. SiO₂">
+                                <input type="text" id="f-formula" placeholder="e.g. FeS₂, HgS, CuSO₄·5H₂O" oninput="app.updateMineralCarePanel()">
                             </div>
                             <div class="form-group">
                                 <label for="f-luster">Luster</label>
@@ -550,9 +568,12 @@
                                 <label for="f-cleavage">Cleavage</label>
                                 <input type="text" id="f-cleavage" placeholder="e.g. Perfect 3 directions, None">
                             </div>
+                            <div class="form-group full-width" id="mineral-care-wrap">
+                                <div id="mineral-care-panel" class="mineral-care-panel" aria-live="polite"></div>
+                            </div>
                         </div>
 
-                        <div class="form-group quick-add-visible">
+                        <div class="form-group">
                             <label for="f-wishlist">Ownership Status</label>
                             <select id="f-wishlist" onchange="app.toggleSalePriceField()">
                                 <option value="false">Owned</option>
@@ -596,7 +617,10 @@
                         <div class="form-group full-width quick-add-visible">
                             <label for="f-notes" style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
                                 <span>Curation Notes</span>
-                                <button type="button" class="btn-dictate" onclick="app.toggleDictation('f-notes')" title="Dictate notes">🎙️</button>
+                                <span class="dictate-controls">
+                                    <button type="button" class="btn-dictate-lang" onclick="app.openDictationLangPicker(event)" title="Change dictation language">🌐</button>
+                                    <button type="button" class="btn-dictate" data-dictate-target="f-notes" onclick="app.toggleDictation('f-notes', event)" title="Dictate notes">🎙️</button>
+                                </span>
                             </label>
                             <textarea id="f-notes" rows="3" placeholder="Provenance details, preparation context, custom scientific information..."></textarea>
                         </div>
@@ -702,18 +726,22 @@
                             <label for="f-country">Country of Origin</label>
                             <div style="display: flex; align-items: center; gap: 0.5rem; position: relative;">
                                 <div id="modal-flag-preview" style="min-width: 20px; text-align: center; height: 14px; display: flex; align-items: center;"></div>
-                                <input type="text" id="f-country" placeholder="e.g. Morocco" style="flex: 1;" oninput="app.updateModalFlag()">
+                                <input type="text" id="f-country" placeholder="e.g. Morocco" style="flex: 1;" oninput="app.updateModalFlag(); app.updateProvenanceRestrictionPanel()">
                             </div>
                         </div>
 
                         <div class="form-group quick-add-visible">
                             <label for="f-location">Precise Location</label>
-                            <input type="text" id="f-location" placeholder="e.g. Kem Kem Beds">
+                            <input type="text" id="f-location" placeholder="e.g. Kem Kem Beds" oninput="app.updateProvenanceRestrictionPanel()">
                         </div>
 
                         <div class="form-group full-width" id="fossil-formation-col">
                             <label for="f-formation">Geological Formation</label>
-                            <input type="text" id="f-formation" placeholder="e.g. Hell Creek Formation">
+                            <input type="text" id="f-formation" placeholder="e.g. Hell Creek Formation" oninput="app.updateProvenanceRestrictionPanel()">
+                        </div>
+
+                        <div class="form-group full-width" id="provenance-restriction-wrap">
+                            <div id="provenance-restriction-panel" class="provenance-restriction-panel" aria-live="polite"></div>
                         </div>
 
                         <div class="form-group">
@@ -726,9 +754,17 @@
                             <input type="number" step="any" id="f-lng" placeholder="e.g. -4.01">
                         </div>
 
-                        <div class="form-group full-width" style="display: flex; flex-direction: row; align-items: center; gap: 0.65rem; border-top: 1px dashed var(--border-color); padding-top: 1rem; margin-top: 0.5rem;">
+                        <div class="form-group full-width quick-add-visible" style="display: flex; flex-direction: row; align-items: center; gap: 0.65rem; border-top: 1px dashed var(--border-color); padding-top: 1rem; margin-top: 0.5rem;">
                             <input type="checkbox" id="f-self-found" style="width: 18px; height: 18px; cursor: pointer; accent-color: var(--accent);">
                             <label for="f-self-found" style="margin: 0; cursor: pointer; white-space: nowrap; font-size: 0.85rem; font-weight: 500;">Field Discovery / Self Found</label>
+                        </div>
+
+                        <div class="form-group full-width quick-add-visible">
+                            <label for="f-trip-id">Field diary trip</label>
+                            <select id="f-trip-id" style="width: 100%;">
+                                <option value="">— None —</option>
+                            </select>
+                            <span class="upload-hint" style="display:block; margin-top:0.25rem;">Link this specimen to a trip log (Utilities → Field Diary).</span>
                         </div>
 
                         <!-- Physical Storage Fields -->
@@ -806,7 +842,7 @@
                             <div class="form-group full-width">
                                 <label for="f-description" style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
                                     <span>Prehistoric Animal Biology / Description</span>
-                                    <button type="button" class="btn-dictate" onclick="app.toggleDictation('f-description')" title="Dictate description">🎙️</button>
+                                    <span class="dictate-controls"><button type="button" class="btn-dictate-lang" onclick="app.openDictationLangPicker(event)" title="Change dictation language">🌐</button><button type="button" class="btn-dictate" data-dictate-target="f-description" onclick="app.toggleDictation('f-description', event)" title="Dictate description">🎙️</button></span>
                                 </label>
                                 <textarea id="f-description" rows="3" placeholder="Description of the prehistoric animal (Auto-filled on 'Auto-Fetch All')..." style="resize: vertical;"></textarea>
                             </div>
@@ -814,7 +850,7 @@
                             <div class="form-group full-width">
                                 <label for="f-etymology" style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
                                     <span>Etymology / Translation</span>
-                                    <button type="button" class="btn-dictate" onclick="app.toggleDictation('f-etymology')" title="Dictate etymology">🎙️</button>
+                                    <span class="dictate-controls"><button type="button" class="btn-dictate-lang" onclick="app.openDictationLangPicker(event)" title="Change dictation language">🌐</button><button type="button" class="btn-dictate" data-dictate-target="f-etymology" onclick="app.toggleDictation('f-etymology', event)" title="Dictate etymology">🎙️</button></span>
                                 </label>
                                 <textarea id="f-etymology" rows="2" placeholder="e.g. 'Great tooth' in Greek..."></textarea>
                             </div>
@@ -859,7 +895,7 @@
                         <div class="form-group full-width">
                             <label for="f-restoration" style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
                                 <span id="lbl-f-restoration">Restoration & Preparation Details</span>
-                                <button type="button" class="btn-dictate" onclick="app.toggleDictation('f-restoration')" title="Dictate restoration details">🎙️</button>
+                                <span class="dictate-controls"><button type="button" class="btn-dictate-lang" onclick="app.openDictationLangPicker(event)" title="Change dictation language">🌐</button><button type="button" class="btn-dictate" data-dictate-target="f-restoration" onclick="app.toggleDictation('f-restoration', event)" title="Dictate restoration details">🎙️</button></span>
                             </label>
                             <textarea id="f-restoration" rows="2" placeholder="e.g. ~5% crack-fill on matrix, minor composite work, consolidated using Paraloid B-72..."></textarea>
                         </div>
@@ -910,6 +946,51 @@
                             </div>
                         </div>
 
+                        <!-- Provenance Papers Vault -->
+                        <div class="form-group full-width provenance-vault-block" style="border-top: 1px dashed var(--border-color); padding-top: 1rem; margin-top: 0.5rem;">
+                            <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 0.75rem; margin-bottom: 0.65rem;">
+                                <div>
+                                    <label style="margin: 0; font-weight: 700; display: flex; align-items: center; gap: 0.35rem;">📜 Provenance Papers</label>
+                                    <span class="upload-hint" style="display: block; margin-top: 0.2rem;">Keep permits, receipts, and export scans with the specimen (local only). Short locality cues appear under Geology when relevant.</span>
+                                </div>
+                            </div>
+                            <div class="form-grid" style="margin-bottom: 0.75rem;">
+                                <div class="form-group">
+                                    <label for="f-legal-status">Chain-of-custody status</label>
+                                    <select id="f-legal-status">
+                                        <option value="">— Select —</option>
+                                        <option value="private_permission">Private land + permission on file</option>
+                                        <option value="permit_on_file">Collecting / export permit on file</option>
+                                        <option value="dealer_invoice">Dealer invoice / receipt on file</option>
+                                        <option value="museum_transfer">Museum / institutional transfer</option>
+                                        <option value="legacy_unknown">Legacy / provenance incomplete</option>
+                                        <option value="under_review">Needs legal review</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label for="f-provenance-doc-type">Document type</label>
+                                    <select id="f-provenance-doc-type">
+                                        <option value="permit">Land / collecting permit</option>
+                                        <option value="permission">Landowner permission</option>
+                                        <option value="receipt">Purchase / sales receipt</option>
+                                        <option value="export">Export / import paperwork</option>
+                                        <option value="transfer">Transfer / chain-of-custody</option>
+                                        <option value="other">Other provenance document</option>
+                                    </select>
+                                </div>
+                                <div class="form-group full-width">
+                                    <label for="f-provenance-notes">Provenance notes</label>
+                                    <textarea id="f-provenance-notes" rows="2" placeholder="e.g. Collected on private ranch with written permission dated 2024-06-12; invoice #441 from Desert Fossils..."></textarea>
+                                </div>
+                            </div>
+                            <div class="provenance-upload-row">
+                                <input type="file" id="f-provenance-file" accept=".pdf,.png,.jpg,.jpeg,.webp,application/pdf,image/*" multiple style="display:none;" onchange="app.handleProvenanceUpload(event)">
+                                <button type="button" class="btn-secondary" onclick="document.getElementById('f-provenance-file').click()" style="font-size: 0.78rem;">📎 Attach PDF / scan</button>
+                                <span class="upload-hint">PDF or image · max 5 files · 6 MB each</span>
+                            </div>
+                            <div id="provenance-docs-preview" class="provenance-docs-preview"></div>
+                        </div>
+
                         <!-- Museum Archival Fields -->
                         <div class="form-contents-subgroup full-width museum-field-group" style="display: contents;">
                             <div style="grid-column: 1 / -1; border-top: 1px dashed var(--border-color); padding-top: 1rem; margin-top: 0.5rem; margin-bottom: 0.5rem;">
@@ -932,7 +1013,7 @@
                             <div class="form-group full-width">
                                 <label for="f-condition-report" style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
                                     <span>Conservation & Condition Report</span>
-                                    <button type="button" class="btn-dictate" onclick="app.toggleDictation('f-condition-report')" title="Dictate condition report">🎙️</button>
+                                    <span class="dictate-controls"><button type="button" class="btn-dictate-lang" onclick="app.openDictationLangPicker(event)" title="Change dictation language">🌐</button><button type="button" class="btn-dictate" data-dictate-target="f-condition-report" onclick="app.toggleDictation('f-condition-report', event)" title="Dictate condition report">🎙️</button></span>
                                 </label>
                                 <textarea id="f-condition-report" rows="2" placeholder="Conservation details, consolidant applications, structural stability logs..."></textarea>
                             </div>
@@ -975,11 +1056,18 @@
                                 </div>
                             </div>
                         </div>
-                    </div>
 
-                    <!-- Section 4: Preparation Log -->
-                    <div id="tab-prep" class="tab-content">
-                        <div class="form-grid">
+                        <div class="form-group full-width" id="change-log-wrap" style="border-top: 1px dashed var(--border-color); padding-top: 1rem; margin-top: 0.5rem; display: none;">
+                            <label style="margin-bottom: 0.4rem; display: block; font-weight: 700;">📜 Change log</label>
+                            <p class="upload-hint" style="margin: 0 0 0.5rem 0;">Local history on this device — no accounts. Actor name is set in Settings.</p>
+                            <div id="change-log-panel" class="change-log-panel" aria-live="polite"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Section 4: Preparation Log -->
+                <div id="tab-prep" class="tab-content">
+                    <div class="form-grid">
                             <div class="form-group">
                                 <label for="f-prep-status">Preparation Status</label>
                                 <select id="f-prep-status">
@@ -1010,7 +1098,7 @@
                             <div class="form-group full-width">
                                 <label for="f-prep-notes" style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
                                     <span>Preparation Notes</span>
-                                    <button type="button" class="btn-dictate" onclick="app.toggleDictation('f-prep-notes')" title="Dictate preparation notes">🎙️</button>
+                                    <span class="dictate-controls"><button type="button" class="btn-dictate-lang" onclick="app.openDictationLangPicker(event)" title="Change dictation language">🌐</button><button type="button" class="btn-dictate" data-dictate-target="f-prep-notes" onclick="app.toggleDictation('f-prep-notes', event)" title="Dictate preparation notes">🎙️</button></span>
                                 </label>
                                 <textarea id="f-prep-notes" rows="2" placeholder="Describe extraction details, rock hardness, fractures encountered..."></textarea>
                             </div>
@@ -1023,18 +1111,18 @@
                                     </span>
                                 </div>
                                 <div class="form-group full-width" style="background: var(--bg-warm); padding: 1rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color); box-sizing: border-box;">
-                                    <div style="display: grid; grid-template-columns: 1fr 1fr auto; gap: 0.5rem; align-items: flex-end; margin-bottom: 0.75rem;">
-                                        <div>
+                                    <div class="prep-milestone-row">
+                                        <div class="prep-milestone-desc">
                                             <label for="f-prep-milestone-label" style="font-size: 0.75rem;">Milestone Description</label>
                                             <input type="text" id="f-prep-milestone-label" placeholder="e.g. In the matrix, 50% prepped, Complete">
                                         </div>
-                                        <div>
+                                        <div class="prep-milestone-date">
                                             <label for="f-prep-milestone-date" style="font-size: 0.75rem;">Date</label>
                                             <input type="date" id="f-prep-milestone-date">
                                         </div>
-                                        <div style="display: flex; gap: 0.25rem;">
-                                            <button type="button" class="btn-secondary" onclick="app.triggerMilestoneUpload()" style="font-size: 0.75rem; padding: 0.4rem 0.6rem; height: 34px;">Choose Photo</button>
-                                            <button type="button" class="btn-primary" onclick="app.triggerMilestoneCamera()" style="font-size: 0.75rem; padding: 0.4rem 0.6rem; height: 34px; background: var(--accent);">📷 Snap</button>
+                                        <div class="prep-milestone-actions">
+                                            <button type="button" class="btn-secondary" onclick="app.triggerMilestoneUpload()" style="font-size: 0.75rem; padding: 0.4rem 0.75rem; height: 38px;">Choose Photo</button>
+                                            <button type="button" class="btn-primary" onclick="app.triggerMilestoneCamera()" style="font-size: 0.75rem; padding: 0.4rem 0.75rem; height: 38px; background: var(--accent);">📷 Snap</button>
                                             <input type="file" id="f-prep-milestone-file" accept="image/*" style="display: none;" onchange="app.handleMilestoneUpload(event)">
                                         </div>
                                     </div>
@@ -1043,7 +1131,6 @@
                                     </div>
                                 </div>
                             </div>
-                        </div>
                     </div>
                 </div>
             </div>
@@ -1077,6 +1164,8 @@
                 <p id="lightbox-location"></p>
                 <div class="lightbox-counter" id="lightbox-counter"></div>
                 <div id="lightbox-timeline-ruler" style="margin-top: 1.25rem; border-top: 1px solid var(--border-color); padding-top: 1rem; display: none;"></div>
+                <div id="lightbox-mineral-care" style="margin-top: 1.25rem; border-top: 1px solid var(--border-color); padding-top: 1rem; display: none;"></div>
+                <div id="lightbox-provenance" style="margin-top: 1.25rem; border-top: 1px solid var(--border-color); padding-top: 1rem; display: none;"></div>
                 <div id="lightbox-curator-details" style="margin-top: 1.25rem; border-top: 1px solid var(--border-color); padding-top: 1rem; display: none;"></div>
                 <div id="lightbox-biology-details" style="margin-top: 1.25rem; border-top: 1px solid var(--border-color); padding-top: 1rem; display: none;"></div>
                 <div id="lightbox-coexistence" style="margin-top: 1.25rem; border-top: 1px solid var(--border-color); padding-top: 1rem; display: none;"></div>
@@ -1108,6 +1197,8 @@
             <span id="selection-count-text" class="selection-count-text">0 selected</span>
             <div class="selection-actions-group">
                 <button id="btn-mass-compare" class="btn-primary" onclick="app.openCompareSelected()" style="background: var(--accent); color: var(--bg-surface); font-weight: 700; display: none;">⚖️ Compare</button>
+                <button id="btn-mass-edit" class="btn-secondary" onclick="app.massBulkEditSelected()">✏️ Bulk Edit</button>
+                <button id="btn-mass-trip" class="btn-secondary" onclick="app.massLinkToTripSelected()">📓 Link to Trip</button>
                 <button id="btn-mass-tag" class="btn-secondary" onclick="app.massTagSelected()">🏷️ Tag</button>
                 <button id="btn-mass-untag" class="btn-secondary" onclick="app.massUntagSelected()">🏷️ Untag</button>
                 <button id="btn-mass-type" class="btn-secondary" onclick="app.massChangeFossilTypeSelected()">🦕 Set Type</button>
@@ -1450,7 +1541,11 @@
             <button type="button" class="btn-icon" onclick="document.getElementById('ai-export-modal').close()" style="background: none; border: none; cursor: pointer; color: var(--text-secondary); display: flex; align-items: center; justify-content: center; font-size: 1.25rem;">&times;</button>
         </div>
         <div style="margin-bottom: 1.25rem;">
-            <p style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 0; margin-bottom: 0.75rem;">This text contains the full context of your fossil archive, optimized for Claude or ChatGPT. Copy it below or download it as a file:</p>
+            <p style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 0; margin-bottom: 0.75rem;">This text contains the curatorial context of your fossil archive, optimized for Claude or ChatGPT. Copy it below or download it as a file:</p>
+            <label style="display:flex; align-items:center; gap:0.45rem; font-size:0.8rem; margin-bottom:0.75rem; cursor:pointer;">
+                <input type="checkbox" id="ai-include-prices" onchange="app.regenerateAIContext()">
+                Include purchase / sale prices
+            </label>
             <textarea id="ai-export-textarea" readonly style="width: 100%; height: 300px; background: var(--bg-warm); border: 1px solid var(--border-color); color: var(--text-primary); border-radius: var(--radius-sm); padding: 0.6rem 0.8rem; font-family: monospace; font-size: 0.8rem; resize: none; box-sizing: border-box; outline: none; line-height: 1.4;"></textarea>
         </div>
         <div style="display: flex; gap: 0.75rem; justify-content: space-between; align-items: center;">
@@ -1552,7 +1647,7 @@
                     <div class="form-group full-width">
                         <label for="cart-f-notes" style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
                             <span>Curator Notes / Details</span>
-                            <button type="button" class="btn-dictate" onclick="app.toggleDictation('cart-f-notes')" title="Dictate notes">🎙️</button>
+                            <span class="dictate-controls"><button type="button" class="btn-dictate-lang" onclick="app.openDictationLangPicker(event)" title="Change dictation language">🌐</button><button type="button" class="btn-dictate" data-dictate-target="cart-f-notes" onclick="app.toggleDictation('cart-f-notes', event)" title="Dictate notes">🎙️</button></span>
                         </label>
                         <textarea id="cart-f-notes" rows="3" placeholder="Describe quality, weathering, defects, seller information..."></textarea>
                     </div>
@@ -1649,7 +1744,7 @@
                     <div class="form-group full-width">
                         <label for="dream-f-notes" style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
                             <span>Curator Notes / Details</span>
-                            <button type="button" class="btn-dictate" onclick="app.toggleDictation('dream-f-notes')" title="Dictate notes">🎙️</button>
+                            <span class="dictate-controls"><button type="button" class="btn-dictate-lang" onclick="app.openDictationLangPicker(event)" title="Change dictation language">🌐</button><button type="button" class="btn-dictate" data-dictate-target="dream-f-notes" onclick="app.toggleDictation('dream-f-notes', event)" title="Dictate notes">🎙️</button></span>
                         </label>
                         <textarea id="dream-f-notes" rows="3" placeholder="Describe why this specimen is superb, quality, weathering, defects..."></textarea>
                     </div>
@@ -1803,11 +1898,11 @@
                     </summary>
                     <div style="font-size: 0.7rem; color: var(--text-secondary); line-height: 1.4; margin-top: 0.5rem; padding-left: 0.25rem; display: flex; flex-direction: column; gap: 0.4rem; cursor: default;" onclick="event.stopPropagation();">
                         <div>1. Visit the <a href="https://console.cloud.google.com/" target="_blank" style="color: var(--accent); font-weight: 600;">Google Cloud Console</a>.</div>
-                        <div>2. Create a Project, go to **Credentials**, and select **Create Credentials** &rarr; **OAuth client ID**.</div>
-                        <div>3. Set Application Type to **Web application**.</div>
+                        <div>2. Create a Project, go to <strong>Credentials</strong>, and select <strong>Create Credentials</strong> &rarr; <strong>OAuth client ID</strong>.</div>
+                        <div>3. Set Application Type to <strong>Web application</strong>.</div>
                         <div>4. Add authorized origins in Google Console:
                             <code id="sync-authorized-origin-hint" style="display:block; background:rgba(0,0,0,0.05); padding:0.2rem; border-radius:3px; margin:0.25rem 0; word-break:break-all;">http://localhost</code>
-                            *(or your own custom GitHub Pages site domain)*
+                            <em>(or your own custom GitHub Pages site domain)</em>
                         </div>
                         <div>5. Save, copy the resulting Client ID string, and paste it above!</div>
                     </div>
@@ -1934,6 +2029,23 @@
                     </div>
                 </label>
             </div>
+
+            <div style="padding: 0.75rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color); background: var(--bg-warm);">
+                <label for="settings-curator-name" style="display: block; font-size: 0.85rem; font-weight: 700; color: var(--text-primary); margin-bottom: 0.35rem;">👤 Curator name (change log)</label>
+                <p style="font-size: 0.7rem; color: var(--text-secondary); margin: 0 0 0.5rem 0; line-height: 1.4;">Shown on local specimen change history (e.g. “price changed”). Not an account — stays on this device.</p>
+                <input type="text" id="settings-curator-name" placeholder="e.g. L. Linné" onchange="app.saveCuratorName()" style="width: 100%;">
+            </div>
+
+            <div style="padding: 0.75rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color); background: var(--bg-warm);">
+                <label for="settings-dictate-lang" style="display: block; font-size: 0.85rem; font-weight: 700; color: var(--text-primary); margin-bottom: 0.35rem;">🎙️ Dictation language</label>
+                <p style="font-size: 0.7rem; color: var(--text-secondary); margin: 0 0 0.5rem 0; line-height: 1.4;">Used by the microphone buttons on notes fields. Choose Auto-detect or lock to a specific language (Swedish, English, German, …).</p>
+                <select id="settings-dictate-lang" class="dictate-lang-select" onchange="app.setDictationLanguage(this.value)" style="width: 100%;"></select>
+                <div style="margin-top: 0.75rem; display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem;">
+                    <span id="dictation-offline-badge-settings" class="dictation-offline-badge dictation-needs-download">Dictation: …</span>
+                    <button type="button" class="btn-secondary" onclick="app.preloadDictationModel()" style="font-size: 0.75rem; padding: 0.35rem 0.7rem;">Download for offline (~75 MB)</button>
+                </div>
+                <p style="font-size: 0.68rem; color: var(--text-secondary); margin: 0.45rem 0 0 0; line-height: 1.4;">Needs network once. After that the badge shows <strong>Ready offline</strong> and field dictation works without Wi‑Fi.</p>
+            </div>
         </div>
         <div class="modal-footer" style="display: flex; justify-content: flex-end; border-top: 1px solid var(--border-color); padding-top: 0.75rem;">
             <button type="button" class="btn-primary" onclick="app.toggleSettingsModal()">Done</button>
@@ -2012,6 +2124,210 @@
         </div>
     </dialog>
 
+    <!-- Field Diary / Trip Log Modal -->
+    <dialog id="field-diary-modal" style="width: 95%; max-width: 720px; border: 1px solid var(--border-color); border-radius: var(--radius-md); background: var(--bg-surface); padding: 1.25rem; box-shadow: var(--shadow-lg); color: var(--text-primary); outline: none;">
+        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 0.75rem; margin-bottom: 1rem;">
+            <h2 style="font-size: 1.1rem; font-weight: 700; margin: 0;">📓 Field Diary</h2>
+            <button type="button" class="btn-icon" aria-label="Close" onclick="app.toggleFieldDiaryModal()" style="border: none; background: transparent; color: var(--text-secondary); cursor: pointer;">✕</button>
+        </div>
+        <p style="font-size: 0.78rem; color: var(--text-secondary); margin: 0 0 1rem 0; line-height: 1.4;">Quick trip log: date, locality, GPS, photos — then link specimens from the editor.</p>
+        <div class="field-diary-layout" style="display: grid; grid-template-columns: 1fr 1.2fr; gap: 1rem; max-height: 70vh;">
+            <div style="overflow: auto; border: 1px solid var(--border-color); border-radius: var(--radius-sm); background: var(--bg-warm); padding: 0.5rem;">
+                <button type="button" class="btn-primary" onclick="app.createNewFieldTrip()" style="width: 100%; margin-bottom: 0.5rem; font-size: 0.78rem;">+ New trip</button>
+                <div id="field-diary-list"></div>
+            </div>
+            <div style="overflow: auto;">
+                <input type="hidden" id="trip-edit-id">
+                <div class="form-grid" style="gap: 0.65rem;">
+                    <div class="form-group full-width">
+                        <label for="trip-title">Title</label>
+                        <input type="text" id="trip-title" placeholder="e.g. Kem Kem weekend">
+                    </div>
+                    <div class="form-group">
+                        <label for="trip-date">Date</label>
+                        <input type="date" id="trip-date">
+                    </div>
+                    <div class="form-group">
+                        <label for="trip-country">Country</label>
+                        <input type="text" id="trip-country" placeholder="e.g. Morocco">
+                    </div>
+                    <div class="form-group full-width">
+                        <label for="trip-locality">Locality</label>
+                        <input type="text" id="trip-locality" placeholder="Site / quarry / beach">
+                    </div>
+                    <div class="form-group">
+                        <label for="trip-lat">Latitude</label>
+                        <input type="number" step="any" id="trip-lat" placeholder="GPS">
+                    </div>
+                    <div class="form-group">
+                        <label for="trip-lng">Longitude</label>
+                        <input type="number" step="any" id="trip-lng" placeholder="GPS">
+                    </div>
+                    <div class="form-group full-width" style="display:flex; gap:0.5rem; align-items:center;">
+                        <button type="button" class="btn-secondary" onclick="app.captureTripGps()" style="font-size:0.75rem;">📍 Use my GPS</button>
+                        <button type="button" class="btn-secondary" onclick="app.applyTripToNewSpecimen()" style="font-size:0.75rem;">＋ Log specimen here</button>
+                    </div>
+                    <div class="form-group full-width">
+                        <label for="trip-notes">Notes</label>
+                        <textarea id="trip-notes" rows="3" placeholder="Weather, access, finds…"></textarea>
+                    </div>
+                    <div class="form-group full-width">
+                        <label>Trip photos</label>
+                        <input type="file" id="trip-photos" accept="image/*,.heic,.heif" multiple onchange="app.handleTripPhotoUpload(event)" style="font-size:0.75rem;">
+                        <div id="trip-photos-preview" style="display:flex; flex-wrap:wrap; gap:0.35rem; margin-top:0.5rem;"></div>
+                    </div>
+                    <div class="form-group full-width">
+                        <label>Linked specimens</label>
+                        <div id="trip-linked-specimens" style="font-size:0.78rem; color:var(--text-secondary);"></div>
+                    </div>
+                </div>
+                <div style="display:flex; justify-content:flex-end; gap:0.5rem; margin-top:1rem; border-top:1px solid var(--border-color); padding-top:0.75rem;">
+                    <button type="button" class="btn-danger" onclick="app.deleteCurrentFieldTrip()" style="margin-right:auto; font-size:0.75rem;">Delete</button>
+                    <button type="button" class="btn-secondary" onclick="app.toggleFieldDiaryModal()">Close</button>
+                    <button type="button" class="btn-primary" onclick="app.saveCurrentFieldTrip()">Save trip</button>
+                </div>
+            </div>
+        </div>
+    </dialog>
+
+    <!-- Shareable Catalog Modal -->
+    <dialog id="share-catalog-modal" style="width: 95%; max-width: 520px; border: 1px solid var(--border-color); border-radius: var(--radius-md); background: var(--bg-surface); padding: 1.25rem; box-shadow: var(--shadow-lg); color: var(--text-primary); outline: none;">
+        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 0.75rem; margin-bottom: 1rem;">
+            <h2 style="font-size: 1.1rem; font-weight: 700; margin: 0;">📖 Shareable Catalog</h2>
+            <button type="button" class="btn-icon" aria-label="Close" onclick="app.closeShareCatalogModal()" style="border: none; background: transparent; color: var(--text-secondary); cursor: pointer;">✕</button>
+        </div>
+        <p style="font-size: 0.78rem; color: var(--text-secondary); margin: 0 0 1rem 0; line-height: 1.45;">Exports a self-contained HTML catalog you can email, host, or open offline. <strong>Prices, storage drawers, provenance scans, change logs, and contacts are never included</strong> — suitable for collectors and museums. <em>Copy share link</em> embeds a metadata-only catalog in the URL (no photos, size-limited).</p>
+        <div class="form-grid" style="gap: 0.65rem;">
+            <div class="form-group full-width">
+                <label for="share-cat-title">Catalog title</label>
+                <input type="text" id="share-cat-title" placeholder="e.g. L. Linné — Fossil Collection">
+            </div>
+            <div class="form-group full-width">
+                <label for="share-cat-collector">Collector / institution credit</label>
+                <input type="text" id="share-cat-collector" placeholder="Optional name or collection label">
+            </div>
+            <div class="form-group full-width">
+                <label for="share-cat-blurb">Introduction</label>
+                <textarea id="share-cat-blurb" rows="2" placeholder="Short note for the reader…"></textarea>
+            </div>
+            <div class="form-group full-width">
+                <label for="share-cat-scope">Which specimens?</label>
+                <select id="share-cat-scope">
+                    <option value="owned">My Collection (owned)</option>
+                    <option value="selected">Currently selected only</option>
+                    <option value="visible">Current filtered view</option>
+                </select>
+            </div>
+            <label style="display:flex; align-items:center; gap:0.45rem; font-size:0.8rem;"><input type="checkbox" id="share-cat-photos" checked> Include photos (first image each)</label>
+            <label style="display:flex; align-items:center; gap:0.45rem; font-size:0.8rem;"><input type="checkbox" id="share-cat-notes"> Include curation notes</label>
+            <label style="display:flex; align-items:center; gap:0.45rem; font-size:0.8rem;"><input type="checkbox" id="share-cat-coords" checked> Include coordinates</label>
+        </div>
+        <div style="display:flex; justify-content:flex-end; gap:0.5rem; margin-top:1.15rem; border-top:1px solid var(--border-color); padding-top:0.75rem; flex-wrap:wrap;">
+            <button type="button" class="btn-secondary" onclick="app.closeShareCatalogModal()">Cancel</button>
+            <button type="button" class="btn-secondary" onclick="app.copyShareCatalogLink()" title="Metadata-only link in the page URL hash — no server upload">Copy share link</button>
+            <button type="button" class="btn-secondary" onclick="app.previewShareCatalog()">Preview</button>
+            <button type="button" class="btn-primary" onclick="app.downloadShareCatalog()">Download HTML</button>
+        </div>
+    </dialog>
+
+    <!-- Welcome / About landing -->
+    <dialog id="welcome-landing-modal" class="welcome-landing-modal" aria-labelledby="welcome-landing-title">
+        <div class="welcome-landing-inner">
+            <div class="welcome-landing-brand">
+                <img src="img/logo_flat.png" alt="" class="welcome-landing-logo" width="48" height="48">
+                <h2 id="welcome-landing-title">Specimen<span class="accent">ry</span></h2>
+            </div>
+            <p class="welcome-landing-lead">A personal database for fossils and minerals — catalog, field notes, labels, and your collection story in one place.</p>
+
+            <ul class="welcome-landing-points">
+                <li><strong>Local-first &amp; private.</strong> Specimens, photos, and field diary trips stay in <em>your</em> browser. No account required. Nothing is uploaded unless you choose optional sync.</li>
+                <li><strong>Free to use.</strong> The app is free. Optional <a href="https://ko-fi.com/specimenry" target="_blank" rel="noopener">Ko-fi tips</a> support development — there is no paid lock on core features.</li>
+                <li><strong>Phone &amp; desktop.</strong> In the field, use <strong>Simple</strong> mode when adding (name, photo, location, notes, trip). On desktop, use Advanced for full curation.</li>
+            </ul>
+
+            <p class="welcome-landing-risk" role="note">Your data lives in this browser — export backups regularly so clearing site data or switching devices does not erase your collection.</p>
+
+            <div class="welcome-landing-actions">
+                <button type="button" class="btn-primary" id="welcome-btn-enter" onclick="app.finishWelcomeLanding(false)">Enter the archive</button>
+                <button type="button" class="btn-secondary" onclick="app.finishWelcomeLanding(true)">Quick tour</button>
+                <button type="button" class="btn-secondary" onclick="app.finishWelcomeLanding(false); app.openModal();">Add first specimen</button>
+            </div>
+            <p class="welcome-landing-foot">You can reopen this anytime: Database → About &amp; Privacy</p>
+        </div>
+    </dialog>
+
+    <!-- Backup & Restore center -->
+    <dialog id="backup-center-modal" class="backup-center-modal" aria-labelledby="backup-center-title">
+        <div class="backup-center-inner">
+            <div class="backup-center-header">
+                <h2 id="backup-center-title">Backup &amp; Restore</h2>
+                <button type="button" class="btn-icon" aria-label="Close" onclick="document.getElementById('backup-center-modal').close()">&times;</button>
+            </div>
+
+            <p class="backup-center-lead">Download one JSON file you own. Restore it on this browser or another device.</p>
+
+            <div class="backup-center-includes">
+                <h3>What a backup includes</h3>
+                <ul>
+                    <li>All specimens (fossils &amp; minerals), photos, notes, tags, storage &amp; prices</li>
+                    <li>Field diary <strong>trips</strong> and specimen links</li>
+                    <li>Provenance documents attached to specimens</li>
+                </ul>
+                <p class="backup-center-excludes">Not included: optional Google Drive / P2P sync settings, and AI speech models (re-downloaded if needed).</p>
+            </div>
+
+            <div class="backup-center-stats" id="backup-center-stats">
+                <span id="backup-stat-specimens">—</span>
+                <span id="backup-stat-trips">—</span>
+                <span id="backup-stat-last">—</span>
+                <span id="backup-stat-added">—</span>
+                <span id="backup-stat-ok">—</span>
+            </div>
+
+            <p class="welcome-landing-risk" role="note">Your data lives in this browser — export backups regularly.</p>
+
+            <div class="backup-center-actions">
+                <button type="button" class="btn-primary" onclick="app.exportData();">📥 Download backup</button>
+                <button type="button" class="btn-secondary" onclick="document.getElementById('file-restore-json').click();">📤 Restore from file…</button>
+            </div>
+
+            <p id="backup-download-hint" class="backup-download-hint"></p>
+
+            <details class="backup-move-guide">
+                <summary>Move to a new phone (3 steps)</summary>
+                <ol class="backup-move-steps">
+                    <li><strong>On this device:</strong> tap <em>Download backup</em>. Save the JSON file somewhere you can open on the new phone (Files, Drive, AirDrop, email to yourself).</li>
+                    <li><strong>On the new phone:</strong> open <a href="https://specimenry.online/" target="_blank" rel="noopener">specimenry.online</a> in the browser you will keep using (Safari / Chrome). Prefer a clean profile so you do not merge with old leftovers.</li>
+                    <li><strong>Restore:</strong> Database → Backup &amp; Restore → <em>Restore from file…</em>, pick the JSON. Confirm the “Backup check: OK” summary, then wait for “Restore verified OK”.</li>
+                </ol>
+                <p class="backup-move-note">Tip: after a successful restore on the new phone, download one fresh backup there too — that becomes the new “last backup OK”.</p>
+            </details>
+
+            <details class="backup-move-guide">
+                <summary>Quick smoke check (2 minutes)</summary>
+                <ol class="backup-move-steps">
+                    <li>Add a test specimen in <strong>Simple</strong> mode (name + note), then delete or keep it.</li>
+                    <li><em>Download backup</em> — confirm toast says Backup OK and the file appears in Downloads / Files.</li>
+                    <li>(Optional) Restore that file in a private/incognito window and confirm “Restore verified OK”.</li>
+                </ol>
+            </details>
+
+            <p class="backup-center-foot">Restore merges by specimen/trip ID (same ID overwrites). Prefer restoring into an empty browser profile when moving devices.</p>
+        </div>
+    </dialog>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <script src="js/lib/errors.js"></script>
+    <script src="js/lib/db.js"></script>
+    <script src="js/lib/changelog.js"></script>
+    <script src="js/lib/mineral-care.js"></script>
+    <script src="js/lib/provenance.js"></script>
+    <script src="js/lib/filters.js"></script>
+    <script src="js/lib/dictation-status.js"></script>
+    <script src="js/lib/trips.js"></script>
+    <script src="js/lib/share-catalog.js"></script>
+    <script src="js/lib/qr.js"></script>
+    <script src="js/lib/backup.js"></script>
     <script src="js/app.js"></script>
 </body>
 </html>

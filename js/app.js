@@ -50,10 +50,18 @@ var CRYSTAL_SYSTEMS = [
     "Amorphous"
 ];
 
-function formatChemicalFormula(formula) {
-    if (!formula) return '';
-    return formula.replace(/(\d+)/g, '<sub>$1</sub>');
-}
+// NOTE: formatChemicalFormula and the mineral-care helpers (ATOMIC_WEIGHTS,
+// ELEMENT_BAR_COLORS, TOXIC_ELEMENTS, MINERAL_CARE_PROFILES,
+// KNOWN_MINERAL_FORMULAS, normalizeMineralFormula, parseChemicalFormula,
+// getElementComposition, lookupKnownFormula, analyzeMineralCare,
+// renderMineralCareHtml, getMineralHazardBadgeHtml) have been extracted to
+// js/lib/mineral-care.js (loaded before this file — see index.html).
+
+// NOTE: PROVENANCE_DOC_TYPES, PROVENANCE_RESTRICTIONS,
+// analyzeProvenanceRestrictions, getProvenanceDocTypeLabel,
+// getProvenanceBadgeHtml, and renderProvenanceRestrictionHtml have been
+// extracted to js/lib/provenance.js (loaded before this file — see
+// index.html).
 
 var PERIODS_AND_EPOCHS = {
     "Cenozoic Era": {
@@ -207,10 +215,7 @@ function hexToRgb(hex) {
     return '127,127,127';
 }
 
-function formatChemicalFormula(formula) {
-    if (!formula) return '';
-    return formula.replace(/(\d+)/g, '<sub>$1</sub>');
-}
+// NOTE: formatChemicalFormula lives in js/lib/mineral-care.js.
 
 function getFlagHtml(countryName) {
     if (!countryName) return '';
@@ -857,189 +862,10 @@ function getAgesForEpoch(epoch) {
 }
 
 
-// =========================================================================
-// DATABASE (IndexedDB)
-// =========================================================================
-var DB_NAME = 'FossilArchiveDB';
-var DB_VERSION = 1;
-var dbInstance = null;
-
-function initDB() {
-    return new Promise(function(resolve, reject) {
-        if (dbInstance) return resolve(dbInstance);
-        var request = window.indexedDB.open(DB_NAME, DB_VERSION);
-        request.onerror = function(e) { reject('IndexedDB error: ' + e.target.errorCode); };
-        request.onsuccess = function(e) {
-            dbInstance = e.target.result;
-            resolve(dbInstance);
-        };
-        request.onupgradeneeded = function(e) {
-            var db = e.target.result;
-            if (!db.objectStoreNames.contains('fossils')) {
-                var store = db.createObjectStore('fossils', { keyPath: 'id' });
-                store.createIndex('category', 'category', { unique: false });
-                store.createIndex('geologicalPeriod', 'geologicalPeriod', { unique: false });
-                store.createIndex('isWishlist', 'isWishlist', { unique: false });
-            }
-        };
-    });
-}
-
-// FIX: withStore had a race condition where both transaction.oncomplete and
-// request.onsuccess could call resolve(). Now we only resolve/reject from
-// the request callbacks and let the transaction handle errors.
-function withStore(type, callback) {
-    return initDB().then(function(db) {
-        return new Promise(function(resolve, reject) {
-            var transaction = db.transaction('fossils', type);
-            var store = transaction.objectStore('fossils');
-            transaction.onerror = function(e) { reject(e); };
-            callback(store, resolve, reject);
-        });
-    });
-}
-
-function getAllFossils() {
-    return initDB().then(function(db) {
-        return new Promise(function(resolve, reject) {
-            var tx = db.transaction('fossils', 'readonly');
-            var store = tx.objectStore('fossils');
-            var request = store.getAll();
-            request.onsuccess = function() { resolve(request.result); };
-            request.onerror = function() { reject(request.error); };
-        });
-    });
-}
-
-function addFossil(fossil, options) {
-    var keep = options && options.keepTimestamps;
-    if (!keep) {
-        if (!fossil.createdAt) {
-            fossil.createdAt = Date.now();
-        }
-        fossil.updatedAt = Date.now();
-    } else {
-        if (!fossil.createdAt) fossil.createdAt = Date.now();
-        if (!fossil.updatedAt) fossil.updatedAt = Date.now();
-    }
-    return withStore('readwrite', function(store, resolve, reject) {
-        var request = store.add(fossil);
-        request.onsuccess = function() { 
-            fossilsCacheLoaded = false; 
-            resolve(); 
-            if (!keep && window.app && typeof window.app.autoPushCloud === 'function') {
-                window.app.autoPushCloud();
-            }
-        };
-        request.onerror = function() { reject(request.error); };
-    });
-}
-
-function updateFossil(fossil, options) {
-    var keep = options && options.keepTimestamps;
-    if (!keep) {
-        if (!fossil.createdAt) {
-            fossil.createdAt = Date.now();
-        }
-        fossil.updatedAt = Date.now();
-    } else {
-        if (!fossil.createdAt) fossil.createdAt = Date.now();
-        if (!fossil.updatedAt) fossil.updatedAt = Date.now();
-    }
-    return withStore('readwrite', function(store, resolve, reject) {
-        var request = store.put(fossil);
-        request.onsuccess = function() { 
-            fossilsCacheLoaded = false; 
-            resolve(); 
-            if (!keep && window.app && typeof window.app.autoPushCloud === 'function') {
-                window.app.autoPushCloud();
-            }
-        };
-        request.onerror = function() { reject(request.error); };
-    });
-}
-
-function deleteFossil(id) {
-    var deletedIds = [];
-    try {
-        deletedIds = JSON.parse(localStorage.getItem('fossil_deleted_ids') || '[]');
-    } catch(e) {}
-    if (deletedIds.indexOf(id) === -1) {
-        deletedIds.push(id);
-        localStorage.setItem('fossil_deleted_ids', JSON.stringify(deletedIds));
-    }
-
-    return withStore('readwrite', function(store, resolve, reject) {
-        var request = store.delete(id);
-        request.onsuccess = function() { 
-            fossilsCacheLoaded = false; 
-            resolve(); 
-            if (window.app && typeof window.app.autoPushCloud === 'function') {
-                window.app.autoPushCloud();
-            }
-        };
-        request.onerror = function() { reject(request.error); };
-    });
-}
-
-function deleteMultipleFossils(ids) {
-    var deletedIds = [];
-    try {
-        deletedIds = JSON.parse(localStorage.getItem('fossil_deleted_ids') || '[]');
-    } catch(e) {}
-    ids.forEach(function(id) {
-        if (deletedIds.indexOf(id) === -1) {
-            deletedIds.push(id);
-        }
-    });
-    localStorage.setItem('fossil_deleted_ids', JSON.stringify(deletedIds));
-
-    return initDB().then(function(db) {
-        return new Promise(function(resolve, reject) {
-            var tx = db.transaction('fossils', 'readwrite');
-            var store = tx.objectStore('fossils');
-            tx.onerror = function(e) { reject(e); };
-            tx.oncomplete = function() { 
-                fossilsCacheLoaded = false; 
-                resolve(); 
-                if (window.app && typeof window.app.autoPushCloud === 'function') {
-                    window.app.autoPushCloud();
-                }
-            };
-            ids.forEach(function(id) { store.delete(id); });
-        });
-    });
-}
-
-function exportToJSON() {
-    return getAllFossils().then(function(fossilsList) {
-        if (!fossilsList || fossilsList.length === 0) {
-            if (window.app && window.app.showToast) {
-                window.app.showToast('No fossil records found to export.', 'warning');
-            }
-            return;
-        }
-        var dataStr = JSON.stringify(fossilsList, null, 2);
-        var blob = new Blob([dataStr], { type: 'application/json' });
-        var url = URL.createObjectURL(blob);
-        var link = document.createElement('a');
-        link.href = url;
-        link.download = 'fossil-archive-backup.json';
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(url);
-        
-        if (window.app && window.app.showToast) {
-            window.app.showToast('Backup completed! fossil-archive-backup.json downloaded successfully.', 'success');
-        }
-    }).catch(function(err) {
-        console.error('Export failed:', err);
-        if (window.app && window.app.showToast) {
-            window.app.showToast('Export failed: ' + err.message, 'danger');
-        }
-    });
-}
+// NOTE: DB_NAME, DB_VERSION, dbInstance, initDB, withStore, getAllFossils,
+// addFossil, updateFossil, deleteFossil, deleteMultipleFossils, and
+// exportToJSON have been extracted to js/lib/db.js (loaded before this
+// file — see index.html).
 
 
 // =========================================================================
@@ -1292,6 +1118,7 @@ var selectedFossils = new Set();
 var expandedTaxonomyIds = new Set();
 var currentImages = [];
 var currentMilestones = [];
+var currentProvenanceDocs = [];
 var currentView = localStorage.getItem('current_view') || 'false'; // 'false' = Collection, 'true' = Wishlist
 var isStatsOpen = false;
 var isAutoEnhanceActive = localStorage.getItem('photo_auto_enhance') === 'true';
@@ -1368,9 +1195,30 @@ function fetchExchangeRates() {
 }
 
 window.addEventListener('DOMContentLoaded', function() {
+    // Shared catalog deep-link (#catalog=...) — open read-only viewer without needing local DB
+    try {
+        if (window.location.hash && window.location.hash.indexOf('catalog=') !== -1) {
+            setTimeout(function() {
+                if (window.app && typeof window.app.openSharedCatalogFromHash === 'function') {
+                    window.app.openSharedCatalogFromHash();
+                }
+            }, 400);
+        }
+    } catch (e) {}
+
     // Apply curation profile settings immediately to prevent visual flashing
     if (window.app && typeof window.app.applySettingsVisibility === 'function') {
         window.app.applySettingsVisibility();
+    }
+    if (window.app && typeof window.app.initDictationLanguageUI === 'function') {
+        window.app.initDictationLanguageUI();
+    }
+    if (typeof SpecimenryDictationStatus !== 'undefined') {
+        SpecimenryDictationStatus.updateBadge();
+    }
+    if (typeof SpecimenryFilters !== 'undefined') {
+        SpecimenryFilters.restore();
+        SpecimenryFilters.bindAutoSave();
     }
     // Sync active view classes immediately to prevent visual flashing
     try {
@@ -1423,10 +1271,17 @@ window.addEventListener('DOMContentLoaded', function() {
         console.error('Failed to pre-sync active view:', e);
     }
 
-    // Check if guided tour needs to start for first-time visitors
+    // First visit: clear landing (about / privacy / free). Tour is opt-in from there.
     try {
+        var welcomeSeen = localStorage.getItem('specimenry_welcome_seen');
         var tourCompleted = localStorage.getItem('first_time_tour_completed');
-        if (!tourCompleted) {
+        if (!welcomeSeen) {
+            setTimeout(function() {
+                if (window.app && typeof window.app.openAboutSpecimenry === 'function') {
+                    window.app.openAboutSpecimenry({ firstVisit: true });
+                }
+            }, 120);
+        } else if (!tourCompleted) {
             setTimeout(function() {
                 if (window.app && typeof window.app.startTour === 'function') {
                     window.app.startTour();
@@ -1434,7 +1289,7 @@ window.addEventListener('DOMContentLoaded', function() {
             }, 100);
         }
     } catch (e) {
-        console.error('Tour check error:', e);
+        console.error('Welcome/tour check error:', e);
     }
 
     var sizeUnitSelect = document.getElementById('f-size-unit');
@@ -1463,36 +1318,20 @@ window.addEventListener('DOMContentLoaded', function() {
         enrichLabel.innerHTML = '💡 Auto-Enhance Lighting: ' + (isAutoEnhanceActive ? 'On' : 'Off');
     }
 
-    // Backup Pulse logic & warning banner
-    var lastBackup = localStorage.getItem('last_backup');
-    var bannerDismissedTime = localStorage.getItem('backup_banner_dismissed_time');
-    var sevenDaysMs = 7 * 24 * 60 * 60 * 1000;
-    var threeDaysMs = 3 * 24 * 60 * 60 * 1000;
-    
-    var needsBackup = !lastBackup || Date.now() - parseInt(lastBackup, 10) > sevenDaysMs;
-    var wasRecentlyDismissed = bannerDismissedTime && Date.now() - parseInt(bannerDismissedTime, 10) < threeDaysMs;
-
-    if (needsBackup) {
-        var exportBtn = document.getElementById('btn-export');
-        if (exportBtn) {
-            exportBtn.style.position = 'relative';
-            if (!exportBtn.querySelector('.pulse-dot')) {
-                exportBtn.insertAdjacentHTML('beforeend', '<div class="pulse-dot" title="You haven\'t backed up in over 7 days!"></div>');
+    // Backup reminder: stale by days OR N new specimens since last backup
+    if (window.app && typeof window.app.refreshBackupReminder === 'function') {
+        window.app.refreshBackupReminder();
+    } else {
+        // Fallback until app object methods are fully defined (should not happen)
+        try {
+            if (typeof SpecimenryBackup !== 'undefined') {
+                var need = SpecimenryBackup.evaluateNeed();
+                if (need.needsBackup && !SpecimenryBackup.wasRecentlyDismissed()) {
+                    var warningBanner = document.getElementById('backup-warning-banner');
+                    if (warningBanner) warningBanner.style.display = 'flex';
+                }
             }
-        }
-        var dbCenterBtn = document.getElementById('btn-db-center');
-        if (dbCenterBtn) {
-            dbCenterBtn.style.position = 'relative';
-            if (!dbCenterBtn.querySelector('.pulse-dot')) {
-                dbCenterBtn.insertAdjacentHTML('beforeend', '<div class="pulse-dot" title="You haven\'t backed up in over 7 days!"></div>');
-            }
-        }
-        if (!wasRecentlyDismissed) {
-            var warningBanner = document.getElementById('backup-warning-banner');
-            if (warningBanner) {
-                warningBanner.style.display = 'flex';
-            }
-        }
+        } catch (e) {}
     }
 
     populateDropdowns();
@@ -1503,8 +1342,24 @@ window.addEventListener('DOMContentLoaded', function() {
             if (window.app && typeof window.app.applySettingsVisibility === 'function') {
                 window.app.applySettingsVisibility();
             }
+            if (window.app && typeof window.app.initDictationLanguageUI === 'function') {
+                window.app.initDictationLanguageUI();
+            }
+            if (typeof SpecimenryDictationStatus !== 'undefined') {
+                SpecimenryDictationStatus.updateBadge();
+            }
+            if (typeof SpecimenryFilters !== 'undefined') {
+                SpecimenryFilters.restore();
+                SpecimenryFilters.bindAutoSave();
+            }
             if (window.app && typeof window.app.initAllAutocompletes === 'function') {
                 window.app.initAllAutocompletes();
+            }
+            if (window.app && typeof window.app.populateTripSelect === 'function') {
+                window.app.populateTripSelect('');
+            }
+            if (window.app && typeof window.app.refreshBackupReminder === 'function') {
+                window.app.refreshBackupReminder();
             }
             var savedView = localStorage.getItem('current_view') || 'false';
             window.app.setView(savedView, true);
@@ -1543,12 +1398,14 @@ window.addEventListener('DOMContentLoaded', function() {
                         if (window.app) {
                             window.app.toggleCloudSyncModal();
                             window.app.setSyncTab('p2p');
-                            window.app.initP2PConnection();
-                            setTimeout(function() {
+                            var ready = window.app.initP2PConnection();
+                            Promise.resolve(ready).then(function() {
                                 var input = document.getElementById('p2p-target-code');
                                 if (input) input.value = connectId;
                                 window.app.connectToPeer(connectId);
-                            }, 1000);
+                            }).catch(function(err) {
+                                console.error('Auto P2P connect failed:', err);
+                            });
                         }
                     }, 500);
                 }
@@ -1576,6 +1433,15 @@ window.addEventListener('DOMContentLoaded', function() {
                             }
                         }
                     }, 1200);
+                }
+
+                var storageParam = urlParams.get('storage');
+                if (storageParam && window.app && typeof window.app.filterByStorage === 'function') {
+                    var parts = storageParam.split('|');
+                    setTimeout(function() {
+                        window.app.filterByStorage(parts[0] || '', parts[1] || '', parts[2] || '');
+                        window.app.showToast('Filtered to drawer from QR label.', 'info');
+                    }, 900);
                 }
             } catch(e) {
                 console.error('Failed to parse auto-open deep-link:', e);
@@ -2056,6 +1922,18 @@ window.app = {
             anatomyCol.style.display = val === 'mineral' ? 'none' : '';
         }
 
+        var formationCol = document.getElementById('fossil-formation-col');
+        if (formationCol) {
+            formationCol.style.display = val === 'mineral' ? 'none' : '';
+        }
+
+        var locationInput = document.getElementById('f-location');
+        if (locationInput) {
+            locationInput.placeholder = val === 'mineral' ?
+                'e.g. Tsumeb Mine, Elmwood Mine, Cave-in-Rock...' :
+                'e.g. Kem Kem Beds, Solnhofen Limestone...';
+        }
+
         if (val === 'mineral') {
             if (fossilClass) fossilClass.style.display = 'none';
             if (fossilGeol) fossilGeol.style.display = 'none';
@@ -2105,29 +1983,204 @@ window.app = {
                 }
             }
         }
+
+        if (typeof window.app.updateMineralCarePanel === 'function') {
+            window.app.updateMineralCarePanel();
+        }
+    },
+
+    updateMineralCarePanel: function() {
+        var panel = document.getElementById('mineral-care-panel');
+        if (!panel) return;
+
+        var typeSelect = document.getElementById('f-type-select');
+        var isMineral = typeSelect && typeSelect.value === 'mineral';
+        var wrap = document.getElementById('mineral-care-wrap');
+        if (!isMineral) {
+            panel.innerHTML = '';
+            if (wrap) wrap.style.display = 'none';
+            return;
+        }
+        if (wrap) wrap.style.display = '';
+
+        var formulaEl = document.getElementById('f-formula');
+        var specimenEl = document.getElementById('f-specimen');
+        var formula = formulaEl ? formulaEl.value : '';
+        var specimen = specimenEl ? specimenEl.value : '';
+        var analysis = analyzeMineralCare(formula, specimen);
+        panel.innerHTML = renderMineralCareHtml(analysis, { showEmptyHint: true });
     },
 
     markAsSoldQuick: function(id, specimen) {
-        var priceInput = prompt('Enter sale price for "' + specimen + '" (leave blank if unknown):');
-        if (priceInput === null) return; // user cancelled
-        
-        var price = parseFloat(priceInput) || null;
-        var currency = 'USD';
-        if (price !== null) {
-            var currInput = prompt('Enter currency (USD, EUR, SEK):', 'USD');
-            if (currInput) currency = currInput.toUpperCase();
-        }
-        
-        var f = fossils.find(function(x) { return x.id === id; });
-        if (f) {
-            f.isSold = true;
-            f.salePrice = price;
-            f.saleCurrency = currency;
-            updateFossil(f).then(function() {
-                window.app.showToast('"' + specimen + '" marked as sold.', 'success');
-                window.app.renderFossils();
+        var self = this;
+        self.openFormModal({
+            title: 'Mark as sold',
+            subtitle: 'Optional sale details for "' + (specimen || '') + '".',
+            submitLabel: 'Mark sold',
+            fields: [
+                { id: 'price', label: 'Sale price', type: 'number', placeholder: 'Leave blank if unknown' },
+                { id: 'currency', label: 'Currency', type: 'select', value: 'USD', options: [
+                    { value: 'USD', label: 'USD' },
+                    { value: 'EUR', label: 'EUR' },
+                    { value: 'SEK', label: 'SEK' },
+                    { value: 'GBP', label: 'GBP' }
+                ]}
+            ]
+        }, function(values) {
+            if (!values) return;
+            var price = values.price !== '' ? parseFloat(values.price) : null;
+            if (isNaN(price)) price = null;
+            var currency = (values.currency || 'USD').toUpperCase();
+            var f = fossils.find(function(x) { return x.id === id; });
+            if (f) {
+                f.isSold = true;
+                f.isTraded = false;
+                f.isWishlist = false;
+                f.isForSale = false;
+                f.isDream = false;
+                f.salePrice = price;
+                f.saleCurrency = currency;
+                f.tradedWith = '';
+                f.tradedFor = '';
+                f.tradeDate = '';
+                updateFossil(f).then(function() {
+                    window.app.showToast('"' + specimen + '" marked as sold.', 'success');
+                    window.app.renderFossils();
+                });
+            }
+        });
+    },
+
+    markAsTradedQuick: function(id, specimen) {
+        var self = this;
+        self.openTradeDetailsModal({
+            title: 'Mark as traded',
+            subtitle: 'Record trade details for "' + (specimen || '') + '".'
+        }, function(details) {
+            if (!details) return;
+            var f = fossils.find(function(x) { return x.id === id; });
+            if (f) {
+                f.isTraded = true;
+                f.isSold = false;
+                f.isWishlist = false;
+                f.isForSale = false;
+                f.isDream = false;
+                f.tradedWith = details.tradedWith;
+                f.tradedFor = details.tradedFor;
+                f.tradeDate = details.tradeDate;
+                f.salePrice = null;
+                f.saleCurrency = 'USD';
+                updateFossil(f).then(function() {
+                    window.app.showToast('"' + specimen + '" marked as traded.', 'success');
+                    window.app.renderFossils();
+                });
+            }
+        });
+    },
+
+    /** Shared trade-details dialog. */
+    openTradeDetailsModal: function(opts, onDone) {
+        opts = opts || {};
+        var today = new Date();
+        var y = today.getFullYear();
+        var m = today.getMonth() + 1;
+        var d = today.getDate();
+        var defaultDate = y + '-' + (m < 10 ? '0' : '') + m + '-' + (d < 10 ? '0' : '') + d;
+        this.openFormModal({
+            title: opts.title || 'Trade details',
+            subtitle: opts.subtitle || 'Optional fields — leave blank if unknown.',
+            submitLabel: 'Save',
+            fields: [
+                { id: 'tradedWith', label: 'Traded with', type: 'text', placeholder: 'Person / institution' },
+                { id: 'tradedFor', label: 'Traded for', type: 'text', placeholder: 'What you received' },
+                { id: 'tradeDate', label: 'Trade date', type: 'date', value: defaultDate }
+            ]
+        }, onDone);
+    },
+
+    /**
+     * Lightweight form modal (replaces window.prompt for multi-field flows).
+     * opts.fields: [{ id, label, type, placeholder, value, options:[{value,label}] }]
+     */
+    openFormModal: function(opts, onDone) {
+        opts = opts || {};
+        var fields = opts.fields || [];
+        var fieldsHtml = fields.map(function(field) {
+            var id = 'form-modal-' + field.id;
+            var label = '<label for="' + id + '" style="display:block; font-size:0.78rem; font-weight:600; margin-bottom:0.25rem;">' +
+                escapeHtml(field.label || field.id) + '</label>';
+            var input;
+            if (field.type === 'select') {
+                var optsHtml = (field.options || []).map(function(o) {
+                    var sel = (String(o.value) === String(field.value || '')) ? ' selected' : '';
+                    return '<option value="' + escapeHtml(o.value) + '"' + sel + '>' + escapeHtml(o.label || o.value) + '</option>';
+                }).join('');
+                input = '<select id="' + id + '" style="width:100%;">' + optsHtml + '</select>';
+            } else if (field.type === 'textarea') {
+                input = '<textarea id="' + id + '" rows="' + (field.rows || 3) + '" placeholder="' +
+                    escapeHtml(field.placeholder || '') + '" style="width:100%; resize:vertical;">' +
+                    escapeHtml(field.value || '') + '</textarea>';
+            } else {
+                input = '<input type="' + escapeHtml(field.type || 'text') + '" id="' + id + '" value="' +
+                    escapeHtml(field.value || '') + '" placeholder="' + escapeHtml(field.placeholder || '') +
+                    '" style="width:100%;">';
+            }
+            return '<div>' + label + input + '</div>';
+        }).join('');
+
+        var overlay = document.createElement('div');
+        overlay.className = 'curator-modal-overlay';
+        overlay.style.cssText = 'position:fixed; inset:0; background:rgba(0,0,0,0.45); z-index:100060; display:flex; align-items:center; justify-content:center; opacity:0; transition:opacity 0.25s;';
+        overlay.innerHTML =
+            '<div class="curator-modal-card" style="background:var(--bg-surface); color:var(--text-primary); border-radius:var(--radius-md); width:92%; max-width:420px; padding:1.25rem; box-shadow:var(--shadow-lg); transform:scale(0.95); transition:transform 0.25s; border:1px solid var(--border-color);">' +
+                '<h3 style="margin:0 0 0.35rem 0; font-size:1.05rem;">' + escapeHtml(opts.title || 'Details') + '</h3>' +
+                (opts.subtitle ? '<p style="margin:0 0 1rem 0; font-size:0.75rem; color:var(--text-secondary); line-height:1.4;">' + escapeHtml(opts.subtitle) + '</p>' : '') +
+                '<div style="display:flex; flex-direction:column; gap:0.75rem;">' + fieldsHtml + '</div>' +
+                '<div style="display:flex; justify-content:flex-end; gap:0.5rem; margin-top:1.15rem;">' +
+                    '<button type="button" class="btn-secondary" id="form-modal-cancel">Cancel</button>' +
+                    '<button type="button" class="btn-primary" id="form-modal-submit">' + escapeHtml(opts.submitLabel || 'Save') + '</button>' +
+                '</div>' +
+            '</div>';
+
+        document.body.appendChild(overlay);
+        var card = overlay.querySelector('.curator-modal-card');
+        setTimeout(function() {
+            overlay.style.opacity = '1';
+            if (card) card.style.transform = 'scale(1)';
+            if (fields[0]) {
+                var first = document.getElementById('form-modal-' + fields[0].id);
+                if (first) first.focus();
+            }
+        }, 10);
+
+        var closeModal = function(result) {
+            overlay.style.opacity = '0';
+            if (card) card.style.transform = 'scale(0.95)';
+            setTimeout(function() {
+                if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+                if (typeof onDone === 'function') onDone(result);
+            }, 250);
+        };
+
+        overlay.querySelector('#form-modal-cancel').addEventListener('click', function() { closeModal(null); });
+        overlay.addEventListener('click', function(e) {
+            if (e.target === overlay) closeModal(null);
+        });
+        overlay.querySelector('#form-modal-submit').addEventListener('click', function() {
+            var values = {};
+            fields.forEach(function(field) {
+                var el = document.getElementById('form-modal-' + field.id);
+                values[field.id] = el ? String(el.value || '').trim() : '';
             });
-        }
+            closeModal(values);
+        });
+        overlay.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') closeModal(null);
+            if (e.key === 'Enter' && e.target && e.target.tagName !== 'TEXTAREA') {
+                e.preventDefault();
+                overlay.querySelector('#form-modal-submit').click();
+            }
+        });
     },
 
     restoreToCollectionQuick: function(id, specimen) {
@@ -2135,6 +2188,10 @@ window.app = {
             var f = fossils.find(function(x) { return x.id === id; });
             if (f) {
                 f.isSold = false;
+                f.isTraded = false;
+                f.isWishlist = false;
+                f.isForSale = false;
+                f.isDream = false;
                 updateFossil(f).then(function() {
                     window.app.showToast('"' + specimen + '" restored to collection.', 'success');
                     window.app.renderFossils();
@@ -2234,11 +2291,18 @@ window.app = {
         title.textContent = f.specimen || 'Unknown Specimen';
 
         var detailParts = [];
-        if (f.category) detailParts.push(f.category);
-        if (f.geologicalPeriod) detailParts.push(f.geologicalPeriod);
-        if (f.epoch) detailParts.push(f.epoch);
-        if (f.ageMa) detailParts.push('~' + f.ageMa + ' Ma');
-        if (f.anatomy) detailParts.push('⚡ ' + f.anatomy);
+        if (f.type === 'mineral') {
+            if (f.formula) detailParts.push(f.formula);
+            if (f.category) detailParts.push(f.category);
+            if (f.crystalSystem) detailParts.push(f.crystalSystem);
+            if (f.hardness) detailParts.push('Mohs ' + f.hardness);
+        } else {
+            if (f.category) detailParts.push(f.category);
+            if (f.geologicalPeriod) detailParts.push(f.geologicalPeriod);
+            if (f.epoch) detailParts.push(f.epoch);
+            if (f.ageMa) detailParts.push('~' + f.ageMa + ' Ma');
+            if (f.anatomy) detailParts.push('⚡ ' + f.anatomy);
+        }
         detail.textContent = detailParts.join(' · ');
 
         var locParts = [];
@@ -2267,7 +2331,27 @@ window.app = {
 
         // Render geological timeline ruler
         var rulerElem = document.getElementById('lightbox-timeline-ruler');
-        if (rulerElem) {
+        var mineralCareElem = document.getElementById('lightbox-mineral-care');
+        if (mineralCareElem) {
+            if (f.type === 'mineral') {
+                var careAnalysis = analyzeMineralCare(f.formula, f.specimen);
+                var careHtml = renderMineralCareHtml(careAnalysis, { showEmptyHint: false });
+                if (careHtml) {
+                    mineralCareElem.innerHTML =
+                        '<div style="font-size: 0.75rem; font-weight: 800; color: var(--accent); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.65rem; display: flex; align-items: center; gap: 4px;">' +
+                        '⚗️ Composition & Care Guidance</div>' + careHtml;
+                    mineralCareElem.style.display = '';
+                } else {
+                    mineralCareElem.innerHTML = '';
+                    mineralCareElem.style.display = 'none';
+                }
+                if (rulerElem) rulerElem.style.display = 'none';
+            } else {
+                mineralCareElem.innerHTML = '';
+                mineralCareElem.style.display = 'none';
+            }
+        }
+        if (rulerElem && f.type !== 'mineral') {
             var period = (f.geologicalPeriod || '').trim();
             if (period && period.toLowerCase() !== 'unknown') {
                 var ERAS = [
@@ -2324,6 +2408,41 @@ window.app = {
                 }
             } else {
                 rulerElem.style.display = 'none';
+            }
+        }
+
+        // Provenance papers + restriction cues
+        var provenanceElem = document.getElementById('lightbox-provenance');
+        if (provenanceElem) {
+            var provAlerts = analyzeProvenanceRestrictions(f.country, f.location, f.formation);
+            var docs = f.provenanceDocs || [];
+            var provHtml = '';
+            if (docs.length || provAlerts.length || f.legalStatus || f.provenanceNotes) {
+                provHtml = '<div style="font-size: 0.75rem; font-weight: 800; color: var(--accent); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.65rem;">📜 Provenance & Compliance</div>';
+                if (f.legalStatus) {
+                    var statusLabels = {
+                        private_permission: 'Private land + permission on file',
+                        permit_on_file: 'Collecting / export permit on file',
+                        dealer_invoice: 'Dealer invoice / receipt on file',
+                        museum_transfer: 'Museum / institutional transfer',
+                        legacy_unknown: 'Legacy / provenance incomplete',
+                        under_review: 'Needs legal review'
+                    };
+                    provHtml += '<div style="font-size:0.8rem;margin-bottom:0.5rem;"><strong>Status:</strong> ' + escapeHtml(statusLabels[f.legalStatus] || f.legalStatus) + '</div>';
+                }
+                if (f.provenanceNotes) {
+                    provHtml += '<div style="font-size:0.8rem;margin-bottom:0.5rem;line-height:1.45;color:var(--text-secondary);">' + escapeHtml(f.provenanceNotes) + '</div>';
+                }
+                if (docs.length) {
+                    provHtml += '<div style="font-size:0.78rem;margin-bottom:0.5rem;"><strong>' + docs.length + '</strong> document' + (docs.length === 1 ? '' : 's') + ' on file: ' +
+                        docs.map(function(d) { return escapeHtml(d.fileName || d.label || 'Doc'); }).join(', ') + '</div>';
+                }
+                provHtml += renderProvenanceRestrictionHtml(provAlerts, { showClear: false });
+                provenanceElem.innerHTML = provHtml;
+                provenanceElem.style.display = '';
+            } else {
+                provenanceElem.innerHTML = '';
+                provenanceElem.style.display = 'none';
             }
         }
 
@@ -3825,7 +3944,14 @@ window.app = {
             document.getElementById('f-lng').value = lon.toFixed(6);
             window.app.showToast('Found coordinates via: "' + matchedQuery + '"', 'success');
         }, function() {
-            window.app.showToast('Could not automatically geocode this specimen.', 'error');
+            if (typeof reportAppError === 'function') {
+                reportAppError(new Error('No coordinates found for the locality text.'), 'Geocode', {
+                    type: 'warning',
+                    retry: function() { window.app.autoGeocodeLookup(); }
+                });
+            } else {
+                window.app.showToast('Could not automatically geocode this specimen.', 'error');
+            }
         });
     },
 
@@ -5495,6 +5621,10 @@ window.app = {
         form.reset();
         currentImages = [];
         window.app.renderImagePreview();
+        currentProvenanceDocs = [];
+        if (typeof window.app.renderProvenanceDocsPreview === 'function') {
+            window.app.renderProvenanceDocsPreview();
+        }
         if (document.getElementById('modal-flag-preview')) {
             document.getElementById('modal-flag-preview').innerHTML = '';
         }
@@ -5602,6 +5732,12 @@ window.app = {
                 document.getElementById('f-storage-unit').value = f.storageUnit || '';
                 document.getElementById('f-storage-drawer').value = f.storageDrawer || '';
                 document.getElementById('f-storage-box').value = f.storageBox || '';
+                if (typeof window.app.populateTripSelect === 'function') {
+                    window.app.populateTripSelect(f.tripId || '');
+                }
+                if (typeof window.app.renderChangeLogPanel === 'function') {
+                    window.app.renderChangeLogPanel(f.changeLog, true);
+                }
 
                 // Trade Fields
                 document.getElementById('f-traded-with').value = f.tradedWith || '';
@@ -5622,6 +5758,13 @@ window.app = {
                 
                 currentMilestones = f.prepMilestones ? f.prepMilestones.slice() : [];
                 window.app.renderMilestonePreview();
+
+                // Provenance vault
+                document.getElementById('f-legal-status').value = f.legalStatus || '';
+                document.getElementById('f-provenance-notes').value = f.provenanceNotes || '';
+                currentProvenanceDocs = (f.provenanceDocs && Array.isArray(f.provenanceDocs)) ? f.provenanceDocs.slice() : [];
+                window.app.renderProvenanceDocsPreview();
+                window.app.updateProvenanceRestrictionPanel();
 
                 // Museum Fields
                 document.getElementById('f-accession-code').value = f.accessionCode || '';
@@ -5713,6 +5856,12 @@ window.app = {
             document.getElementById('f-formation').value = localStorage.getItem('last_formation') || '';
             document.getElementById('f-period').value = localStorage.getItem('last_period') || '';
             document.getElementById('f-self-found').checked = false;
+            if (typeof window.app.populateTripSelect === 'function') {
+                window.app.populateTripSelect('');
+            }
+            if (typeof window.app.renderChangeLogPanel === 'function') {
+                window.app.renderChangeLogPanel(null, false);
+            }
             document.getElementById('f-wishlist').value = 'false';
             document.getElementById('f-sale-price').value = '';
             document.getElementById('f-sale-currency').value = 'USD';
@@ -5746,6 +5895,14 @@ window.app = {
             currentMilestones = [];
             window.app.renderMilestonePreview();
 
+            // Reset provenance vault
+            var legalStatusEl = document.getElementById('f-legal-status');
+            var provenanceNotesEl = document.getElementById('f-provenance-notes');
+            if (legalStatusEl) legalStatusEl.value = '';
+            if (provenanceNotesEl) provenanceNotesEl.value = '';
+            currentProvenanceDocs = [];
+            window.app.renderProvenanceDocsPreview();
+
             // Reset museum archival fields
             document.getElementById('f-accession-code').value = '';
             document.getElementById('f-donor-source').value = '';
@@ -5773,11 +5930,118 @@ window.app = {
             }
         }
 
+        // Ensure type-specific form layout is always correct when opening a new form
+        if (!id) {
+            var typeSelect = document.getElementById('f-type-select');
+            if (typeSelect) typeSelect.value = 'fossil';
+            window.app.handleSpecimenTypeChange();
+        }
+
+        if (typeof window.app.updateProvenanceRestrictionPanel === 'function') {
+            window.app.updateProvenanceRestrictionPanel();
+        }
+
         modal.showModal();
+        window.app.bindFormDirtyTracking();
+        setTimeout(function() {
+            window.app.markFormClean();
+        }, 50);
+    },
+
+    openModalForFirstSpecimen: function() {
+        this.openModal();
+        this.setEditorMode('simple');
+    },
+
+    bindFormDirtyTracking: function() {
+        var form = document.getElementById('fossil-form');
+        var modal = document.getElementById('fossil-modal');
+        if (!form || form._dirtyBound) return;
+        form._dirtyBound = true;
+        var markDirty = function() {
+            window.app.markFormDirty();
+        };
+        form.addEventListener('input', markDirty);
+        form.addEventListener('change', markDirty);
+        if (modal && !modal._dirtyCancelBound) {
+            modal._dirtyCancelBound = true;
+            modal.addEventListener('cancel', function(e) {
+                if (window.app._formDirty) {
+                    e.preventDefault();
+                    window.app.closeModal();
+                } else {
+                    window.app._formDirty = false;
+                }
+            });
+        }
+    },
+
+    ensureUnsavedBadge: function() {
+        var badge = document.getElementById('form-unsaved-badge');
+        if (badge) return badge;
+        var header = document.querySelector('#fossil-modal .modal-header');
+        if (!header) return null;
+        badge = document.createElement('span');
+        badge.id = 'form-unsaved-badge';
+        badge.className = 'form-unsaved-badge';
+        badge.hidden = true;
+        badge.textContent = 'Unsaved changes';
+        badge.title = 'You have unsaved changes';
+        var closeBtn = header.querySelector('.btn-icon');
+        if (closeBtn) {
+            header.insertBefore(badge, closeBtn);
+        } else {
+            header.appendChild(badge);
+        }
+        return badge;
+    },
+
+    updateUnsavedBadge: function() {
+        var badge = this.ensureUnsavedBadge();
+        if (!badge) return;
+        badge.hidden = !this._formDirty;
+    },
+
+    markFormDirty: function() {
+        if (this._formDirtySuppress) return;
+        this._formDirty = true;
+        this.updateUnsavedBadge();
+    },
+
+    markFormClean: function() {
+        this._formDirty = false;
+        this._formDirtySuppress = true;
+        this.updateUnsavedBadge();
+        var self = this;
+        setTimeout(function() {
+            self._formDirtySuppress = false;
+        }, 100);
     },
 
     closeModal: function() {
+        if (this._formDirty) {
+            if (!confirm('You have unsaved changes. Discard them?')) {
+                return;
+            }
+        }
+        this._formDirty = false;
+        this.updateUnsavedBadge();
+        if (typeof window.app.stopAllDictation === 'function') {
+            window.app.stopAllDictation();
+        }
         document.getElementById('fossil-modal').close();
+    },
+
+    stopAllDictation: function() {
+        if (!window.app._activeRecognitions) return;
+        Object.keys(window.app._activeRecognitions).forEach(function(id) {
+            var rec = window.app._activeRecognitions[id];
+            if (rec) {
+                rec._userStopped = true;
+                rec._discard = true;
+                try { rec.stop(); } catch (e) { /* ignore */ }
+            }
+        });
     },
 
     autoFetchAllSpecimenData: async function(event) {
@@ -6054,6 +6318,9 @@ window.app = {
         if (size) {
             sizeElem.value = size;
         }
+        if (typeof window.app.updateMineralCarePanel === 'function') {
+            window.app.updateMineralCarePanel();
+        }
         return size;
     },
 
@@ -6309,6 +6576,9 @@ window.app = {
         if (document.getElementById('btn-dream')) {
             document.getElementById('btn-dream').classList.toggle('active', view === 'dream');
         }
+        if (document.getElementById('btn-traded')) {
+            document.getElementById('btn-traded').classList.toggle('active', view === 'traded');
+        }
 
         // Smoothly scroll active button into view on mobile view-toggle scrollable containers
         var activeBtn = null;
@@ -6318,6 +6588,7 @@ window.app = {
         else if (view === 'sale') activeBtn = document.getElementById('btn-sale');
         else if (view === 'carts') activeBtn = document.getElementById('btn-carts');
         else if (view === 'dream') activeBtn = document.getElementById('btn-dream');
+        else if (view === 'traded') activeBtn = document.getElementById('btn-traded');
 
         if (!skipScroll && activeBtn && typeof activeBtn.scrollIntoView === 'function') {
             activeBtn.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
@@ -6377,7 +6648,11 @@ window.app = {
         } catch (e) {
             console.error('HEIC conversion error:', e);
             var errMsg = e && e.message ? e.message : String(e);
-            window.app.showToast('Failed to convert HEIC image: ' + errMsg, 'danger');
+            if (typeof reportAppError === 'function') {
+                reportAppError(e, 'HEIC conversion', { type: 'error' });
+            } else {
+                window.app.showToast('Failed to convert HEIC image: ' + errMsg, 'error');
+            }
             if (showLoaderFunc) {
                 showLoaderFunc('<span style="color:var(--danger)">Failed: ' + errMsg + '</span>');
                 await new Promise(function(r) { setTimeout(r, 4000); });
@@ -6386,83 +6661,610 @@ window.app = {
         }
     },
 
-    toggleDictation: function(targetId) {
-        var button = event ? event.currentTarget : null;
+    toggleDictation: function(targetId, evt) {
+        var button = (evt && evt.currentTarget) ? evt.currentTarget
+            : (typeof event !== 'undefined' && event && event.currentTarget) ? event.currentTarget
+            : document.querySelector('.btn-dictate[data-dictate-target="' + targetId + '"]');
         var targetInput = document.getElementById(targetId);
         if (!targetInput) return;
 
-        var SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-        if (!SpeechRecognition) {
-            window.app.showToast('Speech Recognition not supported in this browser.', 'error');
+        if (typeof window.isSecureContext !== 'undefined' && !window.isSecureContext) {
+            window.app.showToast('Dictation needs HTTPS or localhost (not a raw file:// open).', 'warning');
             return;
         }
 
-        if (!window.app._activeRecognitions) {
-            window.app._activeRecognitions = {};
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+            window.app.showToast('Microphone access is not available in this browser.', 'error');
+            return;
         }
+
+        if (!window.app._activeRecognitions) window.app._activeRecognitions = {};
+        if (!window.app._dictationButtons) window.app._dictationButtons = {};
 
         var activeRec = window.app._activeRecognitions[targetId];
 
+        // Stop / finish current session
         if (activeRec) {
-            activeRec.stop();
-            delete window.app._activeRecognitions[targetId];
-            if (button) {
-                button.classList.remove('recording');
-                button.innerHTML = '🎙️';
+            activeRec._userStopped = true;
+            try { activeRec.stop(); } catch (err) { /* ignore */ }
+            return;
+        }
+
+        // Stop any other active session
+        Object.keys(window.app._activeRecognitions).forEach(function(otherId) {
+            if (otherId === targetId) return;
+            var other = window.app._activeRecognitions[otherId];
+            if (other) {
+                other._userStopped = true;
+                try { other.stop(); } catch (err2) { /* ignore */ }
             }
-            window.app.showToast('Voice dictation stopped.', 'info');
+            delete window.app._activeRecognitions[otherId];
+            window.app._setDictationButtonState(otherId, window.app._dictationButtons[otherId], false);
+        });
+
+        if (button) {
+            window.app._dictationButtons[targetId] = button;
+            if (!button.getAttribute('data-dictate-target')) {
+                button.setAttribute('data-dictate-target', targetId);
+            }
+        }
+
+        // Prefer on-device Whisper (field-friendly). Chrome Web Speech often fails with "network".
+        window.app._startOfflineDictation(targetId, targetInput, button);
+    },
+
+    _startOfflineDictation: function(targetId, targetInput, button) {
+        var mimeType = '';
+        if (window.MediaRecorder) {
+            if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) mimeType = 'audio/webm;codecs=opus';
+            else if (MediaRecorder.isTypeSupported('audio/webm')) mimeType = 'audio/webm';
+            else if (MediaRecorder.isTypeSupported('audio/mp4')) mimeType = 'audio/mp4';
+        }
+
+        navigator.mediaDevices.getUserMedia({
+            audio: {
+                echoCancellation: true,
+                noiseSuppression: true,
+                channelCount: 1
+            }
+        }).then(function(stream) {
+            var chunks = [];
+            var recorder;
+            try {
+                recorder = mimeType ? new MediaRecorder(stream, { mimeType: mimeType }) : new MediaRecorder(stream);
+            } catch (recErr) {
+                stream.getTracks().forEach(function(t) { t.stop(); });
+                window.app.showToast('Kunde inte starta ljudinspelning.', 'error');
+                return;
+            }
+
+            var session = {
+                mode: 'offline',
+                _userStopped: false,
+                mediaRecorder: recorder,
+                stream: stream,
+                stop: function() {
+                    try {
+                        if (recorder.state === 'recording') {
+                            try { recorder.requestData(); } catch (reqErr) { /* ignore */ }
+                            recorder.stop();
+                        } else if (recorder.state !== 'inactive') {
+                            recorder.stop();
+                        }
+                    } catch (e) { /* ignore */ }
+                }
+            };
+
+            recorder.ondataavailable = function(e) {
+                if (e.data && e.data.size > 0) chunks.push(e.data);
+            };
+
+            recorder.onstop = function() {
+                stream.getTracks().forEach(function(t) { t.stop(); });
+                delete window.app._activeRecognitions[targetId];
+                window.app._setDictationButtonState(targetId, window.app._dictationButtons[targetId] || button, false);
+
+                if (session._discard) {
+                    return;
+                }
+
+                if (!chunks.length) {
+                    window.app.showToast('Ingen ljuddata. Försök igen och prata lite längre.', 'warning');
+                    return;
+                }
+
+                var blobType = recorder.mimeType || mimeType || chunks[0].type || 'audio/webm';
+                var blob = new Blob(chunks, { type: blobType });
+                if (blob.size < 1000) {
+                    window.app.showToast('Inspelningen blev för kort. Håll in 🎙️ längre.', 'warning');
+                    return;
+                }
+                window.app._transcribeAudioBlob(blob, targetInput);
+            };
+
+            recorder.onerror = function() {
+                stream.getTracks().forEach(function(t) { t.stop(); });
+                delete window.app._activeRecognitions[targetId];
+                window.app._setDictationButtonState(targetId, window.app._dictationButtons[targetId] || button, false);
+                window.app.showToast('Inspelningen misslyckades.', 'error');
+            };
+
+            window.app._activeRecognitions[targetId] = session;
+            window.app._setDictationButtonState(targetId, window.app._dictationButtons[targetId] || button, true);
+            try { targetInput.focus(); } catch (focusErr) { /* ignore */ }
+            recorder.start(200);
+            window.app.showToast('Recording… [' + window.app.getDictationLanguageLabel() + '] Tap 🛑 when done.', 'success');
+        }).catch(function(err) {
+            var msg = (err && err.name === 'NotAllowedError')
+                ? 'Mikrofon blockerad. Tillåt mikrofon i webbläsaren.'
+                : 'Kunde inte komma åt mikrofonen.';
+            window.app.showToast(msg, 'error');
+            window.app._setDictationButtonState(targetId, button, false);
+        });
+    },
+
+    _appendDictationText: function(targetInput, transcript) {
+        if (!targetInput || !transcript) return;
+        var text = String(transcript).trim();
+        if (!text) return;
+        // Skip Whisper hallucinations that are only punctuation
+        if (/^[.\s,;:!?…-]+$/.test(text)) return;
+        var val = targetInput.value || '';
+        var needsSpace = val.length > 0 && !/\s$/.test(val);
+        // Prefer native value setter so React-like listeners / form state see the change
+        var proto = window.HTMLTextAreaElement && targetInput instanceof HTMLTextAreaElement
+            ? window.HTMLTextAreaElement.prototype
+            : window.HTMLInputElement.prototype;
+        var descriptor = Object.getOwnPropertyDescriptor(proto, 'value');
+        if (descriptor && descriptor.set) {
+            descriptor.set.call(targetInput, val + (needsSpace ? ' ' : '') + text);
         } else {
-            var recognition = new SpeechRecognition();
-            recognition.continuous = true;
-            recognition.interimResults = false;
-            recognition.lang = 'en-US';
+            targetInput.value = val + (needsSpace ? ' ' : '') + text;
+        }
+        try {
+            targetInput.dispatchEvent(new Event('input', { bubbles: true }));
+            targetInput.dispatchEvent(new Event('change', { bubbles: true }));
+        } catch (ie) {
+            var legacy = document.createEvent('Event');
+            legacy.initEvent('input', true, true);
+            targetInput.dispatchEvent(legacy);
+        }
+        try { targetInput.focus(); } catch (fErr) { /* ignore */ }
+    },
 
-            recognition.onstart = function() {
-                if (button) {
-                    button.classList.add('recording');
-                    button.innerHTML = '🛑';
-                }
-                window.app.showToast('Listening... Speak now.', 'success');
+    getDictationLanguages: function() {
+        return [
+            { id: 'auto', label: 'Auto-detect', native: 'Auto' },
+            { id: 'swedish', label: 'Swedish', native: 'Svenska' },
+            { id: 'english', label: 'English', native: 'English' },
+            { id: 'norwegian', label: 'Norwegian', native: 'Norsk' },
+            { id: 'danish', label: 'Danish', native: 'Dansk' },
+            { id: 'finnish', label: 'Finnish', native: 'Suomi' },
+            { id: 'german', label: 'German', native: 'Deutsch' },
+            { id: 'dutch', label: 'Dutch', native: 'Nederlands' },
+            { id: 'french', label: 'French', native: 'Français' },
+            { id: 'spanish', label: 'Spanish', native: 'Español' },
+            { id: 'portuguese', label: 'Portuguese', native: 'Português' },
+            { id: 'italian', label: 'Italian', native: 'Italiano' },
+            { id: 'polish', label: 'Polish', native: 'Polski' },
+            { id: 'czech', label: 'Czech', native: 'Čeština' },
+            { id: 'russian', label: 'Russian', native: 'Русский' },
+            { id: 'ukrainian', label: 'Ukrainian', native: 'Українська' },
+            { id: 'greek', label: 'Greek', native: 'Ελληνικά' },
+            { id: 'turkish', label: 'Turkish', native: 'Türkçe' },
+            { id: 'arabic', label: 'Arabic', native: 'العربية' },
+            { id: 'hebrew', label: 'Hebrew', native: 'עברית' },
+            { id: 'hindi', label: 'Hindi', native: 'हिन्दी' },
+            { id: 'chinese', label: 'Chinese', native: '中文' },
+            { id: 'japanese', label: 'Japanese', native: '日本語' },
+            { id: 'korean', label: 'Korean', native: '한국어' },
+            { id: 'vietnamese', label: 'Vietnamese', native: 'Tiếng Việt' },
+            { id: 'indonesian', label: 'Indonesian', native: 'Bahasa Indonesia' },
+            { id: 'latin', label: 'Latin', native: 'Latina' }
+        ];
+    },
+
+    _getStoredDictationLangId: function() {
+        var saved = localStorage.getItem('pref_dictation_lang');
+        if (!saved) return 'auto';
+        var known = window.app.getDictationLanguages().some(function(l) { return l.id === saved; });
+        return known ? saved : 'auto';
+    },
+
+    _getDictationLanguage: function() {
+        // Whisper language name, or null for auto-detect
+        var id = window.app._getStoredDictationLangId();
+        if (!id || id === 'auto') return null;
+        return id;
+    },
+
+    getDictationLanguageLabel: function() {
+        var id = window.app._getStoredDictationLangId();
+        var langs = window.app.getDictationLanguages();
+        for (var i = 0; i < langs.length; i++) {
+            if (langs[i].id === id) return langs[i].native || langs[i].label;
+        }
+        return 'Auto';
+    },
+
+    setDictationLanguage: function(langId, silent) {
+        var id = langId || 'auto';
+        var known = window.app.getDictationLanguages().some(function(l) { return l.id === id; });
+        if (!known) id = 'auto';
+        localStorage.setItem('pref_dictation_lang', id);
+        window.app.syncDictationLanguageSelects();
+        if (!silent) {
+            window.app.showToast('Dictation language: ' + window.app.getDictationLanguageLabel(), 'info', 2500);
+        }
+    },
+
+    syncDictationLanguageSelects: function() {
+        var id = window.app._getStoredDictationLangId();
+        var langs = window.app.getDictationLanguages();
+        document.querySelectorAll('.dictate-lang-select').forEach(function(sel) {
+            if (!sel.options.length) {
+                langs.forEach(function(l) {
+                    var opt = document.createElement('option');
+                    opt.value = l.id;
+                    opt.textContent = l.native + (l.id === 'auto' ? '' : ' (' + l.label + ')');
+                    sel.appendChild(opt);
+                });
+            }
+            sel.value = id;
+        });
+        document.querySelectorAll('.btn-dictate-lang').forEach(function(btn) {
+            btn.title = 'Language: ' + window.app.getDictationLanguageLabel() + ' (click to change)';
+            btn.setAttribute('data-lang', id);
+        });
+    },
+
+    cycleDictationLanguage: function(evt) {
+        if (evt) {
+            evt.preventDefault();
+            evt.stopPropagation();
+        }
+        // Quick cycle through common field languages, then open full picker for the rest
+        var quick = ['auto', 'swedish', 'english', 'norwegian', 'danish', 'german', 'french', 'spanish'];
+        var current = window.app._getStoredDictationLangId();
+        var idx = quick.indexOf(current);
+        if (idx === -1 || idx === quick.length - 1) {
+            window.app.openDictationLangPicker(evt);
+            return;
+        }
+        window.app.setDictationLanguage(quick[idx + 1]);
+    },
+
+    openDictationLangPicker: function(evt) {
+        if (evt) {
+            evt.preventDefault();
+            evt.stopPropagation();
+        }
+        var existing = document.getElementById('dictate-lang-popover');
+        if (existing) {
+            try {
+                if (existing.hidePopover) existing.hidePopover();
+            } catch (hideErr) { /* ignore */ }
+            existing.remove();
+            return;
+        }
+
+        var anchor = (evt && evt.currentTarget) ? evt.currentTarget : null;
+        var pop = document.createElement('div');
+        pop.id = 'dictate-lang-popover';
+        pop.className = 'dictate-lang-popover';
+        pop.innerHTML = '<div class="dictate-lang-popover-title">Dictation language</div>';
+
+        var list = document.createElement('div');
+        list.className = 'dictate-lang-popover-list';
+        var current = window.app._getStoredDictationLangId();
+        window.app.getDictationLanguages().forEach(function(l) {
+            var btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'dictate-lang-option' + (l.id === current ? ' active' : '');
+            btn.textContent = l.native + (l.id === 'auto' ? '' : ' — ' + l.label);
+            btn.onclick = function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                window.app.setDictationLanguage(l.id);
+                try {
+                    if (pop.hidePopover) pop.hidePopover();
+                } catch (h2) { /* ignore */ }
+                pop.remove();
             };
+            list.appendChild(btn);
+        });
+        pop.appendChild(list);
 
-            recognition.onresult = function(e) {
-                var transcript = '';
-                for (var i = e.resultIndex; i < e.results.length; ++i) {
-                    if (e.results[i].isFinal) {
-                        transcript += e.results[i][0].transcript;
+        // Position before showing (fixed to viewport)
+        if (anchor && anchor.getBoundingClientRect) {
+            var rect = anchor.getBoundingClientRect();
+            var top = rect.bottom + 6;
+            var left = Math.min(rect.left, window.innerWidth - 280);
+            if (top + 320 > window.innerHeight) top = Math.max(8, rect.top - 320);
+            pop.style.top = top + 'px';
+            pop.style.left = Math.max(8, left) + 'px';
+        } else {
+            pop.style.top = '20%';
+            pop.style.left = '50%';
+            pop.style.transform = 'translateX(-50%)';
+        }
+
+        // Modal dialogs use the browser top-layer — normal z-index cannot cover them.
+        // Prefer Popover API (also top-layer). Fallback: mount inside the open <dialog>.
+        var supportsPopover = typeof HTMLElement !== 'undefined' &&
+            typeof HTMLElement.prototype.showPopover === 'function';
+
+        if (supportsPopover) {
+            pop.setAttribute('popover', 'auto');
+            document.body.appendChild(pop);
+            try {
+                pop.showPopover();
+            } catch (showErr) {
+                // Fallback if showPopover fails
+                pop.removeAttribute('popover');
+                var openDlg = document.querySelector('dialog[open]');
+                (openDlg || document.body).appendChild(pop);
+            }
+        } else {
+            var openDialog = document.querySelector('dialog[open]');
+            (openDialog || document.body).appendChild(pop);
+            setTimeout(function() {
+                var closer = function(e) {
+                    if (!pop.contains(e.target)) {
+                        pop.remove();
+                        document.removeEventListener('mousedown', closer, true);
                     }
+                };
+                document.addEventListener('mousedown', closer, true);
+            }, 0);
+        }
+    },
+
+    initDictationLanguageUI: function() {
+        // Default: auto-detect (best for multilingual field use)
+        if (!localStorage.getItem('pref_dictation_lang')) {
+            localStorage.setItem('pref_dictation_lang', 'auto');
+        }
+        window.app.syncDictationLanguageSelects();
+    },
+
+    _decodeAudioToFloat32: function(arrayBuffer) {
+        return new Promise(function(resolve, reject) {
+            var AudioCtx = window.AudioContext || window.webkitAudioContext;
+            if (!AudioCtx) {
+                reject(new Error('Web Audio API unavailable'));
+                return;
+            }
+            var ctx = new AudioCtx();
+
+            function copySamples(samples) {
+                var out = new Float32Array(samples.length);
+                out.set(samples);
+                return out;
+            }
+
+            function resampleTo16k(audioBuffer) {
+                var targetRate = 16000;
+                var channelData = audioBuffer.getChannelData(0);
+                if (audioBuffer.sampleRate === targetRate) {
+                    return Promise.resolve(copySamples(channelData));
                 }
-                if (transcript) {
-                    var val = targetInput.value;
-                    if (val && !val.endsWith(' ')) {
-                        targetInput.value = val + ' ' + transcript;
+                var frameCount = Math.max(1, Math.ceil(audioBuffer.duration * targetRate));
+                try {
+                    var offline = new OfflineAudioContext(1, frameCount, targetRate);
+                    var source = offline.createBufferSource();
+                    // Clone into offline-compatible buffer
+                    var clone = offline.createBuffer(1, audioBuffer.length, audioBuffer.sampleRate);
+                    var cloned = copySamples(channelData);
+                    if (clone.copyToChannel) {
+                        clone.copyToChannel(cloned, 0);
                     } else {
-                        targetInput.value = val + transcript;
+                        clone.getChannelData(0).set(cloned);
                     }
-                    targetInput.dispatchEvent(new Event('input'));
+                    source.buffer = clone;
+                    source.connect(offline.destination);
+                    source.start(0);
+                    return offline.startRendering().then(function(rendered) {
+                        return copySamples(rendered.getChannelData(0));
+                    });
+                } catch (e) {
+                    var ratio = audioBuffer.sampleRate / targetRate;
+                    var newLen = Math.max(1, Math.floor(channelData.length / ratio));
+                    var resampled = new Float32Array(newLen);
+                    for (var i = 0; i < newLen; i++) {
+                        resampled[i] = channelData[Math.min(channelData.length - 1, Math.floor(i * ratio))];
+                    }
+                    return Promise.resolve(resampled);
                 }
-            };
+            }
 
-            recognition.onerror = function(e) {
-                console.error('Speech recognition error:', e);
-                window.app.showToast('Speech error: ' + e.error, 'error');
-                if (button) {
-                    button.classList.remove('recording');
-                    button.innerHTML = '🎙️';
+            var decodePromise;
+            try {
+                decodePromise = ctx.decodeAudioData(arrayBuffer.slice(0));
+            } catch (syncErr) {
+                decodePromise = new Promise(function(res, rej) {
+                    ctx.decodeAudioData(arrayBuffer.slice(0), res, rej);
+                });
+            }
+
+            Promise.resolve(decodePromise).then(function(audioBuffer) {
+                return resampleTo16k(audioBuffer);
+            }).then(function(samples) {
+                if (ctx.state !== 'closed' && ctx.close) {
+                    return ctx.close().catch(function() { /* ignore */ }).then(function() { return samples; });
                 }
-                delete window.app._activeRecognitions[targetId];
-            };
-
-            recognition.onend = function() {
-                if (button) {
-                    button.classList.remove('recording');
-                    button.innerHTML = '🎙️';
+                return samples;
+            }).then(resolve).catch(function(err) {
+                if (ctx.state !== 'closed' && ctx.close) {
+                    ctx.close().catch(function() { /* ignore */ });
                 }
-                delete window.app._activeRecognitions[targetId];
-            };
+                reject(err || new Error('Could not decode audio'));
+            });
+        });
+    },
 
-            recognition.start();
-            window.app._activeRecognitions[targetId] = recognition;
+    _getWhisperPipeline: async function() {
+        if (window.app._whisperPipeline) return window.app._whisperPipeline;
+        if (window.app._whisperLoading) return window.app._whisperLoading;
+
+        window.app._whisperLoading = (async function() {
+            window.app.showToast('Laddar talmodell första gången (~75 MB)…', 'info', 10000);
+
+            var mod = null;
+            var importErrors = [];
+            var cdnUrls = [
+                'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2/+esm',
+                'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2',
+                'https://unpkg.com/@xenova/transformers@2.17.2'
+            ];
+            for (var i = 0; i < cdnUrls.length; i++) {
+                try {
+                    mod = await import(cdnUrls[i]);
+                    if (mod && mod.pipeline) break;
+                } catch (impErr) {
+                    importErrors.push((impErr && impErr.message) ? impErr.message : String(impErr));
+                    mod = null;
+                }
+            }
+            if (!mod || !mod.pipeline) {
+                throw new Error('Kunde inte ladda talbiblioteket. ' + (importErrors[0] || ''));
+            }
+
+            var pipeline = mod.pipeline;
+            var env = mod.env;
+            if (env) {
+                env.allowLocalModels = false;
+                env.useBrowserCache = true;
+            }
+
+            var lastPct = -1;
+            // Multilingual tiny — behövs för svenska (tiny.en fungerar dåligt/inte alls)
+            var transcriber = await pipeline('automatic-speech-recognition', 'Xenova/whisper-tiny', {
+                quantized: true,
+                progress_callback: function(p) {
+                    if (!p) return;
+                    var pct = null;
+                    if (typeof p.progress === 'number') pct = Math.round(p.progress * (p.progress <= 1 ? 100 : 1));
+                    else if (typeof p.loaded === 'number' && typeof p.total === 'number' && p.total > 0) {
+                        pct = Math.round((p.loaded / p.total) * 100);
+                    }
+                    if (pct !== null && pct >= 0 && pct <= 100 && pct - lastPct >= 15) {
+                        lastPct = pct;
+                        window.app.showToast('Laddar talmodell… ' + pct + '%', 'info', 2500);
+                    }
+                }
+            });
+            window.app._whisperPipeline = transcriber;
+            window.app._whisperLoading = null;
+            window.app.showToast('Talmodellen är redo.', 'success');
+            if (typeof SpecimenryDictationStatus !== 'undefined') {
+                SpecimenryDictationStatus.markReady();
+            }
+            return transcriber;
+        })().catch(function(err) {
+            window.app._whisperLoading = null;
+            throw err;
+        });
+
+        return window.app._whisperLoading;
+    },
+
+    _transcribeAudioBlob: async function(blob, targetInput) {
+        try {
+            window.app.showToast('Transcribing (' + window.app.getDictationLanguageLabel() + ')…', 'info', 8000);
+            var transcriber = await window.app._getWhisperPipeline();
+            var arrayBuffer = await blob.arrayBuffer();
+            var audio = await window.app._decodeAudioToFloat32(arrayBuffer);
+            if (!audio || !audio.length) {
+                window.app.showToast('Inspelningen var tom.', 'warning');
+                return;
+            }
+            if (audio.length < 16000 * 0.4) {
+                window.app.showToast('Prata lite längre, tryck sedan 🛑.', 'warning');
+                return;
+            }
+
+            var language = window.app._getDictationLanguage();
+            var options = {
+                task: 'transcribe',
+                chunk_length_s: 30,
+                stride_length_s: 5,
+                return_timestamps: false
+            };
+            if (language) options.language = language;
+
+            var result;
+            try {
+                // Prefer explicit sampling rate (transformers.js v2)
+                result = await transcriber(audio, Object.assign({ sampling_rate: 16000 }, options));
+            } catch (firstErr) {
+                console.warn('Whisper first attempt failed, retrying without sampling_rate', firstErr);
+                result = await transcriber(audio, options);
+            }
+
+            var text = '';
+            if (typeof result === 'string') text = result;
+            else if (result && typeof result.text === 'string') text = result.text;
+            else if (result && result[0] && typeof result[0].text === 'string') text = result[0].text;
+
+            text = (text || '').replace(/\s+/g, ' ').trim();
+            if (!text || /^[.\s,;:!?…-]+$/.test(text)) {
+                window.app.showToast('Ingen tal upptäcktes. Prata tydligare och närmare mikrofonen.', 'warning');
+                return;
+            }
+
+            if (!targetInput || !document.body.contains(targetInput)) {
+                // Modal field may have remounted — resolve by id if possible
+                var id = targetInput && targetInput.id;
+                if (id) targetInput = document.getElementById(id);
+            }
+            if (!targetInput) {
+                window.app.showToast('Textfältet hittades inte. Öppna formuläret igen.', 'error');
+                return;
+            }
+
+            window.app._appendDictationText(targetInput, text);
+            window.app.showToast('Klar: “' + (text.length > 60 ? text.slice(0, 57) + '…' : text) + '”', 'success', 5000);
+        } catch (err) {
+            console.error('Offline transcription failed:', err);
+            var msg = (err && err.message) ? err.message : String(err);
+            var needsNet = /fetch|network|Failed to fetch|Load failed|CDN/i.test(msg);
+            if (typeof reportAppError === 'function') {
+                reportAppError(
+                    new Error(needsNet
+                        ? 'Needs internet the first time to download the speech model (~75 MB).'
+                        : ('Transcription failed: ' + msg)),
+                    'Dictation',
+                    {
+                        type: needsNet ? 'warning' : 'error',
+                        duration: needsNet ? 8000 : 7000,
+                        retry: function() {
+                            if (targetInput) window.app._transcribeAudioBlob(blob, targetInput);
+                        }
+                    }
+                );
+            } else if (needsNet) {
+                window.app.showToast('Behöver internet första gången för att ladda talmodellen (~75 MB).', 'warning', 8000);
+            } else {
+                window.app.showToast('Transkribering misslyckades: ' + msg, 'error', 7000);
+            }
+        }
+    },
+
+    _setDictationButtonState: function(targetId, button, recording) {
+        var btn = button || (window.app._dictationButtons && window.app._dictationButtons[targetId]) ||
+            document.querySelector('.btn-dictate[data-dictate-target="' + targetId + '"]');
+        if (!btn) return;
+        if (recording) {
+            btn.classList.add('recording');
+            btn.innerHTML = '🛑';
+            btn.setAttribute('aria-pressed', 'true');
+            btn.title = 'Stoppa diktering';
+        } else {
+            btn.classList.remove('recording');
+            btn.innerHTML = '🎙️';
+            btn.setAttribute('aria-pressed', 'false');
+            btn.title = 'Diktera';
         }
     },
 
@@ -6546,6 +7348,128 @@ window.app = {
         window.app.renderMilestonePreview();
     },
 
+    updateProvenanceRestrictionPanel: function() {
+        var panel = document.getElementById('provenance-restriction-panel');
+        if (!panel) return;
+        var country = document.getElementById('f-country');
+        var location = document.getElementById('f-location');
+        var formation = document.getElementById('f-formation');
+        var alerts = analyzeProvenanceRestrictions(
+            country ? country.value : '',
+            location ? location.value : '',
+            formation ? formation.value : ''
+        );
+        var hasLocality = !!(
+            (country && country.value.trim()) ||
+            (location && location.value.trim()) ||
+            (formation && formation.value.trim())
+        );
+        panel.innerHTML = renderProvenanceRestrictionHtml(alerts, { showClear: hasLocality && alerts.length === 0 });
+    },
+
+    handleProvenanceUpload: function(event) {
+        var files = event.target.files;
+        if (!files || !files.length) return;
+
+        var maxFiles = 5;
+        var maxBytes = 6 * 1024 * 1024;
+        var remaining = maxFiles - currentProvenanceDocs.length;
+        if (remaining <= 0) {
+            window.app.showToast('Maximum 5 provenance documents per specimen.', 'warning');
+            event.target.value = '';
+            return;
+        }
+
+        var queue = Array.prototype.slice.call(files, 0, remaining);
+        var typeSelect = document.getElementById('f-provenance-doc-type');
+        var docType = typeSelect ? typeSelect.value : 'other';
+        var pending = queue.length;
+
+        queue.forEach(function(file) {
+            if (file.size > maxBytes) {
+                window.app.showToast('“' + file.name + '” is over 6 MB.', 'warning');
+                pending--;
+                if (pending <= 0) window.app.renderProvenanceDocsPreview();
+                return;
+            }
+            var reader = new FileReader();
+            reader.onload = function(e) {
+                currentProvenanceDocs.push({
+                    id: 'prov-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8),
+                    type: docType,
+                    label: file.name.replace(/\.[^.]+$/, ''),
+                    fileName: file.name,
+                    mimeType: file.type || 'application/octet-stream',
+                    dataUrl: e.target.result,
+                    addedAt: Date.now()
+                });
+                pending--;
+                if (pending <= 0) {
+                    window.app.renderProvenanceDocsPreview();
+                    window.app.showToast('Provenance document attached.', 'success');
+                }
+            };
+            reader.onerror = function() {
+                pending--;
+                window.app.showToast('Failed to read “' + file.name + '”.', 'error');
+                if (pending <= 0) window.app.renderProvenanceDocsPreview();
+            };
+            reader.readAsDataURL(file);
+        });
+
+        event.target.value = '';
+    },
+
+    renderProvenanceDocsPreview: function() {
+        var container = document.getElementById('provenance-docs-preview');
+        if (!container) return;
+        container.innerHTML = '';
+        if (!currentProvenanceDocs.length) {
+            container.innerHTML = '<div class="provenance-docs-empty">No paperwork attached yet.</div>';
+            return;
+        }
+
+        currentProvenanceDocs.forEach(function(doc, index) {
+            var isPdf = (doc.mimeType && doc.mimeType.indexOf('pdf') !== -1) || /\.pdf$/i.test(doc.fileName || '');
+            var item = document.createElement('div');
+            item.className = 'provenance-doc-item';
+            item.innerHTML =
+                '<div class="provenance-doc-icon">' + (isPdf ? '📄' : '🖼️') + '</div>' +
+                '<div class="provenance-doc-meta">' +
+                    '<div class="provenance-doc-name" title="' + escapeHtml(doc.fileName || doc.label || '') + '">' + escapeHtml(doc.fileName || doc.label || 'Document') + '</div>' +
+                    '<div class="provenance-doc-type">' + escapeHtml(getProvenanceDocTypeLabel(doc.type)) + '</div>' +
+                '</div>' +
+                '<div class="provenance-doc-actions">' +
+                    '<button type="button" class="btn-secondary" onclick="app.viewProvenanceDoc(' + index + ')" style="font-size:0.7rem;padding:0.25rem 0.45rem;">View</button>' +
+                    '<button type="button" class="btn-secondary" onclick="app.removeProvenanceDoc(' + index + ')" style="font-size:0.7rem;padding:0.25rem 0.45rem;">Remove</button>' +
+                '</div>';
+            container.appendChild(item);
+        });
+    },
+
+    viewProvenanceDoc: function(index) {
+        var doc = currentProvenanceDocs[index];
+        if (!doc || !doc.dataUrl) return;
+        var isPdf = (doc.mimeType && doc.mimeType.indexOf('pdf') !== -1) || /\.pdf$/i.test(doc.fileName || '');
+        if (isPdf) {
+            var pdfWin = window.open(doc.dataUrl, '_blank');
+            if (!pdfWin) window.app.showToast('Popup blocked — allow popups to view PDFs.', 'warning');
+            return;
+        }
+        var w = window.open();
+        if (!w) {
+            window.app.showToast('Popup blocked — allow popups to view documents.', 'warning');
+            return;
+        }
+        w.document.write('<img src="' + doc.dataUrl + '" style="max-width:100%;height:auto;display:block;margin:1rem auto;" alt="Provenance scan"/>');
+        w.document.title = doc.fileName || 'Provenance document';
+    },
+
+    removeProvenanceDoc: function(index) {
+        currentProvenanceDocs.splice(index, 1);
+        window.app.renderProvenanceDocsPreview();
+    },
+
     handleImageUpload: async function(event) {
         var files = event.target.files;
         if (!files || files.length === 0) return;
@@ -6606,6 +7530,9 @@ window.app = {
 
         // Render preview once all files are in the array
         window.app.renderImagePreview();
+        if (typeof window.app.markFormDirty === 'function') {
+            window.app.markFormDirty();
+        }
         
         // Reset the file input so the user can upload the same files again if needed
         inputElement.value = '';
@@ -6659,6 +7586,9 @@ window.app = {
                 e.stopPropagation();
                 currentImages.splice(index, 1);
                 window.app.renderImagePreview();
+                if (typeof window.app.markFormDirty === 'function') {
+                    window.app.markFormDirty();
+                }
             };
             
             imgContainer.appendChild(removeBtn);
@@ -6772,11 +7702,17 @@ window.app = {
                 return;
             }
 
+            var isSimpleMode = !!(document.getElementById('f-quick-add') && document.getElementById('f-quick-add').checked);
             if (!catElem.value) {
-                window.app.setModalTab('classification');
-                catElem.focus();
-                window.app.showToast('Please select a Category.', 'warning');
-                return;
+                if (isSimpleMode) {
+                    // Field mode hides category — default so a quick save still works.
+                    catElem.value = 'Other';
+                } else {
+                    window.app.setModalTab('classification');
+                    catElem.focus();
+                    window.app.showToast('Please select a Category.', 'warning');
+                    return;
+                }
             }
 
             var idVal = document.getElementById('fossil-id').value;
@@ -6791,10 +7727,14 @@ window.app = {
             var lng = (lngVal !== '' && !isNaN(parseFloat(lngVal))) ? parseFloat(lngVal) : null;
 
             var createdAtVal = Date.now();
+            var existingChangeLog = [];
             if (isEditing) {
                 var existing = fossils.find(function(f){ return f.id === idVal; });
                 if (existing && existing.createdAt) {
                     createdAtVal = existing.createdAt;
+                }
+                if (existing && Array.isArray(existing.changeLog)) {
+                    existingChangeLog = existing.changeLog;
                 }
             } else {
                 // Save last used geography/geology for future batch logging
@@ -6842,6 +7782,8 @@ window.app = {
                 salePrice: (document.getElementById('f-wishlist').value === 'sold' || document.getElementById('f-wishlist').value === 'sale') ? parseFloat(document.getElementById('f-sale-price').value) || null : null,
                 saleCurrency: (document.getElementById('f-wishlist').value === 'sold' || document.getElementById('f-wishlist').value === 'sale') ? document.getElementById('f-sale-currency').value : 'USD',
                 isSelfFound: document.getElementById('f-self-found').checked,
+                tripId: (document.getElementById('f-trip-id') && document.getElementById('f-trip-id').value) || '',
+                changeLog: existingChangeLog,
                 geologicalPeriod: document.getElementById('f-period').value,
                 epoch: document.getElementById('f-epoch').value,
                 stratAge: document.getElementById('f-strat-age').value,
@@ -6869,6 +7811,10 @@ window.app = {
                 conditionTier: document.getElementById('f-condition-tier').value || null,
                 tags: (document.getElementById('f-tags').value || '').split(/[,\s]+/).map(function(t) { return t.trim().toLowerCase().replace(/^#/, ''); }).filter(function(t) { return t.length > 0; }),
                 images: currentImages,
+                // Provenance vault
+                legalStatus: (document.getElementById('f-legal-status') && document.getElementById('f-legal-status').value) || '',
+                provenanceNotes: (document.getElementById('f-provenance-notes') && document.getElementById('f-provenance-notes').value) || '',
+                provenanceDocs: currentProvenanceDocs.slice(),
                 // Storage Fields
                 storageRoom: document.getElementById('f-storage-room').value || '',
                 storageUnit: document.getElementById('f-storage-unit').value || '',
@@ -6914,6 +7860,13 @@ window.app = {
 
             var action = isEditing ? updateFossil(fossil) : addFossil(fossil);
             action.then(function() {
+                var tripLinkId = fossil.tripId;
+                if (tripLinkId && typeof SpecimenryTrips !== 'undefined') {
+                    SpecimenryTrips.linkSpecimen(tripLinkId, fossil.id).catch(function(err) {
+                        console.warn('Could not link specimen to trip:', err);
+                    });
+                }
+
                 if (!isEditing) {
                     newlyAddedFossilId = fossil.id;
                     setTimeout(function() {
@@ -6975,14 +7928,22 @@ window.app = {
                     currentImages = [];
                     var prevList = document.getElementById('image-preview-list');
                     if (prevList) prevList.innerHTML = '';
+                    currentProvenanceDocs = [];
+                    if (document.getElementById('f-legal-status')) document.getElementById('f-legal-status').value = '';
+                    if (document.getElementById('f-provenance-notes')) document.getElementById('f-provenance-notes').value = '';
+                    if (typeof window.app.renderProvenanceDocsPreview === 'function') {
+                        window.app.renderProvenanceDocsPreview();
+                    }
 
                     // Display success toast and keep modal open, focus specimen name
+                    window.app.markFormClean();
                     window.app.showToast('✨ Specimen added! (Batch logging active)', 'success');
                     window.app.renderFossils();
 
                     var specInput = document.getElementById('f-specimen');
                     if (specInput) specInput.focus();
                 } else {
+                    window.app.markFormClean();
                     window.app.closeModal();
                     window.app.renderFossils();
                 }
@@ -7058,13 +8019,80 @@ window.app = {
 
     // --- Delete ---
     deleteFossilItem: function(id) {
-        if (confirm('Are you sure you want to delete this fossil?')) {
-            deleteFossil(id).then(function() {
-                selectedFossils.delete(id);
-                window.app.updateMassDeleteButton();
-                window.app.renderFossils();
-            });
+        if (!confirm('Are you sure you want to delete this fossil?')) return;
+        var f = fossils.find(function(x) { return x.id === id; });
+        if (!f) return;
+        var snapshot = null;
+        try {
+            snapshot = JSON.parse(JSON.stringify(f));
+        } catch (e) {
+            snapshot = f;
         }
+        var name = f.specimen || 'Specimen';
+        deleteFossil(id).then(function() {
+            selectedFossils.delete(id);
+            window.app.updateMassDeleteButton();
+            window.app.renderFossils();
+            window.app.offerUndoDelete([snapshot], '"' + name + '" deleted.');
+        });
+    },
+
+    offerUndoDelete: function(snapshots, message) {
+        snapshots = (snapshots || []).filter(Boolean);
+        if (!snapshots.length) {
+            window.app.showToast(message || 'Deleted.', 'info');
+            return;
+        }
+        var undoId = 'undo-del-' + Date.now();
+        var safeMsg = (typeof escapeHtml === 'function')
+            ? escapeHtml(message || 'Deleted.')
+            : String(message || 'Deleted.').replace(/[&<>"']/g, function(c) {
+                return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c];
+            });
+        var html = safeMsg +
+            ' <a href="#" id="' + undoId + '" class="specimenry-undo-link" style="text-decoration:underline; font-weight:700; margin-left:0.35rem; cursor:pointer;">Undo</a>';
+        window.app.showToast(html, 'info', 9000);
+        setTimeout(function() {
+            var el = document.getElementById(undoId);
+            if (!el) return;
+            el.addEventListener('click', function(evt) {
+                evt.preventDefault();
+                el.textContent = 'Undoing…';
+                el.style.pointerEvents = 'none';
+                window.app.undoDeleteSnapshots(snapshots);
+            });
+        }, 30);
+    },
+
+    undoDeleteSnapshots: function(snapshots) {
+        snapshots = snapshots || [];
+        if (!snapshots.length) return;
+        var ids = snapshots.map(function(s) { return s && s.id; }).filter(Boolean);
+        if (typeof clearDeletedIdMarkers === 'function') {
+            clearDeletedIdMarkers(ids);
+        }
+        var chain = Promise.resolve();
+        snapshots.forEach(function(snap) {
+            chain = chain.then(function() {
+                return addFossil(snap, { keepTimestamps: true });
+            });
+        });
+        chain.then(function() {
+            window.app.showToast(
+                snapshots.length === 1 ? 'Delete undone.' : snapshots.length + ' deletions undone.',
+                'success'
+            );
+            window.app.renderFossils();
+            if (typeof window.app.autoPushCloud === 'function') {
+                window.app.autoPushCloud();
+            }
+        }).catch(function(err) {
+            if (typeof reportAppError === 'function') {
+                reportAppError(err, 'Undo delete', { type: 'error' });
+            } else {
+                window.app.showToast('Could not undo delete.', 'error');
+            }
+        });
     },
 
     toggleSelectFossil: function(event, id) {
@@ -7181,78 +8209,88 @@ window.app = {
 
     massTagSelected: function() {
         if (selectedFossils.size === 0) return;
-        var tagInput = prompt('Enter tags to add (comma or space separated):');
-        if (!tagInput) return;
-        
-        var newTags = tagInput.split(/[,\s]+/).map(function(t) { 
-            return t.trim().toLowerCase().replace(/^#/, ''); 
-        }).filter(function(t) { return t.length > 0; });
-        
-        if (newTags.length === 0) return;
+        var self = this;
+        self.openFormModal({
+            title: 'Add tags',
+            subtitle: 'Tags are added to every selected specimen (comma or space separated).',
+            submitLabel: 'Add tags',
+            fields: [
+                { id: 'tags', label: 'Tags', type: 'text', placeholder: 'e.g. shark morocco field' }
+            ]
+        }, function(values) {
+            if (!values || !values.tags) return;
+            var newTags = values.tags.split(/[,\s]+/).map(function(t) {
+                return t.trim().toLowerCase().replace(/^#/, '');
+            }).filter(function(t) { return t.length > 0; });
+            if (newTags.length === 0) return;
 
-        var ids = Array.from(selectedFossils);
-        var chain = Promise.resolve();
-        
-        ids.forEach(function(id) {
-            chain = chain.then(function() {
-                var f = fossils.find(function(x) { return x.id === id; });
-                if (f) {
-                    var currentTags = f.tags || [];
-                    newTags.forEach(function(nt) {
-                        if (currentTags.indexOf(nt) === -1) {
-                            currentTags.push(nt);
-                        }
-                    });
-                    f.tags = currentTags;
-                    return updateFossil(f);
-                }
+            var ids = Array.from(selectedFossils);
+            var chain = Promise.resolve();
+            ids.forEach(function(id) {
+                chain = chain.then(function() {
+                    var f = fossils.find(function(x) { return x.id === id; });
+                    if (f) {
+                        var currentTags = f.tags || [];
+                        newTags.forEach(function(nt) {
+                            if (currentTags.indexOf(nt) === -1) currentTags.push(nt);
+                        });
+                        f.tags = currentTags;
+                        return updateFossil(f);
+                    }
+                });
             });
-        });
-
-        chain.then(function() {
-            selectedFossils.clear();
-            window.app.updateMassDeleteButton();
-            window.app.renderFossils();
+            chain.then(function() {
+                selectedFossils.clear();
+                window.app.updateMassDeleteButton();
+                window.app.renderFossils();
+                window.app.showToast('Tags added to selected specimens.', 'success');
+            });
         });
     },
 
     massUntagSelected: function() {
         if (selectedFossils.size === 0) return;
-        var tagInput = prompt('Enter tags to remove (comma or space separated, or type "*" to remove all tags):');
-        if (tagInput === null) return; // Cancelled
-        
-        var removeAll = tagInput.trim() === '*';
-        var tagsToRemove = tagInput.split(/[,\s]+/).map(function(t) { 
-            return t.trim().toLowerCase().replace(/^#/, ''); 
-        }).filter(function(t) { return t.length > 0; });
-        
-        if (!removeAll && tagsToRemove.length === 0) return;
+        var self = this;
+        self.openFormModal({
+            title: 'Remove tags',
+            subtitle: 'Enter tags to remove, or type * to clear all tags on the selection.',
+            submitLabel: 'Remove',
+            fields: [
+                { id: 'tags', label: 'Tags to remove', type: 'text', placeholder: 'e.g. draft   or   *' }
+            ]
+        }, function(values) {
+            if (!values) return;
+            var tagInput = values.tags || '';
+            var removeAll = tagInput.trim() === '*';
+            var tagsToRemove = tagInput.split(/[,\s]+/).map(function(t) {
+                return t.trim().toLowerCase().replace(/^#/, '');
+            }).filter(function(t) { return t.length > 0; });
+            if (!removeAll && tagsToRemove.length === 0) return;
 
-        var ids = Array.from(selectedFossils);
-        var chain = Promise.resolve();
-        
-        ids.forEach(function(id) {
-            chain = chain.then(function() {
-                var f = fossils.find(function(x) { return x.id === id; });
-                if (f) {
-                    if (removeAll) {
-                        f.tags = [];
-                    } else {
-                        var currentTags = f.tags || [];
-                        f.tags = currentTags.filter(function(t) {
-                            return tagsToRemove.indexOf(t.toLowerCase()) === -1;
-                        });
+            var ids = Array.from(selectedFossils);
+            var chain = Promise.resolve();
+            ids.forEach(function(id) {
+                chain = chain.then(function() {
+                    var f = fossils.find(function(x) { return x.id === id; });
+                    if (f) {
+                        if (removeAll) {
+                            f.tags = [];
+                        } else {
+                            var currentTags = f.tags || [];
+                            f.tags = currentTags.filter(function(t) {
+                                return tagsToRemove.indexOf(t.toLowerCase()) === -1;
+                            });
+                        }
+                        return updateFossil(f);
                     }
-                    return updateFossil(f);
-                }
+                });
             });
-        });
-
-        chain.then(function() {
-            selectedFossils.clear();
-            window.app.updateMassDeleteButton();
-            window.app.renderFossils();
-            window.app.showToast('Successfully untagged selected specimens.', 'success');
+            chain.then(function() {
+                selectedFossils.clear();
+                window.app.updateMassDeleteButton();
+                window.app.renderFossils();
+                window.app.showToast('Successfully untagged selected specimens.', 'success');
+            });
         });
     },
 
@@ -7392,15 +8430,302 @@ window.app = {
         });
     },
 
+    massBulkEditSelected: function() {
+        if (selectedFossils.size === 0) return;
+        var count = selectedFossils.size;
+
+        var overlay = document.createElement('div');
+        overlay.className = 'curator-modal-overlay';
+        overlay.style.cssText = 'position:fixed; inset:0; background:rgba(0,0,0,0.45); z-index:100050; display:flex; align-items:center; justify-content:center; opacity:0; transition:opacity 0.25s;';
+
+        var contentHtml =
+            '<div class="curator-modal-card" style="background:var(--bg-surface); color:var(--text-primary); border-radius:var(--radius-md); width:92%; max-width:420px; padding:1.25rem; box-shadow:var(--shadow-lg); transform:scale(0.95); transition:transform 0.25s; border:1px solid var(--border-color);">' +
+                '<h3 style="margin:0 0 0.35rem 0; font-size:1.05rem;">Bulk edit ' + count + ' specimen(s)</h3>' +
+                '<p style="margin:0 0 1rem 0; font-size:0.75rem; color:var(--text-secondary); line-height:1.4;">Leave a field blank to keep existing values. Tags are <strong>added</strong> (not replaced).</p>' +
+                '<div style="display:flex; flex-direction:column; gap:0.75rem;">' +
+                    '<div><label for="bulk-country" style="display:block; font-size:0.78rem; font-weight:600; margin-bottom:0.25rem;">Country</label>' +
+                    '<input type="text" id="bulk-country" placeholder="e.g. Morocco" style="width:100%;"></div>' +
+                    '<div><label for="bulk-formation" style="display:block; font-size:0.78rem; font-weight:600; margin-bottom:0.25rem;">Formation</label>' +
+                    '<input type="text" id="bulk-formation" placeholder="e.g. Kem Kem Beds" style="width:100%;"></div>' +
+                    '<div><label for="bulk-status" style="display:block; font-size:0.78rem; font-weight:600; margin-bottom:0.25rem;">Status</label>' +
+                    '<select id="bulk-status" style="width:100%;">' +
+                        '<option value="">— Keep current —</option>' +
+                        '<option value="false">Owned</option>' +
+                        '<option value="true">Wishlist</option>' +
+                        '<option value="sale">For Sale</option>' +
+                        '<option value="sold">Sold</option>' +
+                        '<option value="traded">Traded</option>' +
+                        '<option value="dream">Dream Specimen</option>' +
+                    '</select></div>' +
+                    '<div><label for="bulk-tags" style="display:block; font-size:0.78rem; font-weight:600; margin-bottom:0.25rem;">Add tags</label>' +
+                    '<input type="text" id="bulk-tags" placeholder="comma or space separated" style="width:100%;"></div>' +
+                '</div>' +
+                '<div style="display:flex; justify-content:flex-end; gap:0.5rem; margin-top:1.15rem;">' +
+                    '<button type="button" class="btn-secondary" id="bulk-edit-cancel">Cancel</button>' +
+                    '<button type="button" class="btn-primary" id="bulk-edit-submit">Apply</button>' +
+                '</div>' +
+            '</div>';
+
+        overlay.innerHTML = contentHtml;
+        document.body.appendChild(overlay);
+
+        var card = overlay.querySelector('.curator-modal-card');
+        setTimeout(function() {
+            overlay.style.opacity = '1';
+            if (card) card.style.transform = 'scale(1)';
+        }, 10);
+
+        var closeModal = function() {
+            overlay.style.opacity = '0';
+            if (card) card.style.transform = 'scale(0.95)';
+            setTimeout(function() {
+                if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+            }, 250);
+        };
+
+        overlay.querySelector('#bulk-edit-cancel').addEventListener('click', closeModal);
+        overlay.addEventListener('click', function(e) {
+            if (e.target === overlay) closeModal();
+        });
+
+        overlay.querySelector('#bulk-edit-submit').addEventListener('click', function() {
+            var country = (document.getElementById('bulk-country').value || '').trim();
+            var formation = (document.getElementById('bulk-formation').value || '').trim();
+            var status = document.getElementById('bulk-status').value;
+            var tagRaw = (document.getElementById('bulk-tags').value || '').trim();
+            var newTags = tagRaw
+                ? tagRaw.split(/[,\s]+/).map(function(t) {
+                    return t.trim().toLowerCase().replace(/^#/, '');
+                }).filter(Boolean)
+                : [];
+
+            if (!country && !formation && !status && newTags.length === 0) {
+                window.app.showToast('Enter at least one field to change.', 'warning');
+                return;
+            }
+
+            var applyBulk = function(tradeDetails) {
+                var ids = Array.from(selectedFossils);
+                var chain = Promise.resolve();
+                ids.forEach(function(id) {
+                    chain = chain.then(function() {
+                        var f = fossils.find(function(x) { return x.id === id; });
+                        if (!f) return;
+                        if (country) f.country = country;
+                        if (formation) f.formation = formation;
+                        if (status !== '') {
+                            f.isWishlist = status === 'true';
+                            f.isSold = status === 'sold';
+                            f.isForSale = status === 'sale';
+                            f.isDream = status === 'dream';
+                            f.isTraded = status === 'traded';
+                            if (status === 'false') {
+                                f.isWishlist = false;
+                                f.isSold = false;
+                                f.isForSale = false;
+                                f.isDream = false;
+                                f.isTraded = false;
+                            }
+                            if (status === 'traded' && tradeDetails) {
+                                f.tradedWith = tradeDetails.tradedWith;
+                                f.tradedFor = tradeDetails.tradedFor;
+                                f.tradeDate = tradeDetails.tradeDate;
+                            }
+                        }
+                        if (newTags.length) {
+                            var currentTags = f.tags || [];
+                            newTags.forEach(function(nt) {
+                                if (currentTags.indexOf(nt) === -1) currentTags.push(nt);
+                            });
+                            f.tags = currentTags;
+                        }
+                        return updateFossil(f);
+                    });
+                });
+
+                chain.then(function() {
+                    selectedFossils.clear();
+                    window.app.updateMassDeleteButton();
+                    window.app.renderFossils();
+                    window.app.showToast('Bulk edit applied to ' + count + ' specimen(s).', 'success');
+                    closeModal();
+                }).catch(function(err) {
+                    if (typeof reportAppError === 'function') {
+                        reportAppError(err, 'Bulk edit', { type: 'error' });
+                    } else {
+                        window.app.showToast('Bulk edit failed: ' + err.message, 'error');
+                    }
+                });
+            };
+
+            if (status === 'traded') {
+                closeModal();
+                window.app.openTradeDetailsModal({
+                    title: 'Trade details for ' + count + ' specimen(s)',
+                    subtitle: 'Same trade metadata will be applied to every selected specimen.'
+                }, function(details) {
+                    if (!details) return;
+                    applyBulk(details);
+                });
+                return;
+            }
+
+            applyBulk(null);
+        });
+    },
+
+    massLinkToTripSelected: function() {
+        if (selectedFossils.size === 0) return;
+        if (typeof SpecimenryTrips === 'undefined') {
+            window.app.showToast('Field diary module not loaded.', 'error');
+            return;
+        }
+        var count = selectedFossils.size;
+        var ids = Array.from(selectedFossils);
+
+        SpecimenryTrips.getAll().then(function(trips) {
+            var overlay = document.createElement('div');
+            overlay.className = 'curator-modal-overlay';
+            overlay.style.cssText = 'position:fixed; inset:0; background:rgba(0,0,0,0.45); z-index:100050; display:flex; align-items:center; justify-content:center; opacity:0; transition:opacity 0.25s;';
+
+            var optionsHtml = '<option value="">— Select a trip —</option>';
+            trips.forEach(function(t) {
+                var label = (t.date ? t.date + ' — ' : '') + (t.title || t.locality || t.id);
+                optionsHtml += '<option value="' + escapeHtml(t.id) + '">' + escapeHtml(label) + '</option>';
+            });
+
+            overlay.innerHTML =
+                '<div class="curator-modal-card" style="background:var(--bg-surface); color:var(--text-primary); border-radius:var(--radius-md); width:92%; max-width:420px; padding:1.25rem; box-shadow:var(--shadow-lg); transform:scale(0.95); transition:transform 0.25s; border:1px solid var(--border-color);">' +
+                    '<h3 style="margin:0 0 0.35rem 0; font-size:1.05rem;">Link ' + count + ' specimen(s) to a trip</h3>' +
+                    '<p style="margin:0 0 1rem 0; font-size:0.75rem; color:var(--text-secondary); line-height:1.4;">Attaches the field diary trip to every selected specimen.</p>' +
+                    '<label for="mass-trip-select" style="display:block; font-size:0.78rem; font-weight:600; margin-bottom:0.25rem;">Trip</label>' +
+                    '<select id="mass-trip-select" style="width:100%; margin-bottom:0.75rem;">' + optionsHtml + '</select>' +
+                    '<label style="display:flex; align-items:center; gap:0.4rem; font-size:0.78rem; margin-bottom:1rem;">' +
+                        '<input type="checkbox" id="mass-trip-selffound" checked> Also mark as Field Discovery / Self Found' +
+                    '</label>' +
+                    '<div style="display:flex; justify-content:flex-end; gap:0.5rem;">' +
+                        '<button type="button" class="btn-secondary" id="mass-trip-cancel">Cancel</button>' +
+                        '<button type="button" class="btn-primary" id="mass-trip-submit">Link</button>' +
+                    '</div>' +
+                '</div>';
+
+            document.body.appendChild(overlay);
+            var card = overlay.querySelector('.curator-modal-card');
+            setTimeout(function() {
+                overlay.style.opacity = '1';
+                if (card) card.style.transform = 'scale(1)';
+            }, 10);
+
+            var closeModal = function() {
+                overlay.style.opacity = '0';
+                if (card) card.style.transform = 'scale(0.95)';
+                setTimeout(function() {
+                    if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+                }, 250);
+            };
+
+            overlay.querySelector('#mass-trip-cancel').addEventListener('click', closeModal);
+            overlay.addEventListener('click', function(e) {
+                if (e.target === overlay) closeModal();
+            });
+
+            overlay.querySelector('#mass-trip-submit').addEventListener('click', function() {
+                var tripId = document.getElementById('mass-trip-select').value;
+                if (!tripId) {
+                    window.app.showToast('Choose a trip first.', 'warning');
+                    return;
+                }
+                var markFound = document.getElementById('mass-trip-selffound').checked;
+                var okIds = [];
+                var failCount = 0;
+                var chain = Promise.resolve();
+                ids.forEach(function(id) {
+                    chain = chain.then(function() {
+                        var f = fossils.find(function(x) { return x.id === id; });
+                        if (!f) {
+                            failCount++;
+                            return;
+                        }
+                        var prevTripId = f.tripId || '';
+                        f.tripId = tripId;
+                        if (markFound) f.isSelfFound = true;
+                        return updateFossil(f).then(function() {
+                            okIds.push(id);
+                        }).catch(function() {
+                            failCount++;
+                            f.tripId = prevTripId;
+                        });
+                    });
+                });
+                chain.then(function() {
+                    if (okIds.length === 0) {
+                        throw new Error('No specimens could be updated.');
+                    }
+                    return SpecimenryTrips.linkSpecimens(tripId, okIds);
+                }).then(function() {
+                    selectedFossils.clear();
+                    window.app.updateMassDeleteButton();
+                    window.app.renderFossils();
+                    var msg = 'Linked ' + okIds.length + ' specimen(s) to trip.';
+                    if (failCount) msg += ' ' + failCount + ' failed and were left unchanged.';
+                    window.app.showToast(msg, failCount ? 'warning' : 'success');
+                    closeModal();
+                }).catch(function(err) {
+                    if (typeof reportAppError === 'function') reportAppError(err, 'Link to trip');
+                    else window.app.showToast('Could not link to trip.', 'error');
+                });
+            });
+        }).catch(function(err) {
+            if (typeof reportAppError === 'function') reportAppError(err, 'Link to trip');
+            else window.app.showToast('Could not load trips.', 'error');
+        });
+    },
+
+    preloadDictationModel: function() {
+        if (typeof SpecimenryDictationStatus !== 'undefined' && SpecimenryDictationStatus.updateBadge) {
+            SpecimenryDictationStatus.updateBadge();
+        }
+        window.app._getWhisperPipeline().then(function() {
+            if (typeof SpecimenryDictationStatus !== 'undefined') {
+                SpecimenryDictationStatus.markReady();
+            }
+            window.app.showToast('Dictation ready offline.', 'success');
+        }).catch(function(err) {
+            if (typeof reportAppError === 'function') {
+                reportAppError(err, 'Dictation download', {
+                    type: 'error',
+                    retry: function() { window.app.preloadDictationModel(); }
+                });
+            } else {
+                window.app.showToast('Could not download speech model.', 'error');
+            }
+        });
+    },
+
     deleteSelected: function() {
         if (selectedFossils.size === 0) return;
-        if (confirm('Are you sure you want to delete ' + selectedFossils.size + ' fossil(s)?')) {
-            deleteMultipleFossils(Array.from(selectedFossils)).then(function() {
-                selectedFossils.clear();
-                window.app.updateMassDeleteButton();
-                window.app.renderFossils();
-            });
-        }
+        var count = selectedFossils.size;
+        if (!confirm('Are you sure you want to delete ' + count + ' fossil(s)?')) return;
+        var ids = Array.from(selectedFossils);
+        var snapshots = ids.map(function(id) {
+            var f = fossils.find(function(x) { return x.id === id; });
+            if (!f) return null;
+            try {
+                return JSON.parse(JSON.stringify(f));
+            } catch (e) {
+                return f;
+            }
+        }).filter(Boolean);
+
+        deleteMultipleFossils(ids).then(function() {
+            selectedFossils.clear();
+            window.app.updateMassDeleteButton();
+            window.app.renderFossils();
+            window.app.offerUndoDelete(
+                snapshots,
+                count === 1 ? '1 specimen deleted.' : count + ' specimens deleted.'
+            );
+        });
     },
 
     toggleEnrichDropdown: function(event) {
@@ -7926,12 +9251,31 @@ window.app = {
         window.app.openModal(); // opens as new (resets form and images)
         var f = fossils.find(function(x) { return x.id === id; });
         if (!f) return;
-        document.getElementById('modal-title').innerText = 'Duplicate Fossil';
+
+        // Set specimen type and trigger layout updates before populating fields
+        var typeSelect = document.getElementById('f-type-select');
+        if (typeSelect) {
+            typeSelect.value = f.type || 'fossil';
+            window.app.handleSpecimenTypeChange();
+        }
+
+        var dupTitle = (f.type === 'mineral') ? 'Duplicate Mineral' : 'Duplicate Fossil';
+        document.getElementById('modal-title').innerText = dupTitle;
         document.getElementById('f-specimen').value = f.specimen || '';
         document.getElementById('f-animal-size').value = f.animalSize || '';
         document.getElementById('f-anatomy').value = f.anatomy || '';
         document.getElementById('f-category').value = f.category || '';
         document.getElementById('f-type').value = f.fossilType || '';
+
+        // Copy mineral-specific fields
+        document.getElementById('f-formula').value = f.formula || '';
+        document.getElementById('f-luster').value = f.luster || '';
+        document.getElementById('f-streak').value = f.streak || '';
+        document.getElementById('f-cleavage').value = f.cleavage || '';
+        document.getElementById('f-crystal-system').value = f.crystalSystem || '';
+        document.getElementById('f-hardness').value = f.hardness || '';
+        document.getElementById('f-color').value = f.color || '';
+
         if (f.isSold) {
             document.getElementById('f-wishlist').value = 'sold';
             document.getElementById('f-sale-price').value = f.salePrice || '';
@@ -7942,6 +9286,10 @@ window.app = {
             document.getElementById('f-sale-currency').value = f.saleCurrency || 'USD';
         } else if (f.isDream) {
             document.getElementById('f-wishlist').value = 'dream';
+            document.getElementById('f-sale-price').value = '';
+            document.getElementById('f-sale-currency').value = 'USD';
+        } else if (f.isTraded) {
+            document.getElementById('f-wishlist').value = 'traded';
             document.getElementById('f-sale-price').value = '';
             document.getElementById('f-sale-currency').value = 'USD';
         } else {
@@ -7982,6 +9330,20 @@ window.app = {
         document.getElementById('f-restoration').value = f.restorationDetails || '';
         document.getElementById('f-authority').value = f.authority || '';
         document.getElementById('f-description').value = f.description || '';
+
+        if (document.getElementById('f-legal-status')) {
+            document.getElementById('f-legal-status').value = f.legalStatus || '';
+        }
+        if (document.getElementById('f-provenance-notes')) {
+            document.getElementById('f-provenance-notes').value = f.provenanceNotes || '';
+        }
+        currentProvenanceDocs = (f.provenanceDocs && Array.isArray(f.provenanceDocs)) ? f.provenanceDocs.slice() : [];
+        if (typeof window.app.renderProvenanceDocsPreview === 'function') {
+            window.app.renderProvenanceDocsPreview();
+        }
+        if (typeof window.app.updateProvenanceRestrictionPanel === 'function') {
+            window.app.updateProvenanceRestrictionPanel();
+        }
     },
 
     // --- Print Label ---
@@ -8090,9 +9452,11 @@ window.app = {
 
         // QR routing URL back to the specimen record in application
         var appUrl = window.location.origin + window.location.pathname + '?specimen=' + encodeURIComponent(f.id);
-        var qrUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=' + encodeURIComponent(appUrl);
+        var qrUrl = (typeof SpecimenryQR !== 'undefined')
+            ? SpecimenryQR.makeDataUrl(appUrl, 120)
+            : '';
 
-        var labelHtml = '<!DOCTYPE html><html><head><title>Specimen Label — ' + specimen + '</title>' +
+        var labelHtml = '<!DOCTYPE html><html><head><title>Specimen Label — ' + escapeHtml(specimen) + '</title>' +
             '<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">' +
             '<style id="print-page-styles">' +
             '  @media print { @page { size: 3in 2in; margin: 0; } }' +
@@ -8355,7 +9719,9 @@ window.app = {
 
             // QR routing URL back to the specimen record in application
             var appUrl = window.location.origin + window.location.pathname + '?specimen=' + encodeURIComponent(f.id);
-            var qrUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=' + encodeURIComponent(appUrl);
+            var qrUrl = (typeof SpecimenryQR !== 'undefined')
+                ? SpecimenryQR.makeDataUrl(appUrl, 120)
+                : '';
 
             labelCardsHtml += '<div class="label-card size-standard">' +
                 '<div class="label-top">' +
@@ -8611,6 +9977,7 @@ window.app = {
                 if (currentView === 'true') return !!f.isWishlist && !f.isSold && !f.isDream && !f.isTraded;
                 if (currentView === 'sale') return !f.isWishlist && !f.isSold && !!f.isForSale && !f.isDream && !f.isTraded;
                 if (currentView === 'dream') return !!f.isDream;
+                if (currentView === 'traded') return !!f.isTraded;
                 return !f.isWishlist && !f.isSold && !f.isDream && !f.isTraded;
             });
             
@@ -8800,11 +10167,15 @@ window.app = {
                     matchView = !f.isWishlist && !f.isSold && !!f.isForSale && !f.isDream && !f.isTraded;
                 } else if (currentView === 'dream') {
                     matchView = !!f.isDream;
+                } else if (currentView === 'traded') {
+                    matchView = !!f.isTraded;
                 } else {
                     matchView = !f.isWishlist && !f.isSold && !f.isDream && !f.isTraded;
                 }
                 return matchSearch && matchSpecType && matchCat && matchType && matchPeriod && matchView;
             });
+
+            window.app._lastFilteredFossils = filtered;
 
             // --- UPDATE SEARCH COUNT ---
             var countEl = document.getElementById('search-count');
@@ -8895,6 +10266,23 @@ window.app = {
                             '<div class="view-info-banner-right">' +
                                 rightHtml +
                             '</div>';
+                    } else {
+                        bannerEl.style.display = 'none';
+                    }
+                } else if (currentView === 'traded') {
+                    var tradedCount = 0;
+                    filtered.forEach(function(f) {
+                        if (!!f.isTraded) tradedCount++;
+                    });
+                    if (tradedCount > 0) {
+                        bannerEl.style.display = 'flex';
+                        var tradedIcon = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--accent);"><polyline points="16 3 21 8 16 13"/><line x1="21" y1="8" x2="9" y2="8"/><polyline points="8 21 3 16 8 11"/><line x1="3" y1="16" x2="15" y2="16"/></svg>';
+                        bannerEl.innerHTML =
+                            '<div class="view-info-banner-left">' +
+                                tradedIcon +
+                                '<span>Traded: ' + tradedCount + ' ' + (tradedCount === 1 ? 'specimen' : 'specimens') + '</span>' +
+                            '</div>' +
+                            '<div class="view-info-banner-right"></div>';
                     } else {
                         bannerEl.style.display = 'none';
                     }
@@ -9032,16 +10420,45 @@ window.app = {
             if (filtered.length === 0) {
                 var empty = document.createElement('div');
                 empty.className = 'empty-state';
-                var emptyText = 'Add your first fossil using the button above, or import a CSV file.';
+                var hasAnySpecimen = fossils.some(function(f) { return f && !f.isCartItem; });
+                var filtersActive = !!(searchQ || catQ || typeQ || periodQ || (specTypeVal && specTypeVal !== ''));
+                var collectionView = !wlQ && !dreamQ && !soldQ && currentView !== 'sale' && currentView !== 'traded';
+
                 if (wlQ) {
-                    emptyText = 'Quickly add a specimen to your wishlist above!';
+                    empty.innerHTML =
+                        '<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>' +
+                        '<h3>Wishlist is empty</h3>' +
+                        '<p>Quickly add a specimen to your wishlist above.</p>';
                 } else if (dreamQ) {
-                    emptyText = 'Click "Add Dream Specimen" above to save your first dream fossil!';
+                    empty.innerHTML =
+                        '<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>' +
+                        '<h3>No dream specimens yet</h3>' +
+                        '<p>Click “Add Dream Specimen” above to save something you want someday.</p>';
+                } else if (!hasAnySpecimen && collectionView) {
+                    empty.innerHTML =
+                        '<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>' +
+                        '<h3>Add your first specimen</h3>' +
+                        '<p>Specimenry stores your fossils and minerals in this browser. Start with Simple mode — name, photo, location, notes — then back up when you have a few.</p>' +
+                        '<div class="empty-state-actions">' +
+                            '<button type="button" class="btn-primary" onclick="app.openModalForFirstSpecimen()">➕ Add first specimen</button>' +
+                            '<button type="button" class="btn-secondary" onclick="app.openBackupCenter()">📥 Backup tip</button>' +
+                        '</div>' +
+                        '<p class="empty-state-tip">Your data lives in this browser — <a href="#" onclick="app.openBackupCenter(); return false;">export backups</a> regularly.</p>';
+                } else if (filtersActive || hasAnySpecimen) {
+                    empty.innerHTML =
+                        '<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>' +
+                        '<h3>No specimens match</h3>' +
+                        '<p>Try clearing search or filters, or add a new specimen.</p>' +
+                        '<div class="empty-state-actions">' +
+                            '<button type="button" class="btn-secondary" onclick="app.resetFiltersOnly()">Clear filters</button>' +
+                            '<button type="button" class="btn-primary" onclick="app.openModal()">➕ Add specimen</button>' +
+                        '</div>';
+                } else {
+                    empty.innerHTML =
+                        '<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>' +
+                        '<h3>No specimens here</h3>' +
+                        '<p>Nothing in this view yet.</p>';
                 }
-                empty.innerHTML =
-                    '<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>' +
-                    '<h3>No Specimens Found</h3>' +
-                    '<p>' + emptyText + '</p>';
                 
                 grid.innerHTML = '';
                 if (wlQ || dreamQ) {
@@ -9264,12 +10681,22 @@ window.app = {
                         if (f.luster) detailsLine2.push(escapeHtml(f.luster));
                         if (f.color) detailsLine2.push(escapeHtml(f.color));
                         
+                        var hazardBadge = getMineralHazardBadgeHtml(f.formula, f.specimen);
+                        
                         metaHtmlStr = '<p class="card-meta"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg> <span>' + minDetails.join(' &middot; ') + '</span></p>';
                         if (detailsLine2.length > 0) {
                             metaHtmlStr += '<p class="card-meta" style="margin-top: 0.2rem;"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> <span>' + detailsLine2.join(' &middot; ') + '</span></p>';
                         }
+                        if (hazardBadge) {
+                            metaHtmlStr += '<div class="mineral-hazard-row">' + hazardBadge + '</div>';
+                        }
                     } else {
                         metaHtmlStr = '<p class="card-meta"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg> <span>' + escapeHtml(f.category) + (f.fossilType ? ' &middot; ' + escapeHtml(f.fossilType) : '') + (f.anatomy ? ' &middot; <span style="font-weight:600; color:var(--accent);">' + escapeHtml(f.anatomy) + '</span>' : '') + '</span></p>';
+                    }
+
+                    var provenanceBadge = getProvenanceBadgeHtml(f);
+                    if (provenanceBadge) {
+                        metaHtmlStr += provenanceBadge;
                     }
 
                     cardInnerHtml =
@@ -9320,10 +10747,24 @@ window.app = {
                                             '<button class="dropdown-item" onclick="event.stopPropagation(); app.copyListingDescription(\'' + f.id + '\'); app.closeAllCardMenus()"><span class="icon">📋</span> Copy Sales Info</button>' +
                                             '<button class="dropdown-item" onclick="event.stopPropagation(); app.printLabel(\'' + f.id + '\'); app.closeAllCardMenus()"><span class="icon">🖨️</span> Print Label</button>' +
                                             '<button class="dropdown-item" onclick="event.stopPropagation(); app.duplicateFossil(\'' + f.id + '\'); app.closeAllCardMenus()"><span class="icon">👥</span> Duplicate Specimen</button>' +
-                                            (f.isSold ? 
-                                                '<button class="dropdown-item" onclick="event.stopPropagation(); app.restoreToCollectionQuick(\'' + f.id + '\', \'' + escapeHtml(f.specimen).replace(/'/g, "\\'") + '\'); app.closeAllCardMenus()"><span class="icon">↩️</span> Restore to Collection</button>' : 
-                                                (!f.isWishlist ? '<button class="dropdown-item" onclick="event.stopPropagation(); app.markAsSoldQuick(\'' + f.id + '\', \'' + escapeHtml(f.specimen).replace(/'/g, "\\'") + '\'); app.closeAllCardMenus()"><span class="icon">💰</span> Mark as Sold</button>' : '')
-                                            ) +
+                                            (function() {
+                                                var statusBtns = '';
+                                                var nameEsc = escapeHtml(f.specimen).replace(/'/g, "\\'");
+                                                if (f.isSold) {
+                                                    statusBtns +=
+                                                        '<button class="dropdown-item" onclick="event.stopPropagation(); app.markAsTradedQuick(\'' + f.id + '\', \'' + nameEsc + '\'); app.closeAllCardMenus()"><span class="icon">🔄</span> Change to Traded</button>' +
+                                                        '<button class="dropdown-item" onclick="event.stopPropagation(); app.restoreToCollectionQuick(\'' + f.id + '\', \'' + nameEsc + '\'); app.closeAllCardMenus()"><span class="icon">↩️</span> Restore to Collection</button>';
+                                                } else if (f.isTraded) {
+                                                    statusBtns +=
+                                                        '<button class="dropdown-item" onclick="event.stopPropagation(); app.markAsSoldQuick(\'' + f.id + '\', \'' + nameEsc + '\'); app.closeAllCardMenus()"><span class="icon">💰</span> Change to Sold</button>' +
+                                                        '<button class="dropdown-item" onclick="event.stopPropagation(); app.restoreToCollectionQuick(\'' + f.id + '\', \'' + nameEsc + '\'); app.closeAllCardMenus()"><span class="icon">↩️</span> Restore to Collection</button>';
+                                                } else if (!f.isWishlist && !f.isDream) {
+                                                    statusBtns +=
+                                                        '<button class="dropdown-item" onclick="event.stopPropagation(); app.markAsSoldQuick(\'' + f.id + '\', \'' + nameEsc + '\'); app.closeAllCardMenus()"><span class="icon">💰</span> Mark as Sold</button>' +
+                                                        '<button class="dropdown-item" onclick="event.stopPropagation(); app.markAsTradedQuick(\'' + f.id + '\', \'' + nameEsc + '\'); app.closeAllCardMenus()"><span class="icon">🔄</span> Mark as Traded</button>';
+                                                }
+                                                return statusBtns;
+                                            })() +
                                             '<div class="dropdown-divider"></div>' +
                                             '<button class="dropdown-item danger-action" onclick="event.stopPropagation(); app.deleteFossilItem(\'' + f.id + '\'); app.closeAllCardMenus()"><span class="icon">🗑️</span> Delete Specimen</button>' +
                                         '</div>' +
@@ -9479,27 +10920,38 @@ window.app = {
         if (!f) return;
         
         var name = f.specimen || 'this specimen';
-        var costInput = prompt('Enter acquisition cost for "' + name + '" (leave blank if unknown):');
-        if (costInput === null) return; // user cancelled
-        
-        var cost = parseFloat(costInput) || null;
-        var currency = 'USD';
-        if (cost !== null) {
-            var currInput = prompt('Enter currency (USD, EUR, SEK):', 'USD');
-            if (currInput) currency = currInput.toUpperCase();
-        }
-        
-        f.isWishlist = false;
-        if (cost !== null) {
-            f.price = cost;
-            f.currency = currency;
-        }
-        
-        updateFossil(f).then(function() {
-            if (window.app.showToast) {
-                window.app.showToast('🚀 "' + name + '" is now part of your Physical Collection!', 'success');
+        var self = this;
+        self.openFormModal({
+            title: 'Add to physical collection',
+            subtitle: 'Optional acquisition cost for "' + name + '".',
+            submitLabel: 'Acquire',
+            fields: [
+                { id: 'price', label: 'Acquisition cost', type: 'number', placeholder: 'Leave blank if unknown' },
+                { id: 'currency', label: 'Currency', type: 'select', value: 'USD', options: [
+                    { value: 'USD', label: 'USD' },
+                    { value: 'EUR', label: 'EUR' },
+                    { value: 'SEK', label: 'SEK' },
+                    { value: 'GBP', label: 'GBP' }
+                ]}
+            ]
+        }, function(values) {
+            if (!values) return;
+            var cost = values.price !== '' ? parseFloat(values.price) : null;
+            if (isNaN(cost)) cost = null;
+            var currency = (values.currency || 'USD').toUpperCase();
+
+            f.isWishlist = false;
+            if (cost !== null) {
+                f.price = cost;
+                f.currency = currency;
             }
-            window.app.renderFossils();
+
+            updateFossil(f).then(function() {
+                if (window.app.showToast) {
+                    window.app.showToast('🚀 "' + name + '" is now part of your Physical Collection!', 'success');
+                }
+                window.app.renderFossils();
+            });
         });
     },
 
@@ -9564,16 +11016,27 @@ window.app = {
     },
 
     copyLLMContext: function() {
+        var priceCb = document.getElementById('ai-include-prices');
+        if (priceCb) priceCb.checked = false;
+        this.regenerateAIContext();
+        var modal = document.getElementById('ai-export-modal');
+        if (modal) modal.showModal();
+    },
+
+    regenerateAIContext: function() {
         var exportable = fossils.filter(function(f) { return !f.isCartItem; });
         if (exportable.length === 0) {
             window.app.showToast('No specimens in database to copy!', 'warning');
             return;
         }
 
+        var includePrices = !!(document.getElementById('ai-include-prices') && document.getElementById('ai-include-prices').checked);
+
         var text = '# Specimenry Personal Fossil Collection Database\n' +
                    'Exported on: ' + new Date().toLocaleDateString() + ' ' + new Date().toLocaleTimeString() + '\n' +
-                   'Total Specimens: ' + exportable.length + '\n\n' +
-                   'This file contains the full curatorial context of all fossils in the user\'s private collection database. ' +
+                   'Total Specimens: ' + exportable.length + '\n' +
+                   'Prices included: ' + (includePrices ? 'yes' : 'no') + '\n\n' +
+                   'This file contains the curatorial context of fossils in the user\'s private collection database. ' +
                    'Use this context to analyze, summarize, estimate scientific values, or answer general paleontological questions based on their specimens.\n\n' +
                    '==================================================\n\n';
 
@@ -9602,7 +11065,7 @@ window.app = {
             if (f.animalSize) dimensions.push('Est. Entire Animal Size: ' + f.animalSize + 'm');
             if (dimensions.length > 0) text += '- **Physical Dimensions**: ' + dimensions.join(' | ') + '\n';
             
-            var statusText = f.isWishlist ? 'Wishlist Specimen' : (f.isSold ? 'Sold' : 'Owned / Physical Collection');
+            var statusText = f.isWishlist ? 'Wishlist Specimen' : (f.isSold ? 'Sold' : (f.isTraded ? 'Traded' : 'Owned / Physical Collection'));
             text += '- **Curation Status**: ' + statusText + '\n';
             
             var cond = f.condition || {};
@@ -9626,10 +11089,12 @@ window.app = {
                 text += '- **Preservation Grade**: ' + tierName + '\n';
             }
             
-            var financial = [];
-            if (f.price) financial.push('Acquisition Cost: ' + f.price + ' ' + (f.currency || 'USD'));
-            if (f.isSold && f.salePrice) financial.push('Sale Price: ' + f.salePrice + ' ' + (f.saleCurrency || 'USD'));
-            if (financial.length > 0) text += '- **Financial Valuation**: ' + financial.join(' | ') + '\n';
+            if (includePrices) {
+                var financial = [];
+                if (f.price) financial.push('Acquisition Cost: ' + f.price + ' ' + (f.currency || 'USD'));
+                if (f.isSold && f.salePrice) financial.push('Sale Price: ' + f.salePrice + ' ' + (f.saleCurrency || 'USD'));
+                if (financial.length > 0) text += '- **Financial Valuation**: ' + financial.join(' | ') + '\n';
+            }
             
             text += '- **Self-Found**: ' + (f.isSelfFound ? 'Yes' : 'No') + '\n';
             
@@ -9656,11 +11121,6 @@ window.app = {
         var textarea = document.getElementById('ai-export-textarea');
         if (textarea) {
             textarea.value = text;
-        }
-
-        var modal = document.getElementById('ai-export-modal');
-        if (modal) {
-            modal.showModal();
         }
     },
 
@@ -9816,46 +11276,59 @@ window.app = {
     },
 
     createCart: function() {
-        var name = prompt("Enter a name for the new draft cart:");
-        if (!name) return;
-        name = name.trim();
-        if (name.length === 0) return;
+        var self = this;
+        self.openFormModal({
+            title: 'New draft cart',
+            submitLabel: 'Create',
+            fields: [
+                { id: 'name', label: 'Cart name', type: 'text', placeholder: 'e.g. Tucson 2026 shortlist' }
+            ]
+        }, function(values) {
+            if (!values || !values.name) return;
+            var name = values.name.trim();
+            if (!name) return;
 
-        var carts = this.getCarts();
-        var id = 'cart_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-        carts.push({ id: id, name: name, updatedAt: Date.now() });
-        localStorage.setItem('fossil_carts', JSON.stringify(carts));
-        localStorage.setItem('fossil_active_cart_id', id);
-        
-        if (window.app && typeof window.app.autoPushCloud === 'function') {
-            window.app.autoPushCloud();
-        }
+            var carts = self.getCarts();
+            var id = 'cart_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+            carts.push({ id: id, name: name, updatedAt: Date.now() });
+            localStorage.setItem('fossil_carts', JSON.stringify(carts));
+            localStorage.setItem('fossil_active_cart_id', id);
 
-        this.showToast('Cart "' + name + '" created.', 'success');
-        this.renderFossils();
+            if (window.app && typeof window.app.autoPushCloud === 'function') {
+                window.app.autoPushCloud();
+            }
+
+            self.showToast('Cart "' + name + '" created.', 'success');
+            self.renderFossils();
+        });
     },
 
     renameCart: function() {
+        var self = this;
         var carts = this.getCarts();
         var activeId = this.getActiveCartId();
         var cart = carts.find(function(c) { return c.id === activeId; });
         if (!cart) return;
 
-        var name = prompt("Rename cart:", cart.name);
-        if (!name) return;
-        name = name.trim();
-        if (name.length === 0) return;
-
-        cart.name = name;
-        cart.updatedAt = Date.now();
-        localStorage.setItem('fossil_carts', JSON.stringify(carts));
-
-        if (window.app && typeof window.app.autoPushCloud === 'function') {
-            window.app.autoPushCloud();
-        }
-
-        this.showToast('Cart renamed to "' + name + '".', 'success');
-        this.renderFossils();
+        self.openFormModal({
+            title: 'Rename cart',
+            submitLabel: 'Rename',
+            fields: [
+                { id: 'name', label: 'Cart name', type: 'text', value: cart.name || '' }
+            ]
+        }, function(values) {
+            if (!values || !values.name) return;
+            var name = values.name.trim();
+            if (!name) return;
+            cart.name = name;
+            cart.updatedAt = Date.now();
+            localStorage.setItem('fossil_carts', JSON.stringify(carts));
+            if (window.app && typeof window.app.autoPushCloud === 'function') {
+                window.app.autoPushCloud();
+            }
+            self.showToast('Cart renamed.', 'success');
+            self.renderFossils();
+        });
     },
 
     deleteCart: function() {
@@ -11029,18 +12502,168 @@ window.app = {
     },
 
     exportData: function() {
-        try {
-            localStorage.setItem('last_backup', Date.now().toString());
-        } catch (e) {
-            console.error('LocalStorage error:', e);
-        }
+        var self = this;
         var pd = document.querySelector('#btn-export .pulse-dot');
         if (pd) pd.remove();
         var pdCenter = document.querySelector('#btn-db-center .pulse-dot');
         if (pdCenter) pdCenter.remove();
+
+        // last_backup is recorded only after a successful save inside exportToJSON
+        return exportToJSON().then(function(result) {
+            if (result && result.ok) {
+                var warningBanner = document.getElementById('backup-warning-banner');
+                if (warningBanner) warningBanner.style.display = 'none';
+            }
+            if (typeof self.refreshBackupReminder === 'function') {
+                self.refreshBackupReminder();
+            }
+            if (typeof self.refreshBackupCenterStats === 'function') {
+                self.refreshBackupCenterStats();
+            }
+            return result;
+        });
+    },
+
+    refreshBackupReminder: function() {
+        if (typeof SpecimenryBackup === 'undefined') return;
+        var evalResult = SpecimenryBackup.evaluateNeed();
+        var msgEl = document.getElementById('backup-warning-message');
+        if (msgEl) {
+            msgEl.textContent = SpecimenryBackup.reasonMessage(evalResult);
+        }
+
+        var pulseTitle = evalResult.reasons.indexOf('new') !== -1
+            ? 'You added ' + evalResult.addedSince + '+ specimens since the last backup'
+            : 'Backup recommended';
+
+        var ensurePulse = function(btn) {
+            if (!btn) return;
+            btn.style.position = 'relative';
+            var existing = btn.querySelector('.pulse-dot');
+            if (evalResult.needsBackup) {
+                if (!existing) {
+                    btn.insertAdjacentHTML('beforeend', '<div class="pulse-dot" title=""></div>');
+                    existing = btn.querySelector('.pulse-dot');
+                }
+                if (existing) existing.setAttribute('title', pulseTitle);
+            } else if (existing) {
+                existing.remove();
+            }
+        };
+        ensurePulse(document.getElementById('btn-export'));
+        ensurePulse(document.getElementById('btn-db-center'));
+
         var warningBanner = document.getElementById('backup-warning-banner');
-        if (warningBanner) warningBanner.style.display = 'none';
-        exportToJSON(); 
+        if (!warningBanner) return;
+        if (evalResult.needsBackup && !SpecimenryBackup.wasRecentlyDismissed()) {
+            warningBanner.style.display = 'flex';
+        } else if (!evalResult.needsBackup) {
+            warningBanner.style.display = 'none';
+        }
+    },
+
+    openBackupCenter: function() {
+        var modal = document.getElementById('backup-center-modal');
+        if (!modal) {
+            this.exportData();
+            return;
+        }
+        this.refreshBackupCenterStats();
+        var hint = document.getElementById('backup-download-hint');
+        if (hint) {
+            var canPick = typeof window.showSaveFilePicker === 'function';
+            var isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+                (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+            if (canPick) {
+                hint.textContent = 'Chrome/Edge: you can save directly into Downloads (or another folder).';
+            } else if (isIOS) {
+                hint.textContent = 'iPhone/iPad (Safari): the file goes to Downloads / Files — use the share sheet if you need Drive or AirDrop.';
+            } else {
+                hint.textContent = 'This browser uses the normal download tray (usually the Downloads folder).';
+            }
+        }
+        if (typeof modal.showModal === 'function') modal.showModal();
+        else modal.setAttribute('open', '');
+    },
+
+    refreshBackupCenterStats: function() {
+        var specEl = document.getElementById('backup-stat-specimens');
+        var tripEl = document.getElementById('backup-stat-trips');
+        var lastEl = document.getElementById('backup-stat-last');
+        var addedEl = document.getElementById('backup-stat-added');
+        var okEl = document.getElementById('backup-stat-ok');
+        if (specEl) specEl.textContent = 'Loading…';
+
+        var fossilsPromise = (typeof getAllFossils === 'function')
+            ? getAllFossils()
+            : Promise.resolve(fossils || []);
+        var tripsPromise = (typeof SpecimenryTrips !== 'undefined' && SpecimenryTrips.getAll)
+            ? SpecimenryTrips.getAll().catch(function() { return []; })
+            : Promise.resolve([]);
+
+        Promise.all([fossilsPromise, tripsPromise]).then(function(results) {
+            var specs = (results[0] || []).filter(function(f) { return f && !f.isCartItem; });
+            var trips = results[1] || [];
+            if (specEl) specEl.textContent = specs.length + ' specimen' + (specs.length === 1 ? '' : 's');
+            if (tripEl) tripEl.textContent = trips.length + ' trip' + (trips.length === 1 ? '' : 's');
+
+            var meta = (typeof SpecimenryBackup !== 'undefined') ? SpecimenryBackup.getMeta() : null;
+            var added = (typeof SpecimenryBackup !== 'undefined') ? SpecimenryBackup.getAddedSince() : 0;
+            var threshold = (typeof SpecimenryBackup !== 'undefined') ? SpecimenryBackup.REMIND_AFTER_NEW : 10;
+
+            if (lastEl) {
+                if (meta && meta.at) {
+                    lastEl.textContent = 'Last backup: ' + new Date(meta.at).toLocaleString();
+                } else {
+                    var last = null;
+                    try { last = localStorage.getItem('last_backup'); } catch (e) {}
+                    if (last) {
+                        var d = new Date(parseInt(last, 10));
+                        lastEl.textContent = 'Last backup: ' + (isNaN(d.getTime()) ? 'unknown' : d.toLocaleString());
+                    } else {
+                        lastEl.textContent = 'Last backup: never';
+                    }
+                }
+            }
+            if (addedEl) {
+                addedEl.textContent = 'Added since backup: ' + added + ' (remind at ' + threshold + ')';
+            }
+            if (okEl) {
+                if (meta && meta.ok) {
+                    okEl.textContent = 'Last backup OK' + (meta.filename ? ' · ' + meta.filename : '');
+                } else {
+                    okEl.textContent = 'Last backup OK: not yet';
+                }
+            }
+        }).catch(function() {
+            if (specEl) specEl.textContent = 'Could not load counts';
+        });
+    },
+
+    openAboutSpecimenry: function(opts) {
+        opts = opts || {};
+        var modal = document.getElementById('welcome-landing-modal');
+        if (!modal) return;
+        var foot = modal.querySelector('.welcome-landing-foot');
+        if (foot) {
+            foot.style.display = opts.firstVisit ? '' : 'none';
+        }
+        if (typeof modal.showModal === 'function') modal.showModal();
+        else modal.setAttribute('open', '');
+    },
+
+    finishWelcomeLanding: function(startTourAfter) {
+        try {
+            localStorage.setItem('specimenry_welcome_seen', 'true');
+        } catch (e) {}
+        var modal = document.getElementById('welcome-landing-modal');
+        if (modal) {
+            if (typeof modal.close === 'function') modal.close();
+            else modal.removeAttribute('open');
+        }
+        if (startTourAfter && typeof this.startTour === 'function') {
+            setTimeout(function() { window.app.startTour(); }, 200);
+        }
     },
     
     dismissBackupBanner: function() {
@@ -11060,9 +12683,27 @@ window.app = {
         var reader = new FileReader();
         reader.onload = function(e) {
             try {
-                var data = JSON.parse(e.target.result);
-                if (!Array.isArray(data)) {
-                    throw new Error("Invalid format: Expected an array of fossils.");
+                var parsed = (typeof parseFossilsBackup === 'function')
+                    ? parseFossilsBackup(e.target.result)
+                    : { ok: Array.isArray(JSON.parse(e.target.result)), fossils: JSON.parse(e.target.result), trips: [], error: null };
+
+                if (!parsed.ok) {
+                    throw new Error(parsed.error || 'Invalid format: Expected an array of fossils.');
+                }
+                var data = parsed.fossils || [];
+                var tripsData = parsed.trips || [];
+
+                var check = (typeof SpecimenryBackup !== 'undefined')
+                    ? SpecimenryBackup.describeRestoreCheck(data, tripsData, file.name)
+                    : { fingerprint: '', message: 'Backup check: OK — ' + data.length + ' specimen(s).', matchesLast: false };
+
+                var warnMsg = check.message + '\n\n' +
+                    'Restore these records into this browser?\n\n' +
+                    'Local records with the same ID will be overwritten. ' +
+                    'Change history from the backup is kept when present; otherwise your local change history is preserved.';
+                if (!confirm(warnMsg)) {
+                    document.getElementById('file-restore-json').value = '';
+                    return;
                 }
 
                 var successCount = 0;
@@ -11070,21 +12711,69 @@ window.app = {
 
                 data.forEach(function(fossil) {
                     chain = chain.then(function() {
-                        // "put" handles both insert (if id is brand new) and update
                         return updateFossil(fossil, { keepTimestamps: true }).then(function() {
                             successCount++;
                         });
                     });
                 });
 
+                chain = chain.then(function() {
+                    if (tripsData.length && typeof SpecimenryTrips !== 'undefined' && SpecimenryTrips.replaceAll) {
+                        return SpecimenryTrips.getAll().then(function(localTrips) {
+                            var byId = {};
+                            (localTrips || []).forEach(function(t) { if (t && t.id) byId[t.id] = t; });
+                            tripsData.forEach(function(t) { if (t && t.id) byId[t.id] = t; });
+                            return SpecimenryTrips.replaceAll(Object.keys(byId).map(function(k) { return byId[k]; }));
+                        });
+                    }
+                });
+
                 chain.then(function() {
-                    window.app.showToast('Successfully restored ' + successCount + ' fossil(s) from backup!', 'success');
+                    var allOk = successCount === data.length;
+                    var tripNote = tripsData.length ? ' + ' + tripsData.length + ' trip(s)' : '';
+
+                    if (typeof SpecimenryBackup !== 'undefined' && allOk) {
+                        SpecimenryBackup.recordSuccessfulBackup({
+                            filename: file.name,
+                            specimenCount: data.length,
+                            tripCount: tripsData.length,
+                            fingerprint: check.fingerprint,
+                            method: 'restore',
+                            source: 'restore'
+                        });
+                    }
+
+                    if (allOk) {
+                        window.app.showToast(
+                            'Restore verified OK — ' + successCount + ' fossil(s)' + tripNote + '.',
+                            'success'
+                        );
+                    } else {
+                        window.app.showToast(
+                            'Partial restore: ' + successCount + '/' + data.length + ' fossils written. Re-export a backup after fixing errors.',
+                            'warning'
+                        );
+                    }
+
                     window.app.renderFossils();
+                    if (typeof window.app.populateTripSelect === 'function') window.app.populateTripSelect();
+                    if (typeof window.app.refreshBackupCenterStats === 'function') window.app.refreshBackupCenterStats();
+                    if (typeof window.app.refreshBackupReminder === 'function') window.app.refreshBackupReminder();
                     document.getElementById('file-restore-json').value = '';
+                }).catch(function(err) {
+                    if (typeof reportAppError === 'function') {
+                        reportAppError(err, 'Import backup', { type: 'error' });
+                    } else {
+                        window.app.showToast('Error importing backup: ' + err.message, 'error');
+                    }
                 });
 
             } catch (err) {
-                window.app.showToast('Error reading JSON backup: ' + err.message, 'error');
+                if (typeof reportAppError === 'function') {
+                    reportAppError(err, 'Import backup', { type: 'error' });
+                } else {
+                    window.app.showToast('Error reading JSON backup: ' + err.message, 'error');
+                }
                 document.getElementById('file-restore-json').value = '';
             }
         };
@@ -13158,28 +14847,28 @@ window.app = {
     getTourSteps: function() {
         return [
             {
-                title: "Welcome to Specimenry! 🦕",
-                body: "Specimenry is a personal, offline-first digital database designed to help you catalog, organize, and showcase your fossil collection.",
+                title: "Welcome to Specimenry",
+                body: "A local-first catalog for fossils and minerals. Your collection stays in this browser — private by default.",
                 target: null
             },
             {
-                title: "Log New Specimens 🔬",
-                body: "Click here to add a new fossil to your archive. You can specify taxonomic classifications, geological formations, sizes, valuation, and upload photos.",
+                title: "Log specimens",
+                body: "Add fossils or minerals here. On a phone in the field, switch to Simple mode: name, photo, location, notes, and trip.",
                 target: "#btn-add-fossil"
             },
             {
-                title: "Manage & Backup Your Database 📥",
-                body: "All of your data is stored locally in your browser cache for maximum privacy. Make sure to download a JSON backup regularly so you never lose your catalog!",
+                title: "Backup & Restore",
+                body: "Open Backup & Restore to download one JSON file with specimens and field diary trips. Your data lives in this browser — export regularly.",
                 target: "#btn-db-center"
             },
             {
-                title: "Exhibition Utilities & Compare 🏛️",
-                body: "Under utilities, you can trigger compare mode, batch enhance photo lighting, print physical exhibition display labels, or browse the Earth History timeline.",
+                title: "Utilities",
+                body: "Compare specimens, print labels, Field Diary, shareable catalogs, and more.",
                 target: "#btn-enrich-center"
             },
             {
-                title: "Support & Feedback 🐛",
-                body: "We hope you love using Specimenry! You can support this open-source project on Ko-fi, or report any bugs directly next to it in the top bar.",
+                title: "Free & optional support",
+                body: "Specimenry is free. Ko-fi tips are optional — core features are not paywalled.",
                 target: "#btn-support-project"
             }
         ];
@@ -13707,7 +15396,10 @@ window.app = {
         if (state === 'connected') {
             statusDot.style.background = '#22c55e';
             statusText.textContent = text || 'Connected';
-            statusDetails.textContent = 'Last synced: ' + new Date().toLocaleTimeString();
+            var lastSync = parseInt(localStorage.getItem('fossil_gdrive_last_sync') || '0', 10);
+            statusDetails.textContent = lastSync
+                ? ('Last synced: ' + new Date(lastSync).toLocaleString())
+                : 'Connected — tap Sync Now when ready.';
             if (activeActions) activeActions.style.display = 'flex';
             if (btnConnect) btnConnect.style.display = 'none';
         } else if (state === 'syncing') {
@@ -13789,9 +15481,13 @@ window.app = {
     disconnectGoogleDrive: function() {
         var self = this;
         if (confirm('Disconnect from Google Drive? Your local data will remain intact, but cloud synchronization will be disabled.')) {
+            var token = window.app.gdriveAccessToken;
             localStorage.removeItem('fossil_gdrive_connected');
             window.app.gdriveAccessToken = null;
             window.app.gdriveTokenExpiry = null;
+            if (token && typeof google !== 'undefined' && google.accounts && google.accounts.oauth2 && google.accounts.oauth2.revoke) {
+                try { google.accounts.oauth2.revoke(token); } catch (e) {}
+            }
             
             self.updateCloudStatus('disconnected', 'Not Connected');
             self.showToast('Disconnected from Google Drive.', 'success');
@@ -13816,7 +15512,7 @@ window.app = {
             var searchData = await searchResp.json();
             var fileId = (searchData.files && searchData.files.length > 0) ? searchData.files[0].id : null;
             
-            var remoteData = { specimens: [], carts: [], deletedIds: [] };
+            var remoteData = { specimens: [], carts: [], trips: [], deletedIds: [] };
             if (fileId) {
                 var downloadUrl = 'https://www.googleapis.com/drive/v3/files/' + fileId + '?alt=media';
                 var downloadResp = await fetch(downloadUrl, {
@@ -13825,6 +15521,7 @@ window.app = {
                 if (downloadResp.ok) {
                     try {
                         remoteData = await downloadResp.json();
+                        if (!remoteData.trips) remoteData.trips = [];
                     } catch(e) {
                         console.warn('Failed to parse remote JSON, starting fresh:', e);
                     }
@@ -13835,6 +15532,10 @@ window.app = {
             
             var localSpecimens = await getAllFossils();
             var localCarts = self.getCarts();
+            var localTrips = [];
+            if (typeof SpecimenryTrips !== 'undefined' && SpecimenryTrips.getAll) {
+                try { localTrips = await SpecimenryTrips.getAll(); } catch (e) { localTrips = []; }
+            }
             var localDeletedIds = [];
             try {
                 localDeletedIds = JSON.parse(localStorage.getItem('fossil_deleted_ids') || '[]');
@@ -13842,15 +15543,19 @@ window.app = {
             
             var finalSpecimens = [];
             var finalCarts = [];
+            var finalTrips = [];
             var finalDeletedIds = [];
             
             if (mode === 'push') {
                 finalSpecimens = localSpecimens;
                 finalCarts = localCarts;
-                finalDeletedIds = [];
+                finalTrips = localTrips;
+                // Keep local tombstones so deletes still propagate on force push
+                finalDeletedIds = localDeletedIds.slice();
             } else if (mode === 'pull') {
                 finalSpecimens = remoteData.specimens || [];
                 finalCarts = remoteData.carts || [];
+                finalTrips = remoteData.trips || [];
                 finalDeletedIds = remoteData.deletedIds || [];
             } else {
                 var mergedDeletedIds = Array.from(new Set([].concat(localDeletedIds, remoteData.deletedIds || [])));
@@ -13897,6 +15602,9 @@ window.app = {
                 });
                 finalCarts = Object.values(cartMap);
                 finalDeletedIds = mergedDeletedIds;
+                finalTrips = (typeof SpecimenryTrips !== 'undefined' && SpecimenryTrips.mergeByUpdatedAt)
+                    ? SpecimenryTrips.mergeByUpdatedAt(localTrips, remoteData.trips || [])
+                    : (localTrips.length ? localTrips : (remoteData.trips || []));
             }
             
             await initDB().then(function(db) {
@@ -13914,6 +15622,10 @@ window.app = {
                     });
                 });
             });
+
+            if (typeof SpecimenryTrips !== 'undefined' && SpecimenryTrips.replaceAll) {
+                await SpecimenryTrips.replaceAll(finalTrips || []);
+            }
             
             if (finalCarts.length === 0) {
                 finalCarts = [{ id: 'cart_default', name: 'Main Comparison Cart', updatedAt: 0 }];
@@ -13930,6 +15642,7 @@ window.app = {
                 var syncPayload = {
                     specimens: finalSpecimens,
                     carts: finalCarts,
+                    trips: finalTrips || [],
                     deletedIds: finalDeletedIds,
                     syncTime: Date.now()
                 };
@@ -13973,7 +15686,8 @@ window.app = {
                 }
             }
             
-            localStorage.setItem('fossil_deleted_ids', JSON.stringify([]));
+            localStorage.setItem('fossil_deleted_ids', JSON.stringify(finalDeletedIds || []));
+            localStorage.setItem('fossil_gdrive_last_sync', String(Date.now()));
             self.updateCloudStatus('connected', 'Connected');
             self.showToast('Cloud synchronization successful (' + mode + ').', 'success');
             self.renderFossils();
@@ -13981,7 +15695,14 @@ window.app = {
             console.error('Cloud sync error:', err);
             var isConnected = localStorage.getItem('fossil_gdrive_connected') === 'true';
             self.updateCloudStatus(isConnected ? 'connected' : 'disconnected', isConnected ? 'Connection Active (Sync Error)' : 'Not Connected');
-            self.showToast('Sync failed: ' + err.message, 'danger');
+            if (typeof reportAppError === 'function') {
+                reportAppError(err, 'Cloud sync', {
+                    type: 'error',
+                    retry: function() { self.syncWithGoogleDrive(mode); }
+                });
+            } else {
+                self.showToast('Sync failed: ' + err.message, 'error');
+            }
         }
     },
 
@@ -14068,61 +15789,94 @@ window.app = {
         var btnP2pInit = document.getElementById('btn-p2p-init');
         if (btnP2pInit) btnP2pInit.style.display = 'none';
 
+        if (typeof Peer === 'undefined') {
+            self.updateP2PStatus('error', 'P2P Unavailable', 'PeerJS library failed to load. Check your network.');
+            self.showToast('P2P library not loaded. Try refreshing the page.', 'error');
+            if (btnP2pInit) btnP2pInit.style.display = 'flex';
+            return Promise.reject(new Error('PeerJS not loaded'));
+        }
+
         self.updateP2PStatus('syncing', 'Connecting...', 'Establishing peer connection...');
 
-        try {
-            if (window.p2pPeer) {
-                try { window.p2pPeer.destroy(); } catch(e) {}
+        return new Promise(function(resolve, reject) {
+            try {
+                if (window.p2pPeer) {
+                    try { window.p2pPeer.destroy(); } catch (e) {}
+                }
+
+                var shortId = Math.random().toString(36).substring(2, 8).toUpperCase();
+                window.p2pPeer = new Peer('SPECIMENRY-' + shortId, {
+                    debug: 1
+                });
+
+                var settled = false;
+                var settleOk = function(id) {
+                    if (settled) return;
+                    settled = true;
+                    resolve(id);
+                };
+                var settleErr = function(err) {
+                    if (settled) return;
+                    settled = true;
+                    reject(err);
+                };
+
+                window.p2pPeer.on('open', function(id) {
+                    var displayId = id.replace('SPECIMENRY-', '');
+                    self.updateP2PStatus('ready', 'P2P Ready', 'Waiting for connection from peer...');
+                    
+                    var codeDiv = document.getElementById('p2p-sync-code');
+                    if (codeDiv) {
+                        codeDiv.textContent = displayId;
+                    }
+
+                    var qrImg = document.getElementById('p2p-qr-img');
+                    if (qrImg) {
+                        var connectUrl = window.location.origin + window.location.pathname + '?connect=' + displayId;
+                        qrImg.src = (typeof SpecimenryQR !== 'undefined')
+                            ? SpecimenryQR.makeDataUrl(connectUrl, 180)
+                            : '';
+                    }
+
+                    var hostArea = document.getElementById('p2p-host-area');
+                    var joinArea = document.getElementById('p2p-join-area');
+                    if (hostArea) hostArea.style.display = 'flex';
+                    if (joinArea) joinArea.style.display = 'flex';
+                    settleOk(displayId);
+                });
+
+                window.p2pPeer.on('connection', function(conn) {
+                    self.handleP2PConnection(conn);
+                });
+
+                window.p2pPeer.on('error', function(err) {
+                    console.error('PeerJS error:', err);
+                    var errLabel = (err && (err.type || err.message)) ? String(err.type || err.message) : 'unknown';
+                    // Only treat as init failure before the peer is open.
+                    if (!window.p2pPeer || !window.p2pPeer.open) {
+                        self.updateP2PStatus('error', 'P2P Error', 'Error: ' + errLabel);
+                        self.showToast('P2P connection error: ' + errLabel, 'error');
+                        if (btnP2pInit) btnP2pInit.style.display = 'flex';
+                        settleErr(err || new Error(errLabel));
+                    } else {
+                        self.showToast('P2P: ' + errLabel, 'warning');
+                        self.updateP2PStatus('ready', 'P2P Ready', 'Peer error: ' + errLabel + ' — try again.');
+                    }
+                });
+
+                window.p2pPeer.on('close', function() {
+                    self.updateP2PStatus('offline', 'P2P Offline', 'Initialize to connect to network.');
+                    if (btnP2pInit) btnP2pInit.style.display = 'flex';
+                });
+
+            } catch (err) {
+                console.error('Failed to init PeerJS:', err);
+                self.updateP2PStatus('offline', 'Initialization Failed', err.message);
+                self.showToast('Failed to initialize P2P: ' + err.message, 'error');
+                if (btnP2pInit) btnP2pInit.style.display = 'flex';
+                reject(err);
             }
-
-            var shortId = Math.random().toString(36).substring(2, 8).toUpperCase();
-            window.p2pPeer = new Peer('SPECIMENRY-' + shortId, {
-                debug: 1
-            });
-
-            window.p2pPeer.on('open', function(id) {
-                var displayId = id.replace('SPECIMENRY-', '');
-                self.updateP2PStatus('ready', 'P2P Ready', 'Waiting for connection from peer...');
-                
-                var codeDiv = document.getElementById('p2p-sync-code');
-                if (codeDiv) {
-                    codeDiv.textContent = displayId;
-                }
-
-                var qrImg = document.getElementById('p2p-qr-img');
-                if (qrImg) {
-                    var connectUrl = window.location.origin + window.location.pathname + '?connect=' + displayId;
-                    qrImg.src = 'https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=' + encodeURIComponent(connectUrl);
-                }
-
-                var hostArea = document.getElementById('p2p-host-area');
-                var joinArea = document.getElementById('p2p-join-area');
-                if (hostArea) hostArea.style.display = 'flex';
-                if (joinArea) joinArea.style.display = 'flex';
-            });
-
-            window.p2pPeer.on('connection', function(conn) {
-                self.handleP2PConnection(conn);
-            });
-
-            window.p2pPeer.on('error', function(err) {
-                console.error('PeerJS error:', err);
-                self.updateP2PStatus('error', 'P2P Error', 'Error: ' + err.type);
-                self.showToast('P2P connection error: ' + err.message, 'danger');
-                if (btnP2pInit) btnP2pInit.style.display = 'flex';
-            });
-
-            window.p2pPeer.on('close', function() {
-                self.updateP2PStatus('offline', 'P2P Offline', 'Initialize to connect to network.');
-                if (btnP2pInit) btnP2pInit.style.display = 'flex';
-            });
-
-        } catch(err) {
-            console.error('Failed to init PeerJS:', err);
-            self.updateP2PStatus('offline', 'Initialization Failed', err.message);
-            self.showToast('Failed to initialize P2P: ' + err.message, 'danger');
-            if (btnP2pInit) btnP2pInit.style.display = 'flex';
-        }
+        });
     },
 
     updateP2PStatus: function(state, text, details) {
@@ -14170,6 +15924,11 @@ window.app = {
         var btn = document.getElementById('btn-p2p-scanner-toggle');
         if (!container) return;
 
+        if (typeof Html5Qrcode === 'undefined') {
+            self.showToast('QR scanner library not loaded. Enter the sync code manually.', 'warning');
+            return;
+        }
+
         container.style.display = 'flex';
         if (btn) btn.textContent = '⏹️ Stop Camera';
 
@@ -14209,12 +15968,12 @@ window.app = {
                 }
             ).catch(function(err) {
                 console.error("Camera scan failed:", err);
-                self.showToast("Camera access failed: " + err.message, "danger");
+                self.showToast("Camera access failed: " + (err && err.message ? err.message : String(err)), "error");
                 self.stopP2PScanner();
             });
         } catch(err) {
             console.error("Scanner exception:", err);
-            self.showToast("Failed to initialize scanner: " + err.message, "danger");
+            self.showToast("Failed to initialize scanner: " + err.message, "error");
             self.stopP2PScanner();
         }
     },
@@ -14250,8 +16009,22 @@ window.app = {
             return;
         }
 
-        var fullTargetId = targetId.trim().toUpperCase();
-        if (fullTargetId.length === 6 && !fullTargetId.startsWith('SPECIMENRY-')) {
+        var raw = String(targetId).trim();
+        // Allow pasting a full ?connect= URL
+        if (raw.indexOf('connect=') !== -1) {
+            try {
+                var parsed = new URL(raw, window.location.origin);
+                raw = parsed.searchParams.get('connect') || raw;
+            } catch (e) {
+                var m = raw.match(/[?&]connect=([^&#]+)/i);
+                if (m) raw = decodeURIComponent(m[1]);
+            }
+        }
+
+        var fullTargetId = raw.trim().toUpperCase();
+        if (fullTargetId.length === 6 && fullTargetId.indexOf('SPECIMENRY-') !== 0) {
+            fullTargetId = 'SPECIMENRY-' + fullTargetId;
+        } else if (fullTargetId.indexOf('SPECIMENRY-') !== 0 && /^[A-Z0-9]{6,12}$/.test(fullTargetId)) {
             fullTargetId = 'SPECIMENRY-' + fullTargetId;
         }
 
@@ -14260,14 +16033,14 @@ window.app = {
             return;
         }
 
-        self.updateP2PStatus('syncing', 'Connecting...', 'Initiating handshake with ' + targetId.toUpperCase());
+        self.updateP2PStatus('syncing', 'Connecting...', 'Initiating handshake with ' + raw.toUpperCase());
 
         try {
             var conn = window.p2pPeer.connect(fullTargetId);
             self.handleP2PConnection(conn, true);
         } catch(err) {
             self.updateP2PStatus('ready', 'Connection Failed', err.message);
-            self.showToast('Failed to connect: ' + err.message, 'danger');
+            self.showToast('Failed to connect: ' + err.message, 'error');
         }
     },
 
@@ -14281,17 +16054,22 @@ window.app = {
                 try {
                     var localSpecimens = await getAllFossils();
                     var localCarts = self.getCarts();
+                    var localTrips = [];
+                    if (typeof SpecimenryTrips !== 'undefined' && SpecimenryTrips.getAll) {
+                        try { localTrips = await SpecimenryTrips.getAll(); } catch (e) { localTrips = []; }
+                    }
                     var localDeletedIds = JSON.parse(localStorage.getItem('fossil_deleted_ids') || '[]');
                     var payload = {
                         specimens: localSpecimens,
                         carts: localCarts,
+                        trips: localTrips,
                         deletedIds: localDeletedIds,
                         syncTime: Date.now()
                     };
                     conn.send({ type: 'SYNC_DATA', data: payload });
                 } catch(e) {
                     console.error('P2P export failed:', e);
-                    self.showToast('Failed to compile data for transfer: ' + e.message, 'danger');
+                    self.showToast('Failed to compile data for transfer: ' + e.message, 'error');
                     conn.close();
                 }
             }
@@ -14305,6 +16083,10 @@ window.app = {
                     var remoteData = msg.data;
                     var localSpecimens = await getAllFossils();
                     var localCarts = self.getCarts();
+                    var localTrips = [];
+                    if (typeof SpecimenryTrips !== 'undefined' && SpecimenryTrips.getAll) {
+                        try { localTrips = await SpecimenryTrips.getAll(); } catch (e) { localTrips = []; }
+                    }
                     var localDeletedIds = JSON.parse(localStorage.getItem('fossil_deleted_ids') || '[]');
 
                     var mergedDeletedIds = Array.from(new Set([].concat(localDeletedIds, remoteData.deletedIds || [])));
@@ -14351,6 +16133,9 @@ window.app = {
                     });
                     var finalCarts = Object.values(cartMap);
                     var finalDeletedIds = mergedDeletedIds;
+                    var finalTrips = (typeof SpecimenryTrips !== 'undefined' && SpecimenryTrips.mergeByUpdatedAt)
+                        ? SpecimenryTrips.mergeByUpdatedAt(localTrips, remoteData.trips || [])
+                        : (localTrips.length ? localTrips : (remoteData.trips || []));
 
                     await initDB().then(function(db) {
                         return new Promise(function(resolve, reject) {
@@ -14368,6 +16153,10 @@ window.app = {
                         });
                     });
 
+                    if (typeof SpecimenryTrips !== 'undefined' && SpecimenryTrips.replaceAll) {
+                        await SpecimenryTrips.replaceAll(finalTrips || []);
+                    }
+
                     if (finalCarts.length === 0) {
                         finalCarts = [{ id: 'cart_default', name: 'Main Comparison Cart', updatedAt: 0 }];
                     }
@@ -14379,6 +16168,7 @@ window.app = {
                     var mergedPayload = {
                         specimens: finalSpecimens,
                         carts: finalCarts,
+                        trips: finalTrips || [],
                         deletedIds: finalDeletedIds,
                         syncTime: Date.now()
                     };
@@ -14390,7 +16180,7 @@ window.app = {
 
                 } catch(err) {
                     console.error('Merge failure:', err);
-                    self.showToast('Failed to merge databases: ' + err.message, 'danger');
+                    self.showToast('Failed to merge databases: ' + err.message, 'error');
                     self.updateP2PStatus('ready', 'Merge Error', err.message);
                     conn.close();
                 }
@@ -14416,6 +16206,10 @@ window.app = {
                         });
                     });
 
+                    if (typeof SpecimenryTrips !== 'undefined' && SpecimenryTrips.replaceAll) {
+                        await SpecimenryTrips.replaceAll(mergedData.trips || []);
+                    }
+
                     if ((mergedData.carts || []).length > 0) {
                         localStorage.setItem('fossil_carts', JSON.stringify(mergedData.carts));
                     }
@@ -14429,7 +16223,7 @@ window.app = {
 
                 } catch(err) {
                     console.error('Update failure:', err);
-                    self.showToast('Failed to update database: ' + err.message, 'danger');
+                    self.showToast('Failed to update database: ' + err.message, 'error');
                     self.updateP2PStatus('ready', 'Update Error', err.message);
                     conn.close();
                 }
@@ -14445,8 +16239,8 @@ window.app = {
 
         conn.on('error', function(err) {
             console.error('P2P data error:', err);
-            self.showToast('Data transfer error: ' + err.message, 'danger');
-            self.updateP2PStatus('ready', 'Transfer Error', err.message);
+            self.showToast('Data transfer error: ' + (err && err.message ? err.message : String(err)), 'error');
+            self.updateP2PStatus('ready', 'Transfer Error', err && err.message ? err.message : String(err));
             conn.close();
         });
     },
@@ -14463,8 +16257,39 @@ window.app = {
             document.getElementById('settings-museum-enabled').checked = localStorage.getItem('pref_museum_fields') === 'true';
             document.getElementById('settings-shop-enabled').checked = localStorage.getItem('pref_shop_fields') === 'true';
             document.getElementById('settings-storage-enabled').checked = localStorage.getItem('pref_storage_fields') === 'true';
+            var curatorInput = document.getElementById('settings-curator-name');
+            if (curatorInput && typeof SpecimenryChangeLog !== 'undefined') {
+                curatorInput.value = SpecimenryChangeLog.getActor() === 'Local curator' ? '' : SpecimenryChangeLog.getActor();
+            }
+            if (typeof window.app.syncDictationLanguageSelects === 'function') {
+                window.app.syncDictationLanguageSelects();
+            }
             modal.showModal();
         }
+    },
+
+    saveCuratorName: function() {
+        var el = document.getElementById('settings-curator-name');
+        if (!el || typeof SpecimenryChangeLog === 'undefined') return;
+        SpecimenryChangeLog.setActor(el.value || '');
+        window.app.showToast('Curator name saved for change log.', 'success', 2000);
+    },
+
+    renderChangeLogPanel: function(changeLog, isEditing) {
+        var wrap = document.getElementById('change-log-wrap');
+        var panel = document.getElementById('change-log-panel');
+        if (!wrap || !panel) return;
+        if (!isEditing) {
+            wrap.style.display = 'none';
+            panel.innerHTML = '';
+            return;
+        }
+        wrap.style.display = '';
+        if (typeof SpecimenryChangeLog === 'undefined') {
+            panel.innerHTML = '';
+            return;
+        }
+        panel.innerHTML = SpecimenryChangeLog.renderHtml(changeLog, { showEmpty: true, limit: 15 });
     },
 
     saveSettings: function() {
@@ -14639,7 +16464,10 @@ window.app = {
                     var items = drawers[drwName];
                     html += '        <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.4rem; border-bottom: 1px solid var(--bg-warm);">';
                     html += '          <span style="font-weight: 500; font-size: 0.8rem; display: flex; align-items: center; gap: 0.3rem;">📥 ' + escapeHtml(drwName) + ' (' + items.length + ')</span>';
-                    html += '          <button type="button" class="btn-text" onclick="window.app.filterByStorage(\'' + escapeJsString(roomName) + '\', \'' + escapeJsString(cabName) + '\', \'' + escapeJsString(drwName) + '\')" style="font-size: 0.7rem; color: var(--accent); cursor: pointer; font-weight: 600; padding: 0.1rem 0.3rem; border: none; background: none;">Filter Drawer</button>';
+                    html += '          <span style="display:flex; align-items:center; gap:0.35rem;">';
+                    html += '            <button type="button" class="btn-text" onclick="window.app.printDrawerLabel(\'' + escapeJsString(roomName) + '\', \'' + escapeJsString(cabName) + '\', \'' + escapeJsString(drwName) + '\')" style="font-size: 0.7rem; color: var(--accent); cursor: pointer; font-weight: 600; padding: 0.1rem 0.3rem; border: none; background: none;" title="Print drawer label with QR">🏷️ Label</button>';
+                    html += '            <button type="button" class="btn-text" onclick="window.app.filterByStorage(\'' + escapeJsString(roomName) + '\', \'' + escapeJsString(cabName) + '\', \'' + escapeJsString(drwName) + '\')" style="font-size: 0.7rem; color: var(--accent); cursor: pointer; font-weight: 600; padding: 0.1rem 0.3rem; border: none; background: none;">Filter</button>';
+                    html += '          </span>';
                     html += '        </div>';
                     
                     html += '        <div style="padding-left: 1rem; display: flex; flex-direction: column; gap: 0.2rem; margin-bottom: 0.5rem;">';
@@ -14677,6 +16505,501 @@ window.app = {
             searchInput.dispatchEvent(new Event('input'));
         }
         this.closeStorageExplorerModal();
+    },
+
+    printDrawerLabel: function(room, cabinet, drawer) {
+        var items = fossils.filter(function(f) {
+            var r = (f.storageRoom || '').trim() || 'Unassigned Room';
+            var c = (f.storageUnit || '').trim() || 'Unassigned Cabinet';
+            var d = (f.storageDrawer || '').trim() || 'Unassigned Drawer';
+            return r === room && c === cabinet && d === drawer;
+        });
+
+        var deepLink = window.location.origin + window.location.pathname +
+            '?storage=' + encodeURIComponent([room, cabinet, drawer].join('|'));
+        var qrUrl = (typeof SpecimenryQR !== 'undefined')
+            ? SpecimenryQR.makeDataUrl(deepLink, 140)
+            : '';
+
+        var listHtml = items.map(function(f) {
+            var box = f.storageBox ? ' <span style="opacity:0.65">[' + escapeHtml(f.storageBox) + ']</span>' : '';
+            return '<li><span class="id">' + escapeHtml(f.id || '') + '</span> ' + escapeHtml(f.specimen || 'Untitled') + box + '</li>';
+        }).join('');
+
+        var html = '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Drawer Label</title>' +
+            '<style>' +
+            '@page { size: 4in 3in; margin: 0.2in; }' +
+            'body{font-family:Georgia,serif;margin:0;color:#1c1917;}' +
+            '.sheet{border:2px solid #1c1917;padding:0.35in;min-height:2.4in;display:flex;flex-direction:column;gap:0.2in;}' +
+            'h1{font-size:18pt;margin:0;letter-spacing:-0.02em}' +
+            '.path{font-size:9pt;color:#57534e;margin:0}' +
+            '.row{display:flex;gap:0.25in;align-items:flex-start}' +
+            'ul{margin:0;padding-left:1.1em;font-size:8.5pt;flex:1;max-height:1.6in;overflow:hidden}' +
+            'li{margin:0.05in 0}.id{font-family:ui-monospace,monospace;font-size:7.5pt;color:#8b6914;font-weight:700}' +
+            '.qr{width:1.05in;height:1.05in;object-fit:contain;border:1px solid #d6d3d1;padding:2px}' +
+            '.meta{font-size:8pt;color:#78716c}' +
+            '.toolbar{position:fixed;top:12px;right:12px;display:flex;gap:8px}' +
+            '.toolbar button{padding:8px 12px;border-radius:8px;border:1px solid #d6d3d1;background:#fff;cursor:pointer;font-weight:700}' +
+            '@media print{.toolbar{display:none}}' +
+            '</style></head><body>' +
+            '<div class="toolbar"><button onclick="window.print()">Print Label</button></div>' +
+            '<div class="sheet">' +
+            '<div><h1>' + escapeHtml(drawer) + '</h1>' +
+            '<p class="path">' + escapeHtml(room) + ' · ' + escapeHtml(cabinet) + '</p></div>' +
+            '<div class="row"><ul>' + (listHtml || '<li>Empty drawer</li>') + '</ul>' +
+            '<img class="qr" src="' + qrUrl + '" alt="QR">' +
+            '</div><p class="meta">' + items.length + ' specimen(s) · scan QR to filter this drawer in Specimenry</p>' +
+            '</div></body></html>';
+
+        var w = window.open('', '_blank', 'width=520,height=420');
+        if (!w) {
+            window.app.showToast('Please allow popups to print drawer labels.', 'warning');
+            return;
+        }
+        w.document.write(html);
+        w.document.close();
+    },
+
+    // --- Field Diary ---
+    _tripDraftPhotos: [],
+
+    toggleFieldDiaryModal: function() {
+        var modal = document.getElementById('field-diary-modal');
+        if (!modal) return;
+        if (modal.open) {
+            modal.close();
+            return;
+        }
+        this.renderFieldDiaryList().then(function() {
+            modal.showModal();
+        }).catch(function(err) {
+            if (typeof reportAppError === 'function') reportAppError(err, 'Field diary');
+            else window.app.showToast('Could not open field diary.', 'error');
+        });
+    },
+
+    populateTripSelect: function(selectedId) {
+        var sel = document.getElementById('f-trip-id');
+        if (!sel || typeof SpecimenryTrips === 'undefined') return Promise.resolve();
+        return SpecimenryTrips.getAll().then(function(trips) {
+            var html = '<option value="">— None —</option>';
+            trips.forEach(function(t) {
+                var label = (t.date ? t.date + ' — ' : '') + (t.title || t.locality || t.id);
+                html += '<option value="' + escapeHtml(t.id) + '"' + (t.id === selectedId ? ' selected' : '') + '>' + escapeHtml(label) + '</option>';
+            });
+            sel.innerHTML = html;
+            if (selectedId) sel.value = selectedId;
+        }).catch(function() { /* trips store may not exist yet */ });
+    },
+
+    renderFieldDiaryList: function() {
+        var self = this;
+        return SpecimenryTrips.getAll().then(function(trips) {
+            var list = document.getElementById('field-diary-list');
+            if (!list) return;
+            if (!trips.length) {
+                list.innerHTML = '<p style="font-size:0.75rem;color:var(--text-secondary);padding:0.5rem;">No trips yet.</p>';
+                if (!document.getElementById('trip-edit-id').value) {
+                    self.createNewFieldTrip(true);
+                }
+                return;
+            }
+            list.innerHTML = trips.map(function(t) {
+                var label = escapeHtml(t.title || t.locality || 'Untitled trip');
+                var meta = escapeHtml((t.date || '') + (t.locality ? ' · ' + t.locality : ''));
+                var count = (t.specimenIds || []).length;
+                return '<button type="button" onclick="app.loadFieldTrip(\'' + t.id.replace(/'/g, "\\'") + '\')" style="display:block;width:100%;text-align:left;padding:0.55rem 0.6rem;margin-bottom:0.35rem;border:1px solid var(--border-color);border-radius:var(--radius-sm);background:var(--bg-surface);cursor:pointer;color:var(--text-primary);">' +
+                    '<strong style="font-size:0.82rem;">' + label + '</strong>' +
+                    '<div style="font-size:0.68rem;color:var(--text-secondary);margin-top:0.15rem;">' + meta + ' · ' + count + ' specimen(s)</div></button>';
+            }).join('');
+            var current = document.getElementById('trip-edit-id').value;
+            if (!current && trips[0]) self.loadFieldTrip(trips[0].id);
+        });
+    },
+
+    createNewFieldTrip: function(skipRender) {
+        var trip = SpecimenryTrips.newBlank();
+        this._fillTripForm(trip);
+        if (!skipRender) {
+            this.renderFieldDiaryList();
+        }
+    },
+
+    _fillTripForm: function(trip) {
+        document.getElementById('trip-edit-id').value = trip.id || '';
+        document.getElementById('trip-title').value = trip.title || '';
+        document.getElementById('trip-date').value = trip.date || '';
+        document.getElementById('trip-country').value = trip.country || '';
+        document.getElementById('trip-locality').value = trip.locality || '';
+        document.getElementById('trip-lat').value = trip.lat != null ? trip.lat : '';
+        document.getElementById('trip-lng').value = trip.lng != null ? trip.lng : '';
+        document.getElementById('trip-notes').value = trip.notes || '';
+        this._tripDraftPhotos = (trip.photos || []).slice();
+        this._renderTripPhotosPreview();
+        this._renderTripLinkedSpecimens(trip.specimenIds || []);
+    },
+
+    loadFieldTrip: function(id) {
+        var self = this;
+        SpecimenryTrips.getById(id).then(function(trip) {
+            if (!trip) return;
+            self._fillTripForm(trip);
+        });
+    },
+
+    _readTripForm: function() {
+        var latEl = document.getElementById('trip-lat');
+        var lngEl = document.getElementById('trip-lng');
+        var latVal = latEl && latEl.value !== '' ? parseFloat(latEl.value) : null;
+        var lngVal = lngEl && lngEl.value !== '' ? parseFloat(lngEl.value) : null;
+        return {
+            id: document.getElementById('trip-edit-id').value,
+            title: document.getElementById('trip-title').value.trim(),
+            date: document.getElementById('trip-date').value,
+            country: document.getElementById('trip-country').value.trim(),
+            locality: document.getElementById('trip-locality').value.trim(),
+            lat: isNaN(latVal) ? null : latVal,
+            lng: isNaN(lngVal) ? null : lngVal,
+            notes: document.getElementById('trip-notes').value,
+            photos: this._tripDraftPhotos.slice(),
+            specimenIds: this._getLinkedIdsFromUi()
+        };
+    },
+
+    _getLinkedIdsFromUi: function() {
+        var wrap = document.getElementById('trip-linked-specimens');
+        if (!wrap) return [];
+        var ids = [];
+        wrap.querySelectorAll('[data-specimen-id]').forEach(function(el) {
+            ids.push(el.getAttribute('data-specimen-id'));
+        });
+        return ids;
+    },
+
+    _renderTripPhotosPreview: function() {
+        var el = document.getElementById('trip-photos-preview');
+        if (!el) return;
+        el.innerHTML = this._tripDraftPhotos.map(function(src, i) {
+            return '<div style="position:relative;width:64px;height:64px;">' +
+                '<img src="' + src + '" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:6px;border:1px solid var(--border-color);">' +
+                '<button type="button" onclick="app.removeTripPhoto(' + i + ')" style="position:absolute;top:-4px;right:-4px;border:none;background:#c0392b;color:#fff;border-radius:50%;width:18px;height:18px;cursor:pointer;font-size:10px;">×</button></div>';
+        }).join('');
+    },
+
+    _renderTripLinkedSpecimens: function(ids) {
+        var el = document.getElementById('trip-linked-specimens');
+        if (!el) return;
+        if (!ids || !ids.length) {
+            el.innerHTML = '<span>None linked yet — use “Log specimen here” or pick a trip in the specimen editor.</span>';
+            return;
+        }
+        el.innerHTML = ids.map(function(id) {
+            var f = fossils.find(function(x) { return x.id === id; });
+            var name = f ? f.specimen : '(missing)';
+            return '<div data-specimen-id="' + escapeHtml(id) + '" style="display:flex;justify-content:space-between;gap:0.5rem;padding:0.25rem 0;border-bottom:1px solid var(--border-color);">' +
+                '<a href="#" onclick="app.closeFieldDiaryThenOpen(\'' + id.replace(/'/g, "\\'") + '\');return false;">' + escapeHtml(id) + ' — ' + escapeHtml(name) + '</a>' +
+                '<button type="button" class="btn-text" onclick="app.unlinkSpecimenFromTrip(\'' + id.replace(/'/g, "\\'") + '\')" style="border:none;background:none;color:var(--text-secondary);cursor:pointer;">Unlink</button></div>';
+        }).join('');
+    },
+
+    removeTripPhoto: function(index) {
+        this._tripDraftPhotos.splice(index, 1);
+        this._renderTripPhotosPreview();
+    },
+
+    handleTripPhotoUpload: function(event) {
+        var self = this;
+        var files = Array.prototype.slice.call(event.target.files || []);
+        if (!files.length) return;
+        var chain = Promise.resolve();
+        files.forEach(function(file) {
+            chain = chain.then(function() {
+                return new Promise(function(resolve) {
+                    var reader = new FileReader();
+                    reader.onload = function() {
+                        self._tripDraftPhotos.push(reader.result);
+                        if (self._tripDraftPhotos.length > 8) self._tripDraftPhotos = self._tripDraftPhotos.slice(0, 8);
+                        resolve();
+                    };
+                    reader.onerror = function() { resolve(); };
+                    reader.readAsDataURL(file);
+                });
+            });
+        });
+        chain.then(function() {
+            self._renderTripPhotosPreview();
+            event.target.value = '';
+        });
+    },
+
+    captureTripGps: function() {
+        if (!navigator.geolocation) {
+            window.app.showToast('Geolocation not available on this device.', 'warning');
+            return;
+        }
+        window.app.showToast('Getting GPS…', 'info');
+        navigator.geolocation.getCurrentPosition(function(pos) {
+            document.getElementById('trip-lat').value = pos.coords.latitude.toFixed(6);
+            document.getElementById('trip-lng').value = pos.coords.longitude.toFixed(6);
+            window.app.showToast('GPS captured.', 'success');
+        }, function(err) {
+            if (typeof reportAppError === 'function') {
+                reportAppError(err, 'Trip GPS', { type: 'warning', retry: function() { window.app.captureTripGps(); } });
+            } else {
+                window.app.showToast('Could not get GPS.', 'error');
+            }
+        }, { enableHighAccuracy: true, timeout: 12000 });
+    },
+
+    saveCurrentFieldTrip: function() {
+        var self = this;
+        var trip = this._readTripForm();
+        if (!trip.id) trip.id = SpecimenryTrips.createId();
+        if (!trip.title && !trip.locality) {
+            window.app.showToast('Add a title or locality for the trip.', 'warning');
+            return;
+        }
+        SpecimenryTrips.getById(trip.id).then(function(existing) {
+            if (existing && existing.createdAt) trip.createdAt = existing.createdAt;
+            if (existing && existing.specimenIds && (!trip.specimenIds || !trip.specimenIds.length)) {
+                trip.specimenIds = existing.specimenIds;
+            }
+            return SpecimenryTrips.save(trip);
+        }).then(function() {
+            window.app.showToast('Trip saved.', 'success');
+            self.populateTripSelect(trip.id);
+            return self.renderFieldDiaryList();
+        }).catch(function(err) {
+            if (typeof reportAppError === 'function') reportAppError(err, 'Save trip');
+            else window.app.showToast('Could not save trip.', 'error');
+        });
+    },
+
+    deleteCurrentFieldTrip: function() {
+        var id = document.getElementById('trip-edit-id').value;
+        if (!id) return;
+        if (!confirm('Delete this trip log? Specimens stay in your collection; only the link is removed.')) return;
+        var self = this;
+        SpecimenryTrips.remove(id).then(function() {
+            fossils.forEach(function(f) {
+                if (f.tripId === id) {
+                    f.tripId = '';
+                    updateFossil(f);
+                }
+            });
+            self.createNewFieldTrip();
+            self.renderFieldDiaryList();
+            self.populateTripSelect('');
+            window.app.showToast('Trip deleted.', 'success');
+        });
+    },
+
+    unlinkSpecimenFromTrip: function(specimenId) {
+        var tripId = document.getElementById('trip-edit-id').value;
+        var self = this;
+        SpecimenryTrips.unlinkSpecimen(tripId, specimenId).then(function(trip) {
+            var f = fossils.find(function(x) { return x.id === specimenId; });
+            if (f && f.tripId === tripId) {
+                f.tripId = '';
+                updateFossil(f);
+            }
+            if (trip) self._renderTripLinkedSpecimens(trip.specimenIds || []);
+        });
+    },
+
+    closeFieldDiaryThenOpen: function(specimenId) {
+        var modal = document.getElementById('field-diary-modal');
+        if (modal && modal.open) modal.close();
+        this.openModal(specimenId);
+    },
+
+    applyTripToNewSpecimen: function() {
+        var trip = this._readTripForm();
+        if (!trip.id) {
+            window.app.showToast('Save the trip first.', 'warning');
+            return;
+        }
+        var self = this;
+        SpecimenryTrips.save(Object.assign(trip, { specimenIds: trip.specimenIds || [] })).then(function() {
+            var modal = document.getElementById('field-diary-modal');
+            if (modal && modal.open) modal.close();
+            self.openModal();
+            setTimeout(function() {
+                if (trip.country) document.getElementById('f-country').value = trip.country;
+                if (trip.locality) document.getElementById('f-location').value = trip.locality;
+                if (trip.lat != null) document.getElementById('f-lat').value = trip.lat;
+                if (trip.lng != null) document.getElementById('f-lng').value = trip.lng;
+                if (trip.notes) document.getElementById('f-notes').value = trip.notes;
+                document.getElementById('f-self-found').checked = true;
+                self.populateTripSelect(trip.id);
+                if (document.getElementById('f-quick-add')) {
+                    self.setEditorMode('simple');
+                }
+                window.app.showToast('New specimen prefilled from trip — add name & photo, then save.', 'success', 5000);
+            }, 200);
+        });
+    },
+
+    // --- Shareable public catalog ---
+    openShareCatalogModal: function() {
+        var modal = document.getElementById('share-catalog-modal');
+        if (!modal) return;
+        var dbMenu = document.getElementById('db-dropdown');
+        if (dbMenu) dbMenu.classList.remove('active');
+        if (!document.getElementById('share-cat-title').value) {
+            document.getElementById('share-cat-title').value = 'Specimen Catalog';
+        }
+        modal.showModal();
+    },
+
+    closeShareCatalogModal: function() {
+        var modal = document.getElementById('share-catalog-modal');
+        if (modal && modal.open) modal.close();
+    },
+
+    _collectShareCatalogSource: function() {
+        var scope = (document.getElementById('share-cat-scope') || {}).value || 'owned';
+        if (scope === 'selected') {
+            return fossils.filter(function(f) { return selectedFossils.has(f.id); });
+        }
+        if (scope === 'visible') {
+            return (window.app._lastFilteredFossils || fossils).slice();
+        }
+        // owned collection
+        return fossils.filter(function(f) {
+            return !f.isCartItem && !f.isWishlist && !f.isSold && !f.isDream && !f.isTraded;
+        });
+    },
+
+    _buildShareCatalogPayload: function() {
+        if (typeof SpecimenryShareCatalog === 'undefined') {
+            throw new Error('Share catalog module not loaded');
+        }
+        var options = {
+            title: (document.getElementById('share-cat-title') || {}).value || 'Specimen Catalog',
+            collector: (document.getElementById('share-cat-collector') || {}).value || '',
+            blurb: (document.getElementById('share-cat-blurb') || {}).value || '',
+            includePhotos: !!(document.getElementById('share-cat-photos') || {}).checked,
+            includeNotes: !!(document.getElementById('share-cat-notes') || {}).checked,
+            includeCoordinates: !!(document.getElementById('share-cat-coords') || {}).checked,
+            maxPhotosPerSpecimen: 1,
+            includeWishlist: false,
+            includeForSale: false,
+            includeSold: false,
+            includeDream: false
+        };
+        var scope = (document.getElementById('share-cat-scope') || {}).value || 'owned';
+        if (scope === 'visible' || scope === 'selected') {
+            options.includeWishlist = true;
+            options.includeForSale = true;
+            options.includeSold = true;
+            options.includeDream = true;
+            options.includeTraded = true;
+        }
+        return SpecimenryShareCatalog.buildPayload(this._collectShareCatalogSource(), options);
+    },
+
+    previewShareCatalog: function() {
+        try {
+            var payload = this._buildShareCatalogPayload();
+            if (!payload.count) {
+                window.app.showToast('No specimens to share for this selection.', 'warning');
+                return;
+            }
+            var w = SpecimenryShareCatalog.openPreview(payload);
+            if (!w) window.app.showToast('Please allow popups to preview the catalog.', 'warning');
+        } catch (err) {
+            if (typeof reportAppError === 'function') reportAppError(err, 'Share catalog');
+            else window.app.showToast('Could not preview catalog.', 'error');
+        }
+    },
+
+    downloadShareCatalog: function() {
+        try {
+            var payload = this._buildShareCatalogPayload();
+            if (!payload.count) {
+                window.app.showToast('No specimens to share for this selection.', 'warning');
+                return;
+            }
+            var safeName = (payload.title || 'catalog').replace(/[^\w\-]+/g, '_').slice(0, 40);
+            SpecimenryShareCatalog.downloadHtml(payload, 'specimenry-' + safeName + '.html');
+            window.app.showToast('Shareable catalog downloaded (' + payload.count + ' specimens).', 'success');
+            this.closeShareCatalogModal();
+        } catch (err) {
+            if (typeof reportAppError === 'function') reportAppError(err, 'Share catalog');
+            else window.app.showToast('Could not export catalog.', 'error');
+        }
+    },
+
+    copyShareCatalogLink: function() {
+        try {
+            var options = {
+                title: (document.getElementById('share-cat-title') || {}).value || 'Specimen Catalog',
+                collector: (document.getElementById('share-cat-collector') || {}).value || '',
+                blurb: (document.getElementById('share-cat-blurb') || {}).value || '',
+                includePhotos: false,
+                includeNotes: !!(document.getElementById('share-cat-notes') || {}).checked,
+                includeCoordinates: !!(document.getElementById('share-cat-coords') || {}).checked,
+                maxPhotosPerSpecimen: 0
+            };
+            var scope = (document.getElementById('share-cat-scope') || {}).value || 'owned';
+            if (scope === 'visible' || scope === 'selected') {
+                options.includeWishlist = true;
+                options.includeForSale = true;
+                options.includeSold = true;
+                options.includeDream = true;
+                options.includeTraded = true;
+            }
+            var payload = SpecimenryShareCatalog.buildPayload(this._collectShareCatalogSource(), options);
+            if (!payload.count) {
+                window.app.showToast('No specimens to share for this selection.', 'warning');
+                return;
+            }
+            var encoded = SpecimenryShareCatalog.encodeShareLink(payload);
+            if (encoded.tooLarge) {
+                window.app.showToast('Catalog too large for a URL link — use Download HTML instead (or share fewer specimens).', 'warning', 7000);
+                return;
+            }
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(encoded.url).then(function() {
+                    window.app.showToast('Share link copied (metadata only, no photos).', 'success');
+                }).catch(function() {
+                    window.app.openFormModal({
+                        title: 'Copy share link',
+                        subtitle: 'Select the link and copy it manually.',
+                        submitLabel: 'Done',
+                        fields: [
+                            { id: 'url', label: 'Share link', type: 'textarea', rows: 4, value: encoded.url }
+                        ]
+                    }, function() {});
+                });
+            } else {
+                window.app.openFormModal({
+                    title: 'Copy share link',
+                    subtitle: 'Select the link and copy it manually.',
+                    submitLabel: 'Done',
+                    fields: [
+                        { id: 'url', label: 'Share link', type: 'textarea', rows: 4, value: encoded.url }
+                    ]
+                }, function() {});
+            }
+        } catch (err) {
+            if (typeof reportAppError === 'function') reportAppError(err, 'Share catalog link');
+            else window.app.showToast('Could not build share link.', 'error');
+        }
+    },
+
+    openSharedCatalogFromHash: function() {
+        if (typeof SpecimenryShareCatalog === 'undefined') return false;
+        var payload = SpecimenryShareCatalog.decodeShareLink(window.location.hash || '');
+        if (!payload) return false;
+        var w = SpecimenryShareCatalog.openPreview(payload);
+        if (!w) {
+            window.app.showToast('Allow popups to open the shared catalog, or Download HTML instead.', 'warning');
+        } else {
+            window.app.showToast('Opened shared catalog (' + (payload.count || 0) + ' specimens).', 'info');
+        }
+        return true;
     },
 
     toggleShopLedgerModal: function() {
@@ -15389,6 +17712,7 @@ function migrateToCatalogIds() {
 
 function showToast(msg, type, duration) {
     type = type || 'success';
+    if (type === 'danger') type = 'error';
     duration = duration || 4000;
     
     var toastContainer = document.getElementById('toast-hub');
@@ -15444,10 +17768,13 @@ function showToast(msg, type, duration) {
 
 
 function escapeHtml(str) {
-    if (!str) return '';
-    var div = document.createElement('div');
-    div.appendChild(document.createTextNode(str));
-    return div.innerHTML;
+    if (str === null || str === undefined) return '';
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
 }
 
 /**

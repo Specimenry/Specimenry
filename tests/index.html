@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Specimenry — lightweight tests</title>
+  <style>
+    body { font-family: ui-monospace, Consolas, monospace; margin: 1.5rem; background: #111; color: #eee; }
+    h1 { font-size: 1.1rem; }
+    .pass { color: #2ecc71; }
+    .fail { color: #e74c3c; }
+    #summary { margin-top: 1rem; font-weight: 700; }
+  </style>
+</head>
+<body>
+  <h1>Specimenry unit checks</h1>
+  <p>Open this page locally or on GitHub Pages at <code>/tests/</code>.</p>
+  <div id="results"></div>
+  <div id="summary"></div>
+
+  <script src="../js/lib/errors.js"></script>
+  <script src="../js/lib/db.js"></script>
+  <script src="../js/lib/backup.js"></script>
+  <script src="../js/lib/mineral-care.js"></script>
+  <script src="../js/lib/provenance.js"></script>
+  <script src="../js/lib/share-catalog.js"></script>
+  <script src="run.js"></script>
+</body>
+</html>

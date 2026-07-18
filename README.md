@@ -4,11 +4,21 @@
 
 A personal, high-performance web application designed for fossil collectors, sedimentologists, and paleontology enthusiasts to log, manage, and showcase their fossil specimens.
 
+**Live:** [https://specimenry.online/](https://specimenry.online/) (GitHub Pages)
+
 The Fossil Archive is a fully offline-capable, local-first database built on standard web technologies (HTML, CSS, JS). All your sensitive data and images are securely stored entirely on your device using `IndexedDB`.
 
 ## Features ✨
 
-- **Local-First Privacy**: No servers, no accounts, and no data tracking. Everything lives directly in your browser.
+- **Local-First Privacy**: No servers, no accounts, and no data tracking. Everything lives directly in your browser. See [docs/STORAGE.md](docs/STORAGE.md) for what is stored in IndexedDB vs localStorage vs optional sync.
+- **Modular codebase**: Core helpers live in `js/lib/` (DB, mineral care, provenance, filters, dictation status, errors) for safer changes on GitHub Pages without a bundler.
+- **Field Simple mode**: Name, photo, location, notes, and save — optimized for logging specimens outdoors.
+- **Offline dictation**: On-device Whisper (first download ~75 MB); badge shows when **ready offline**.
+- **Persisted filters**: Last search/filter state is restored per device.
+- **Bulk edit**: Mass-change country, formation, status, and tags for large collections.
+- **Drawer labels + QR**: From Storage Explorer, print a drawer label with contents list and a QR that filters back to that drawer.
+- **Field diary**: Trip logs (date, locality, GPS, photos) with specimen linking — Utilities → Field Diary.
+- **Shareable catalog**: Export a privacy-safe HTML catalog (no prices/storage/private docs) for collectors or museums.
 - **Mobile-First Responsive Design**: A fully responsive interface featuring a Floating Action Button (FAB) stack for critical controls, ensuring seamless use across desktop, tablet, and mobile devices.
 - **Scientific Etymology Tooltips**: Integrated paleontological dictionary that automatically annotates specimen names. Hover over roots like *saurus*, *pteryx*, or *idae* to see their scientific meanings and origins.
 - **Interactive Geological Timeline**: Each specimen features a high-fidelity timeline bar, visualizing its position in Earth's 541-million-year history (Phanerozoic Eon) relative to the Present.
@@ -39,14 +49,20 @@ Because the application runs entirely locally, there is no complicated backend s
 *(Note: While the app is perfectly functional running purely from the `file://` protocol, you may want to serve it using a simple local HTTP server like `python -m http.server` for the most accurate behavior depending on your browser's local security policies).*
 
 ### Backing Up Data
-Since data is saved locally in your browser's IndexedDB, clearing your browser history or caches **may delete your collection**. 
-* Always use the **Export Backup** icon (the downward-pointing arrow in the header) regularly to download a `.json` snapshot of your collections and images.
-* To restore, click the **Restore Database** icon (the circular arrow) and select your `.json` file.
+Since data is saved locally in your browser's IndexedDB, clearing site data **may delete your collection**.
+
+> Your data lives in this browser — export backups regularly.
+
+* Use **Database → Backup & Restore** to download a dated `.json` file. The backup includes **specimens (with photos)** and **field diary trips**.
+* To restore, open the same panel and choose **Restore from file…**.
+* Optional Google Drive / P2P sync is separate; a JSON file is still the safest portable copy.
 
 ### CSV Import
 If you currently track your collection in Excel or Google Sheets, you can export it as a CSV file and use the **Import CSV** command. The application will automatically attempt to map standard columns (like `specimen`, `category`, `period`, `price`, etc.) directly into the database.
 
-## Technologies Used 💻
+### Lightweight tests
+
+Open [`tests/index.html`](tests/index.html) in a browser (or visit `/tests/` when served). Covers formula parsing, provenance restriction matching, and JSON backup serialize/parse — **20 assertions**, no build step.
 - **HTML5 & Vanilla Javascript (ES5+)** - Ensuring longevity and lack of framework bloat.
 - **Vanilla CSS** - Clean, responsive UI with modern custom CSS properties.
 - **IndexedDB** - High capacity local browser storage.
