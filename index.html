@@ -8,12 +8,41 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <meta name="description" content="Specimenry — local-first fossil & mineral collection database. Your data stays in your browser. Free to use. Export backups regularly.">
+    <meta name="theme-color" content="#7a5c12">
+    <meta name="application-name" content="Specimenry">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="Specimenry">
+    <meta name="mobile-web-app-capable" content="yes">
+    <link rel="manifest" href="manifest.webmanifest">
+    <link rel="apple-touch-icon" href="img/favicon.png">
+
+    <!-- Open Graph / social preview -->
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="Specimenry">
+    <meta property="og:title" content="Specimenry — Personal Collection Database">
+    <meta property="og:description" content="Local-first fossil & mineral catalog. Data stays in your browser. Free to use — export backups regularly.">
+    <meta property="og:url" content="https://specimenry.online/">
+    <meta property="og:image" content="https://specimenry.online/img/logo_flat.png">
+    <meta property="og:image:alt" content="Specimenry ammonite logo">
+    <meta name="twitter:card" content="summary">
+    <meta name="twitter:title" content="Specimenry — Personal Collection Database">
+    <meta name="twitter:description" content="Local-first fossil & mineral catalog. Your data stays in your browser.">
+    <meta name="twitter:image" content="https://specimenry.online/img/logo_flat.png">
+
     <title>Specimenry — Personal Collection Database</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400;1,600;1,700&family=Inter:wght@300;400;500;600;700;800&family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="icon" type="image/png" href="img/favicon.png">
     <link rel="stylesheet" href="css/style.css">
+    <script>
+        try {
+            if (localStorage.getItem('pref_field_outdoor') === 'true') {
+                document.documentElement.classList.add('field-outdoor');
+            }
+        } catch (e) {}
+    </script>
     <script src="js/heic-to.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
@@ -34,6 +63,7 @@
                 <button id="btn-toggle-theme" class="btn-icon" onclick="app.toggleTheme()" title="Toggle Dark Mode" aria-label="Toggle Dark Mode">
                     <svg id="theme-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
                 </button>
+                <span id="field-outdoor-badge" class="field-outdoor-badge" hidden title="Field / Outdoor mode is on — turn off in Settings" onclick="app.toggleSettingsModal()">☀️ Field</span>
                 <a href="https://ko-fi.com/specimenry" target="_blank" id="btn-support-project" class="desktop-only" title="Support Specimenry on Ko-fi" aria-label="Support Specimenry on Ko-fi" style="color: var(--text-primary); background: var(--bg-warm); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 0.35rem 0.65rem; font-size: 0.75rem; font-weight: 600; text-decoration: none; display: flex; align-items: center; gap: 0.35rem; transition: all 0.2s;" onmouseover="this.style.background='var(--border-color)'" onmouseout="this.style.background='var(--bg-warm)'">
                     <span style="color: #ef4444;">❤️</span> Support
                 </a>
@@ -363,6 +393,18 @@
     </nav>
 
     <main>
+        <!-- Storage / IndexedDB failure banner -->
+        <div id="storage-failure-banner" class="warning-banner storage-failure-banner" style="display: none;" role="alert">
+            <div class="backup-warning-main">
+                <span class="backup-warning-icon" aria-hidden="true">💾</span>
+                <span id="storage-failure-message" class="backup-warning-text"><strong>Browser storage unavailable</strong> — your collection cannot be loaded. Restore a JSON backup if you have one.</span>
+            </div>
+            <div class="backup-warning-actions">
+                <button type="button" class="btn-primary backup-warning-cta" onclick="app.openBackupCenter();">Restore backup</button>
+                <button type="button" class="btn-secondary backup-warning-cta" onclick="location.reload();">Retry</button>
+            </div>
+        </div>
+
         <!-- Backup Warning / Reminder Banner -->
         <div id="backup-warning-banner" class="warning-banner backup-warning-banner" style="display: none;">
             <div class="backup-warning-main">
@@ -536,8 +578,8 @@
                                 <input type="text" id="f-authority" placeholder="e.g. Agassiz, 1843 (Auto-filled on 'Auto-Fetch All')">
                             </div>
                             <div class="form-group">
-                                <label for="f-category" id="lbl-f-category">Category *</label>
-                                <select id="f-category" required></select>
+                                <label for="f-category" id="lbl-f-category">Category <span class="category-required-mark" aria-hidden="true">*</span></label>
+                                <select id="f-category"></select>
                             </div>
                             <div class="form-group" id="group-f-type">
                                 <label for="f-type">Fossil Type</label>
@@ -2049,6 +2091,14 @@
                         <span style="display: block; font-size: 0.7rem; color: var(--text-secondary); margin-top: 0.15rem;">Unlocks Room, Cabinet/Shelf, Drawer, and Box mappings, enabling the visual storage drawer explorer.</span>
                     </div>
                 </label>
+
+                <label style="display: flex; align-items: flex-start; gap: 0.75rem; padding: 0.75rem; border-radius: var(--radius-sm); border: 2px solid var(--border-color); background: var(--bg-warm); cursor: pointer;">
+                    <input type="checkbox" id="settings-field-outdoor" onchange="app.saveSettings()" style="width: 18px; height: 18px; margin-top: 0.1rem; accent-color: var(--accent);">
+                    <div>
+                        <span style="display: block; font-size: 0.85rem; font-weight: 700; color: var(--text-primary);">☀️ Field / Outdoor mode</span>
+                        <span style="display: block; font-size: 0.7rem; color: var(--text-secondary); margin-top: 0.15rem;">High contrast for sunlight, larger text, and bigger tap targets for gloves or dusty fingers. Stays on this device until you turn it off.</span>
+                    </div>
+                </label>
             </div>
 
             <div style="padding: 0.75rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color); background: var(--bg-warm);">
@@ -2274,6 +2324,7 @@
                 <button type="button" class="btn-secondary" onclick="app.finishWelcomeLanding(false); app.openModal();">Add first specimen</button>
             </div>
             <p class="welcome-landing-foot">You can reopen this anytime: Database → About &amp; Privacy</p>
+            <p class="welcome-landing-version" id="specimenry-version-stamp">Specimenry</p>
         </div>
     </dialog>
 

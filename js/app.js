@@ -5,6 +5,9 @@
 // =========================================================================
 
 // --- CONSTANTS ---
+var SPECIMENRY_VERSION = '0.9.0';
+var SPECIMENRY_BUILD_DATE = '2026-07-18';
+
 var CATEGORIES = [
     "Vertebrate",
     "Invertebrate",
@@ -1391,7 +1394,7 @@ window.addEventListener('DOMContentLoaded', function() {
                 }
             }
 
-            // Check for WebRTC sync parameter
+            // Deep-links / sync connect from URL
             try {
                 var urlParams = new URLSearchParams(window.location.search);
                 var connectId = urlParams.get('connect');
@@ -1414,12 +1417,7 @@ window.addEventListener('DOMContentLoaded', function() {
                         }
                     }, 500);
                 }
-            } catch(e) {
-                console.error('Failed to auto-connect to peer from URL:', e);
-            }
 
-            // Check for specimen deep-link to auto-open
-            try {
                 var specId = urlParams.get('specimen') || urlParams.get('id');
                 if (specId) {
                     setTimeout(function() {
@@ -1449,9 +1447,14 @@ window.addEventListener('DOMContentLoaded', function() {
                     }, 900);
                 }
             } catch(e) {
-                console.error('Failed to parse auto-open deep-link:', e);
+                console.error('Failed to parse URL deep-links:', e);
             }
         });
+    }).catch(function(err) {
+        console.error('IndexedDB init failed:', err);
+        if (window.app && typeof window.app.showStorageFailureUI === 'function') {
+            window.app.showStorageFailureUI(err);
+        }
     });
 
     // Close dropdowns on outside clicks
@@ -1522,6 +1525,33 @@ window.addEventListener('DOMContentLoaded', function() {
 
 // Global keyboard navigation (Lightbox & Showcase & Zoom & Compare)
 document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape' && window.app) {
+        var menu = document.getElementById('mobile-menu-dropdown-content');
+        if (menu && menu.classList.contains('active')) {
+            window.app.closeMobileMenu();
+            e.preventDefault();
+            return;
+        }
+        var filterBar = document.querySelector('.filter-bar.show-mobile-filters');
+        if (filterBar) {
+            window.app.closeMobileFilters();
+            e.preventDefault();
+            return;
+        }
+        var viewMore = document.getElementById('view-more-menu');
+        if (viewMore && !viewMore.hasAttribute('hidden')) {
+            window.app.closeViewMoreMenu();
+            e.preventDefault();
+            return;
+        }
+        var selMore = document.getElementById('selection-more-menu');
+        if (selMore && !selMore.hasAttribute('hidden')) {
+            window.app.closeSelectionMoreMenu();
+            e.preventDefault();
+            return;
+        }
+    }
+
     var deepDiveModal = document.getElementById('deep-dive-modal');
     if (deepDiveModal && deepDiveModal.style.display === 'flex') {
         if (e.key === 'Escape') {
@@ -7755,16 +7785,11 @@ window.app = {
             }
 
             var isSimpleMode = !!(document.getElementById('f-quick-add') && document.getElementById('f-quick-add').checked);
-            if (!catElem.value) {
-                if (isSimpleMode) {
-                    // Field mode hides category — default so a quick save still works.
-                    catElem.value = 'Other';
-                } else {
-                    window.app.setModalTab('classification');
-                    catElem.focus();
-                    window.app.showToast('Please select a Category.', 'warning');
-                    return;
-                }
+            if (!isSimpleMode && !catElem.value) {
+                window.app.setModalTab('classification');
+                catElem.focus();
+                window.app.showToast('Please select a Category.', 'warning');
+                return;
             }
 
             var idVal = document.getElementById('fossil-id').value;
@@ -8846,6 +8871,7 @@ window.app = {
         var filterBar = document.querySelector('.filter-bar');
         var backdrop = document.getElementById('mobile-filter-backdrop');
         var btn = document.getElementById('btn-mobile-filter-toggle');
+        var sheet = document.getElementById('mobile-filter-sheet');
         if (filterBar) filterBar.classList.add('show-mobile-filters');
         if (backdrop) {
             backdrop.hidden = false;
@@ -8853,6 +8879,7 @@ window.app = {
         }
         if (btn) btn.classList.add('active');
         document.body.classList.add('mobile-filters-open');
+        if (sheet) this.focusSheet(sheet, '.mobile-filter-sheet-done');
     },
 
     closeMobileFilters: function() {
@@ -8866,6 +8893,65 @@ window.app = {
         }
         if (btn) btn.classList.remove('active');
         document.body.classList.remove('mobile-filters-open');
+        this.restoreSheetFocus(btn);
+    },
+
+    focusSheet: function(sheetEl, preferredSelector) {
+        if (!sheetEl) return;
+        this._sheetReturnFocus = document.activeElement;
+        var self = this;
+        setTimeout(function() {
+            var prefer = preferredSelector ? sheetEl.querySelector(preferredSelector) : null;
+            var nodes = sheetEl.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
+            var target = prefer || (nodes.length ? nodes[0] : sheetEl);
+            if (target && typeof target.focus === 'function') {
+                try { target.focus(); } catch (err) {}
+            }
+            self._boundSheetKeydown = function(ev) {
+                if (ev.key !== 'Tab') return;
+                var list = sheetEl.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
+                if (!list.length) return;
+                var first = list[0];
+                var last = list[list.length - 1];
+                if (ev.shiftKey && document.activeElement === first) {
+                    ev.preventDefault();
+                    last.focus();
+                } else if (!ev.shiftKey && document.activeElement === last) {
+                    ev.preventDefault();
+                    first.focus();
+                }
+            };
+            sheetEl.addEventListener('keydown', self._boundSheetKeydown);
+            self._activeSheetEl = sheetEl;
+        }, 40);
+    },
+
+    restoreSheetFocus: function(fallbackBtn) {
+        if (this._activeSheetEl && this._boundSheetKeydown) {
+            this._activeSheetEl.removeEventListener('keydown', this._boundSheetKeydown);
+        }
+        this._activeSheetEl = null;
+        this._boundSheetKeydown = null;
+        var el = this._sheetReturnFocus || fallbackBtn;
+        this._sheetReturnFocus = null;
+        if (el && typeof el.focus === 'function') {
+            try { el.focus(); } catch (err) {}
+        }
+    },
+
+    showStorageFailureUI: function(err) {
+        var banner = document.getElementById('storage-failure-banner');
+        var msg = document.getElementById('storage-failure-message');
+        if (msg) {
+            msg.innerHTML = '<strong>Browser storage unavailable</strong> — your collection cannot be loaded. Restore a JSON backup if you have one.';
+        }
+        if (banner) banner.style.display = 'flex';
+        if (typeof this.showToast === 'function') {
+            this.showToast('Storage failed to open. Use Backup & Restore if you have a file.', 'danger', 6000);
+        }
+        if (typeof reportAppError === 'function') {
+            reportAppError(err || new Error('IndexedDB init failed'), 'Browser storage', { type: 'error' });
+        }
     },
 
     toggleSelectionMoreMenu: function(event) {
@@ -8908,6 +8994,11 @@ window.app = {
         }
         if (btn) btn.classList.toggle('active', opening);
         document.body.classList.toggle('mobile-menu-open', opening);
+        if (opening) {
+            this.focusSheet(menu, '.mobile-menu-close');
+        } else {
+            this.restoreSheetFocus(btn);
+        }
     },
 
     closeMobileMenu: function() {
@@ -8924,6 +9015,7 @@ window.app = {
         }
         if (btn) btn.classList.remove('active');
         document.body.classList.remove('mobile-menu-open');
+        this.restoreSheetFocus(btn);
     },
 
     toggleViewMoreMenu: function(event) {
@@ -9557,10 +9649,10 @@ window.app = {
 
         var detailPartsHtml = '';
         var labelRowsHtml = '';
-        var borderGradient = f.type === 'mineral' ? 'linear-gradient(90deg, #6b46c1, #b794f4, #6b46c1)' : 'linear-gradient(90deg, #8b6914, #b8942e, #8b6914)';
-        var catalogColor = f.type === 'mineral' ? '#6b46c1' : '#8b6914';
-        var printBtnBackground = f.type === 'mineral' ? '#6b46c1' : '#8b6914';
-        var printBtnHover = f.type === 'mineral' ? '#b794f4' : '#b8942e';
+        var borderGradient = f.type === 'mineral' ? 'linear-gradient(90deg, #6b46c1, #b794f4, #6b46c1)' : 'linear-gradient(90deg, #7a5c12, #9a7820, #7a5c12)';
+        var catalogColor = f.type === 'mineral' ? '#6b46c1' : '#7a5c12';
+        var printBtnBackground = f.type === 'mineral' ? '#6b46c1' : '#7a5c12';
+        var printBtnHover = f.type === 'mineral' ? '#b794f4' : '#9a7820';
 
         if (f.type === 'mineral') {
             var parts = [];
@@ -10578,21 +10670,70 @@ window.app = {
                 empty.className = 'empty-state';
                 var hasAnySpecimen = fossils.some(function(f) { return f && !f.isCartItem; });
                 var filtersActive = !!(searchQ || catQ || typeQ || periodQ || (specTypeVal && specTypeVal !== ''));
-                var collectionView = !wlQ && !dreamQ && !soldQ && currentView !== 'sale' && currentView !== 'traded';
+                var saleQ = currentView === 'sale';
+                var tradedQ = currentView === 'traded';
+                var collectionView = !wlQ && !dreamQ && !soldQ && !saleQ && !tradedQ;
 
-                if (wlQ) {
+                var iconSearch = '<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>';
+                var iconPlus = '<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>';
+                var iconStar = '<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>';
+                var iconHeart = '<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>';
+                var iconCart = '<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg>';
+                var iconSold = '<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>';
+                var iconTrade = '<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 3 21 8 16 13"/><line x1="21" y1="8" x2="9" y2="8"/><polyline points="8 21 3 16 8 11"/><line x1="3" y1="16" x2="15" y2="16"/></svg>';
+
+                if (filtersActive) {
                     empty.innerHTML =
-                        '<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>' +
+                        iconSearch +
+                        '<h3>No specimens match</h3>' +
+                        '<p>Nothing in this view matches your search or filters.</p>' +
+                        '<div class="empty-state-actions">' +
+                            '<button type="button" class="btn-secondary" onclick="app.resetFiltersOnly()">Clear filters</button>' +
+                        '</div>';
+                } else if (wlQ) {
+                    empty.innerHTML =
+                        iconHeart +
                         '<h3>Wishlist is empty</h3>' +
-                        '<p>Quickly add a specimen to your wishlist above.</p>';
+                        '<p>Track specimens you want to acquire. Use the quick-add row above, or add from Collection later.</p>' +
+                        '<div class="empty-state-actions">' +
+                            '<button type="button" class="btn-secondary" onclick="document.getElementById(\'wl-quick-name\') && document.getElementById(\'wl-quick-name\').focus()">Focus quick add</button>' +
+                        '</div>';
                 } else if (dreamQ) {
                     empty.innerHTML =
-                        '<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>' +
+                        iconStar +
                         '<h3>No dream specimens yet</h3>' +
-                        '<p>Click “Add Dream Specimen” above to save something you want someday.</p>';
+                        '<p>Save superb specimens you find but can\'t buy right now — wishlist for the long term.</p>' +
+                        '<div class="empty-state-actions">' +
+                            '<button type="button" class="btn-primary" onclick="app.openDreamItemModal()">✨ Add Dream Specimen</button>' +
+                        '</div>';
+                } else if (soldQ) {
+                    empty.innerHTML =
+                        iconSold +
+                        '<h3>No sold specimens yet</h3>' +
+                        '<p>When you sell something, use <strong>More → Mark as Sold</strong> on a card. It moves here for your records.</p>' +
+                        '<div class="empty-state-actions">' +
+                            '<button type="button" class="btn-secondary" onclick="app.setView(\'false\')">Back to Collection</button>' +
+                        '</div>';
+                } else if (tradedQ) {
+                    empty.innerHTML =
+                        iconTrade +
+                        '<h3>No traded specimens yet</h3>' +
+                        '<p>Mark a specimen as traded from the card menu to keep a history of exchanges here.</p>' +
+                        '<div class="empty-state-actions">' +
+                            '<button type="button" class="btn-secondary" onclick="app.setView(\'false\')">Back to Collection</button>' +
+                        '</div>';
+                } else if (saleQ) {
+                    empty.innerHTML =
+                        iconCart +
+                        '<h3>Nothing for sale yet</h3>' +
+                        '<p>List a specimen from Collection via ownership status <strong>For Sale</strong>, or edit and set asking price.</p>' +
+                        '<div class="empty-state-actions">' +
+                            '<button type="button" class="btn-secondary" onclick="app.setView(\'false\')">Back to Collection</button>' +
+                            '<button type="button" class="btn-primary" onclick="app.openModal()">➕ Add specimen</button>' +
+                        '</div>';
                 } else if (!hasAnySpecimen && collectionView) {
                     empty.innerHTML =
-                        '<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>' +
+                        iconPlus +
                         '<h3>Add your first specimen</h3>' +
                         '<p>Specimenry stores your fossils and minerals in this browser. Start with Simple mode — name, photo, location, notes — then back up when you have a few.</p>' +
                         '<div class="empty-state-actions">' +
@@ -10600,20 +10741,14 @@ window.app = {
                             '<button type="button" class="btn-secondary" onclick="app.openBackupCenter()">📥 Backup tip</button>' +
                         '</div>' +
                         '<p class="empty-state-tip">Your data lives in this browser — <a href="#" onclick="app.openBackupCenter(); return false;">export backups</a> regularly.</p>';
-                } else if (filtersActive || hasAnySpecimen) {
-                    empty.innerHTML =
-                        '<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>' +
-                        '<h3>No specimens match</h3>' +
-                        '<p>Try clearing search or filters, or add a new specimen.</p>' +
-                        '<div class="empty-state-actions">' +
-                            '<button type="button" class="btn-secondary" onclick="app.resetFiltersOnly()">Clear filters</button>' +
-                            '<button type="button" class="btn-primary" onclick="app.openModal()">➕ Add specimen</button>' +
-                        '</div>';
                 } else {
                     empty.innerHTML =
-                        '<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>' +
+                        iconSearch +
                         '<h3>No specimens here</h3>' +
-                        '<p>Nothing in this view yet.</p>';
+                        '<p>This archive view is empty.</p>' +
+                        '<div class="empty-state-actions">' +
+                            '<button type="button" class="btn-primary" onclick="app.openModal()">➕ Add specimen</button>' +
+                        '</div>';
                 }
                 
                 grid.innerHTML = '';
@@ -10815,7 +10950,7 @@ window.app = {
                                            '</span>';
                         } else if (f.price) {
                             var priceVal = f.price + ' ' + (f.currency || 'USD');
-                            detailsHtml += '<span class="spec-micro-pill" title="Acquisition Cost: ' + escapeHtml(priceVal) + '" style="display: inline-flex; align-items: center; gap: 0.25rem; background: var(--accent-bg); border: 1px solid rgba(139, 105, 20, 0.15); padding: 0.2rem 0.5rem; border-radius: 6px; font-size: 0.7rem; font-weight: 700; color: var(--accent);">' +
+                            detailsHtml += '<span class="spec-micro-pill" title="Acquisition Cost: ' + escapeHtml(priceVal) + '" style="display: inline-flex; align-items: center; gap: 0.25rem; background: var(--accent-bg); border: 1px solid rgba(122, 92, 18, 0.15); padding: 0.2rem 0.5rem; border-radius: 6px; font-size: 0.7rem; font-weight: 700; color: var(--accent);">' +
                                                 '<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>' +
                                                 escapeHtml(priceVal) +
                                            '</span>';
@@ -11659,10 +11794,13 @@ window.app = {
 
         html += '<div class="cart-grid">';
         if (activeCartItems.length === 0) {
-            html += '  <div style="grid-column: 1 / -1; text-align: center; padding: 3rem; background: var(--bg-surface); border: 1px dashed var(--border-color); border-radius: var(--radius-md); color: var(--text-secondary);">';
-            html += '    <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round" style="opacity: 0.3; margin-bottom: 1rem;"><circle cx="9" cy="21" r="1"></circle><circle cx="20" cy="21" r="1"></circle><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"></path></svg>';
-            html += '    <p style="margin: 0; font-size: 0.95rem; font-weight: 500;">This cart is empty.</p>';
-            html += '    <p style="margin: 0.25rem 0 0; font-size: 0.8rem; opacity: 0.7;">Click "Add Draft Item" to add specimens for comparison.</p>';
+            html += '  <div class="empty-state" style="grid-column: 1 / -1;">';
+            html += '    <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="21" r="1"></circle><circle cx="20" cy="21" r="1"></circle><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"></path></svg>';
+            html += '    <h3>This draft cart is empty</h3>';
+            html += '    <p>Add draft specimens to compare prices, sizes, and photos before you buy.</p>';
+            html += '    <div class="empty-state-actions">';
+            html += '      <button type="button" class="btn-primary" onclick="app.openCartItemModal()">➕ Add Draft Item</button>';
+            html += '    </div>';
             html += '  </div>';
         } else {
             activeCartItems.forEach(function(f) {
@@ -12804,6 +12942,11 @@ window.app = {
         var foot = modal.querySelector('.welcome-landing-foot');
         if (foot) {
             foot.style.display = opts.firstVisit ? '' : 'none';
+        }
+        var stamp = document.getElementById('specimenry-version-stamp');
+        if (stamp) {
+            stamp.textContent = 'Specimenry v' + (typeof SPECIMENRY_VERSION !== 'undefined' ? SPECIMENRY_VERSION : '?') +
+                ' · ' + (typeof SPECIMENRY_BUILD_DATE !== 'undefined' ? SPECIMENRY_BUILD_DATE : '');
         }
         if (typeof modal.showModal === 'function') modal.showModal();
         else modal.setAttribute('open', '');
@@ -16434,6 +16577,10 @@ window.app = {
             document.getElementById('settings-museum-enabled').checked = localStorage.getItem('pref_museum_fields') === 'true';
             document.getElementById('settings-shop-enabled').checked = localStorage.getItem('pref_shop_fields') === 'true';
             document.getElementById('settings-storage-enabled').checked = localStorage.getItem('pref_storage_fields') === 'true';
+            var fieldOutdoorChk = document.getElementById('settings-field-outdoor');
+            if (fieldOutdoorChk) {
+                fieldOutdoorChk.checked = localStorage.getItem('pref_field_outdoor') === 'true';
+            }
             var curatorInput = document.getElementById('settings-curator-name');
             if (curatorInput && typeof SpecimenryChangeLog !== 'undefined') {
                 curatorInput.value = SpecimenryChangeLog.getActor() === 'Local curator' ? '' : SpecimenryChangeLog.getActor();
@@ -16473,29 +16620,50 @@ window.app = {
         var museumEnabled = document.getElementById('settings-museum-enabled').checked;
         var shopEnabled = document.getElementById('settings-shop-enabled').checked;
         var storageEnabled = document.getElementById('settings-storage-enabled').checked;
+        var fieldOutdoorChk = document.getElementById('settings-field-outdoor');
+        var fieldOutdoorEnabled = fieldOutdoorChk ? fieldOutdoorChk.checked : false;
+        var wasOutdoor = localStorage.getItem('pref_field_outdoor') === 'true';
 
         localStorage.setItem('pref_museum_fields', museumEnabled);
         localStorage.setItem('pref_shop_fields', shopEnabled);
         localStorage.setItem('pref_storage_fields', storageEnabled);
+        localStorage.setItem('pref_field_outdoor', fieldOutdoorEnabled);
 
         this.applySettingsVisibility();
+
+        if (fieldOutdoorEnabled && !wasOutdoor) {
+            this.showToast('Field / Outdoor mode on — high contrast & larger controls.', 'success', 3200);
+        } else if (!fieldOutdoorEnabled && wasOutdoor) {
+            this.showToast('Field / Outdoor mode off.', 'info', 2200);
+        }
     },
 
     applySettingsVisibility: function() {
         var museumEnabled = localStorage.getItem('pref_museum_fields') === 'true';
         var shopEnabled = localStorage.getItem('pref_shop_fields') === 'true';
         var storageEnabled = localStorage.getItem('pref_storage_fields') === 'true';
+        var fieldOutdoorEnabled = localStorage.getItem('pref_field_outdoor') === 'true';
 
         document.body.classList.toggle('pref-museum-active', museumEnabled);
         document.body.classList.toggle('pref-shop-active', shopEnabled);
         document.body.classList.toggle('pref-storage-active', storageEnabled);
+        document.body.classList.toggle('field-outdoor', fieldOutdoorEnabled);
+        document.documentElement.classList.toggle('field-outdoor', fieldOutdoorEnabled);
 
         var chkMuseum = document.getElementById('settings-museum-enabled');
         var chkShop = document.getElementById('settings-shop-enabled');
         var chkStorage = document.getElementById('settings-storage-enabled');
+        var chkFieldOutdoor = document.getElementById('settings-field-outdoor');
         if (chkMuseum) chkMuseum.checked = museumEnabled;
         if (chkShop) chkShop.checked = shopEnabled;
         if (chkStorage) chkStorage.checked = storageEnabled;
+        if (chkFieldOutdoor) chkFieldOutdoor.checked = fieldOutdoorEnabled;
+
+        var outdoorBadge = document.getElementById('field-outdoor-badge');
+        if (outdoorBadge) {
+            if (fieldOutdoorEnabled) outdoorBadge.removeAttribute('hidden');
+            else outdoorBadge.setAttribute('hidden', '');
+        }
 
         var mStorage = document.getElementById('mobile-link-storage');
         var mLedger = document.getElementById('mobile-link-ledger');
@@ -16516,6 +16684,16 @@ window.app = {
                 form.classList.add('simple-mode-active');
             } else {
                 form.classList.remove('simple-mode-active');
+            }
+            var catElem = document.getElementById('f-category');
+            var catRequiredMark = document.querySelector('#lbl-f-category .category-required-mark');
+            if (catElem) {
+                // Category is field-optional in Simple; required only in Advanced.
+                if (chk.checked) catElem.removeAttribute('required');
+                else catElem.setAttribute('required', '');
+            }
+            if (catRequiredMark) {
+                catRequiredMark.style.display = chk.checked ? 'none' : 'inline';
             }
             var btnSimple = document.getElementById('btn-editor-simple');
             var btnAdvanced = document.getElementById('btn-editor-advanced');
@@ -16712,7 +16890,7 @@ window.app = {
             '.path{font-size:9pt;color:#57534e;margin:0}' +
             '.row{display:flex;gap:0.25in;align-items:flex-start}' +
             'ul{margin:0;padding-left:1.1em;font-size:8.5pt;flex:1;max-height:1.6in;overflow:hidden}' +
-            'li{margin:0.05in 0}.id{font-family:ui-monospace,monospace;font-size:7.5pt;color:#8b6914;font-weight:700}' +
+            'li{margin:0.05in 0}.id{font-family:ui-monospace,monospace;font-size:7.5pt;color:#7a5c12;font-weight:700}' +
             '.qr{width:1.05in;height:1.05in;object-fit:contain;border:1px solid #d6d3d1;padding:2px}' +
             '.meta{font-size:8pt;color:#78716c}' +
             '.toolbar{position:fixed;top:12px;right:12px;display:flex;gap:8px}' +

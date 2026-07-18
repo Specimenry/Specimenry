@@ -7,6 +7,8 @@ Run once after deploying to [specimenry.online](https://specimenry.online/) (or 
 2. Add a specimen in **Simple** mode.
 3. **Database → Backup & Restore → Download backup** — toast “Backup OK”; file in Downloads.
 4. Confirm Backup center shows **Last backup OK**.
+5. About shows version stamp (`Specimenry v…`).
+6. On phone: Add to Home Screen works (PWA manifest).
 5. Mark one specimen sold/traded — uses modal (no browser `prompt`).
 
 ## Phone (Safari iOS or Chrome Android)

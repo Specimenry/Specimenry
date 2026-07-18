@@ -130,7 +130,7 @@ var SpecimenryShareCatalog = (function() {
             '<meta name="viewport" content="width=device-width, initial-scale=1">\n' +
             '<title>' + escapeHtmlAttr(title) + '</title>\n' +
             '<style>\n' +
-            ':root{--ink:#1c1917;--muted:#78716c;--paper:#faf7f2;--card:#fff;--line:#e7e5e4;--accent:#8b6914;}\n' +
+            ':root{--ink:#1c1917;--muted:#78716c;--paper:#faf7f2;--card:#fff;--line:#e7e5e4;--accent:#7a5c12;}\n' +
             '*{box-sizing:border-box}\n' +
             'body{margin:0;font-family:"Segoe UI",system-ui,sans-serif;background:linear-gradient(180deg,#f3efe6 0%,var(--paper) 40%);color:var(--ink);line-height:1.45}\n' +
             'header{padding:2.5rem 1.25rem 1.5rem;max-width:1100px;margin:0 auto}\n' +

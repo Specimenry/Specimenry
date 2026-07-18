@@ -1,70 +1,95 @@
-# Fossil Archive 🦖
+# Specimenry
 
 [![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/specimenry)
 
-A personal, high-performance web application designed for fossil collectors, sedimentologists, and paleontology enthusiasts to log, manage, and showcase their fossil specimens.
+Local-first personal database for **fossils and minerals** — catalog, field notes, labels, and collection history in one place.
 
 **Live:** [https://specimenry.online/](https://specimenry.online/) (GitHub Pages)
 
-The Fossil Archive is a fully offline-capable, local-first database built on standard web technologies (HTML, CSS, JS). All your sensitive data and images are securely stored entirely on your device using `IndexedDB`.
+No accounts and no mandatory server. Specimens, photos, and field diary trips stay in your browser via **IndexedDB**. Optional sync (Google Drive / P2P) is available; a JSON backup remains the safest portable copy.
 
-## Features ✨
+## Features
 
-- **Local-First Privacy**: No servers, no accounts, and no data tracking. Everything lives directly in your browser. See [docs/STORAGE.md](docs/STORAGE.md) for what is stored in IndexedDB vs localStorage vs optional sync.
-- **Modular codebase**: Core helpers live in `js/lib/` (DB, mineral care, provenance, filters, dictation status, errors) for safer changes on GitHub Pages without a bundler.
-- **Field Simple mode**: Name, photo, location, notes, and save — optimized for logging specimens outdoors.
-- **Offline dictation**: On-device Whisper (first download ~75 MB); badge shows when **ready offline**.
-- **Persisted filters**: Last search/filter state is restored per device.
-- **Bulk edit**: Mass-change country, formation, status, and tags for large collections.
-- **Drawer labels + QR**: From Storage Explorer, print a drawer label with contents list and a QR that filters back to that drawer.
-- **Field diary**: Trip logs (date, locality, GPS, photos) with specimen linking — Utilities → Field Diary.
-- **Shareable catalog**: Export a privacy-safe HTML catalog (no prices/storage/private docs) for collectors or museums.
-- **Mobile-First Responsive Design**: A fully responsive interface featuring a Floating Action Button (FAB) stack for critical controls, ensuring seamless use across desktop, tablet, and mobile devices.
-- **Scientific Etymology Tooltips**: Integrated paleontological dictionary that automatically annotates specimen names. Hover over roots like *saurus*, *pteryx*, or *idae* to see their scientific meanings and origins.
-- **Interactive Geological Timeline**: Each specimen features a high-fidelity timeline bar, visualizing its position in Earth's 541-million-year history (Phanerozoic Eon) relative to the Present.
-- **Stratigraphic Column Visualizer**: A vertical timeline representing the Phanerozoic Eon on your dashboard. It highlights collected geological periods, reveals gaps in your collection, and features educational tooltips, gamifying the collecting experience.
-- **Detailed Taxonomic & Geological Data**: Built-in support for intricate geological periods, epochs, stages (custom stratigraphic ages), and estimated age in millions of years (Ma).
-- **Data Insights Dashboard**: Comprehensive, dynamic charts and statistics summarizing your collection's taxonomic diversity, geographical distribution, and estimated valuation.
-- **"Sea Monsters" Theme**: Immersive visual styling with period-specific color tints and gradients for Ordovician, Devonian, and Cretaceous specimens, evoking classic paleontology documentaries.
-- **Collection vs. Wishlist**: Seamlessly manage both the fossils you currently own and the ones you are actively hunting for. Rank your wishlist intuitively using built-in **drag-and-drop** functionality.
-- **Advanced Filtering & Sorting**: Quickly search through notes and localities, or filter by taxonomy and geological age. Sort by purchase price, age, or recently added.
-- **Intelligent Image Handling**:
-  - Upload multiple photos per specimen (including seamless, client-side HEIC conversion for iPhone photos).
-  - Background image compression shrinks heavy raw photos into highly optimized thumbnails, guaranteeing a smooth and fast scrolling experience even with hundreds of cataloged items.
-- **Duplication Tool**: Streamlines data entry by allowing you to quickly copy existing fossil specimens with shared properties (location, period, etc.).
-- **Import / Export**: Full JSON backups to easily transfer your collection between devices, plus a CSV import tool to migrate existing spreadsheets into your vault.
-- **Mass Management**: Select multiple fossils to quickly delete or process batches.
+### Core
+- **Local-first privacy** — data stays on this device. See [docs/STORAGE.md](docs/STORAGE.md) for IndexedDB vs localStorage vs optional sync.
+- **Fossils & minerals** — taxonomy/geology for fossils; formula, hardness, crystal system, and care alerts for minerals.
+- **Archive views** — Collection, Wishlist, For Sale, Sold, Traded, Dream Collection, and Draft Carts (each with a clear empty state).
+- **Simple vs Advanced** — field logging with name, photo, place, notes (category optional in Simple); full curation in Advanced.
+- **Field / Outdoor mode** — Settings toggle: high contrast, larger text, and bigger tap targets for sunlight and gloves (persists on this device).
+- **PWA-ready** — install / Add to Home Screen via `manifest.webmanifest`.
 
-## Usage 📖
+### Field & workflow
+- **Offline dictation** — on-device Whisper (~75 MB first download); badge shows when ready offline.
+- **Field diary** — trip logs (date, locality, GPS, photos) with specimen linking.
+- **Persisted filters** — last search/filter state restored per device.
+- **Bulk edit** — mass-change country, formation, status, tags; link selected specimens to a trip.
+- **Change log** — local per-specimen history (what/when; optional curator name in Settings).
 
-Because the application runs entirely locally, there is no complicated backend setup required.
+### Curation & sharing
+- **Drawer labels + QR** — print drawer labels; QR filters back to that drawer.
+- **Shareable catalog** — privacy-safe HTML export and optional share link (metadata; no private prices/docs).
+- **Dashboard** — charts, map, stratigraphy, portfolio, and more.
+- **Import / export** — full JSON backup (specimens + trips); CSV import for spreadsheets.
+- **HEIC support** — iPhone photos converted client-side (best over `https://` or localhost).
 
-### Getting Started
+### Mobile
+- Bottom-sheet menu and filters, compact Archive View tabs + More, sticky Add FAB, and glove-friendly controls in Outdoor mode.
 
-1. Download or clone this repository to your computer.
-2. Open the index file: Simply double-click on `index.html` (or drag it into your browser) to launch the app.
-3. Add a Fossil: Click the **+ Add Fossil** button in the top right (or the floating action button on mobile) to log your first specimen.
-4. Upload Images: You can upload JPEGs, PNGs, WebP files, or even raw HEIC photos straight from an iPhone. The app automatically resizes and optimizes them behind the scenes.
+## Getting started
 
-*(Note: While the app is perfectly functional running purely from the `file://` protocol, you may want to serve it using a simple local HTTP server like `python -m http.server` for the most accurate behavior depending on your browser's local security policies).*
+1. Open [specimenry.online](https://specimenry.online/), **or** clone this repo and serve it locally (recommended):
 
-### Backing Up Data
-Since data is saved locally in your browser's IndexedDB, clearing site data **may delete your collection**.
+   ```bash
+   npx serve .
+   # or: python -m http.server
+   ```
+
+2. Prefer **HTTPS or localhost** over opening `index.html` via `file://` (mic, HEIC, and some APIs work more reliably).
+
+3. Tap **Add** — on a phone, Simple mode is the default for new specimens.
+
+4. After a few entries: **Database → Backup & Restore** and download a JSON file.
+
+### Backing up
+
+Clearing site data **can delete your collection**.
 
 > Your data lives in this browser — export backups regularly.
 
-* Use **Database → Backup & Restore** to download a dated `.json` file. The backup includes **specimens (with photos)** and **field diary trips**.
-* To restore, open the same panel and choose **Restore from file…**.
-* Optional Google Drive / P2P sync is separate; a JSON file is still the safest portable copy.
+- **Database → Backup & Restore** downloads a dated `.json` (specimens with photos + field diary trips).
+- Restore from the same panel.
+- Optional Drive / P2P sync is separate; keep a JSON file as your portable copy.
 
-### CSV Import
-If you currently track your collection in Excel or Google Sheets, you can export it as a CSV file and use the **Import CSV** command. The application will automatically attempt to map standard columns (like `specimen`, `category`, `period`, `price`, etc.) directly into the database.
+### CSV import
 
-### Lightweight tests
+Export a spreadsheet as CSV and use **Import CSV**. Columns such as `specimen`, `category`, `period`, and `price` are mapped automatically when possible.
 
-Open [`tests/index.html`](tests/index.html) in a browser (or visit `/tests/` when served). Covers formula parsing, provenance restriction matching, and JSON backup serialize/parse — **20 assertions**, no build step.
-- **HTML5 & Vanilla Javascript (ES5+)** - Ensuring longevity and lack of framework bloat.
-- **Vanilla CSS** - Clean, responsive UI with modern custom CSS properties.
-- **IndexedDB** - High capacity local browser storage.
-- **PapaParse** - Robust CSV parsing.
-- **heic2any** - Client-side HEIC-to-JPEG image conversions. 
+### Profiles (Settings)
+
+Enable only what you need:
+
+- Museum archival fields  
+- Commercial shop / ledger tools  
+- Physical storage mapping  
+- **Field / Outdoor mode**
+
+## Tests
+
+Open [`tests/index.html`](tests/index.html) (or `/tests/` when served). Covers formula parsing, provenance matching, and backup serialize/parse — no build step.
+
+Pre-release checklist: [docs/SMOKE.md](docs/SMOKE.md).
+
+## Stack
+
+| Piece | Role |
+|---|---|
+| HTML / CSS / vanilla JS | No bundler — works on GitHub Pages |
+| `js/lib/*` | DB, mineral care, provenance, filters, trips, errors, share catalog |
+| IndexedDB | Primary specimen + trip storage |
+| Chart.js, Leaflet, PeerJS, PapaParse | Dashboard, maps, P2P, CSV (CDN) |
+
+**Version:** v0.9.0 (2026-07-18) — also shown under About & Privacy in the app.
+
+## Support
+
+Optional tips: [ko-fi.com/specimenry](https://ko-fi.com/specimenry). Core catalog features stay free.
