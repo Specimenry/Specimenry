@@ -18,6 +18,9 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.4.7/peerjs.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
 </head>
 <body>
  
@@ -71,8 +74,23 @@
                             ⚡ Auto-Fill Scientific Data
                         </a>
 
+                        <!-- Advanced Curatorial Profiles -->
+                        <div style="padding: 0.4rem 1rem 0.2rem 1rem; font-size: 0.65rem; font-weight: 800; text-transform: uppercase; color: var(--text-secondary); letter-spacing: 0.05em;">Curator Tools</div>
+                        <a href="#" onclick="app.closeMobileMenu(); app.toggleSettingsModal(); return false;" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 1.25rem; font-size: 0.8rem; color: var(--text-primary); text-decoration: none; transition: background 0.15s;" onmouseover="this.style.background='var(--bg-warm)'" onmouseout="this.style.background='transparent'">
+                            ⚙️ App Settings & Profiles
+                        </a>
+                        <a href="#" id="mobile-link-storage" onclick="app.closeMobileMenu(); app.toggleStorageExplorerModal(); return false;" style="display: none; align-items: center; gap: 0.5rem; padding: 0.5rem 1.25rem; font-size: 0.8rem; color: var(--text-primary); text-decoration: none; transition: background 0.15s;" onmouseover="this.style.background='var(--bg-warm)'" onmouseout="this.style.background='transparent'">
+                            🗄️ Storage Drawer Explorer
+                        </a>
+                        <a href="#" id="mobile-link-ledger" onclick="app.closeMobileMenu(); app.toggleShopLedgerModal(); return false;" style="display: none; align-items: center; gap: 0.5rem; padding: 0.5rem 1.25rem; font-size: 0.8rem; color: var(--text-primary); text-decoration: none; transition: background 0.15s; border-bottom: 1px solid var(--border-color);" onmouseover="this.style.background='var(--bg-warm)'" onmouseout="this.style.background='transparent'">
+                            📊 Shop Commercial Ledger
+                        </a>
+
                         <!-- Database Section -->
                         <div style="padding: 0.4rem 1rem 0.2rem 1rem; font-size: 0.65rem; font-weight: 800; text-transform: uppercase; color: var(--text-secondary); letter-spacing: 0.05em;">Database Tools</div>
+                        <a href="#" onclick="app.closeMobileMenu(); app.toggleCloudSyncModal(); return false;" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 1.25rem; font-size: 0.8rem; color: var(--text-primary); text-decoration: none; transition: background 0.15s; font-weight: 600;" onmouseover="this.style.background='var(--bg-warm)'" onmouseout="this.style.background='transparent'">
+                            🔄 Sync Center (Cloud & P2P)
+                        </a>
                         <a href="#" onclick="app.closeMobileMenu(); app.copyLLMContext(); return false;" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 1.25rem; font-size: 0.8rem; color: var(--text-primary); text-decoration: none; transition: background 0.15s;" onmouseover="this.style.background='var(--bg-warm)'" onmouseout="this.style.background='transparent'">
                             🤖 Copy & Export for AI (LLM)
                         </a>
@@ -106,6 +124,9 @@
                         <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="opacity: 0.7; margin-left: 0.1rem; flex-shrink: 0;"><polyline points="6 9 12 15 18 9"/></svg>
                     </button>
                     <div id="db-dropdown" class="dropdown-menu" style="display: none; position: absolute; right: 0; top: 105%; background: var(--bg-surface); border: 1px solid var(--border-color); border-radius: var(--radius-md); box-shadow: var(--shadow-md); z-index: 1000; min-width: 200px; padding: 0.5rem 0;">
+                        <a href="#" onclick="app.toggleCloudSyncModal(); return false;" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.6rem 1rem; font-size: 0.8rem; color: var(--text-primary); text-decoration: none; transition: background 0.15s; font-weight: 600; border-bottom: 1px solid var(--border-color);" onmouseover="this.style.background='var(--bg-warm)'" onmouseout="this.style.background='transparent'">
+                            🔄 Sync Center (Cloud & P2P)
+                        </a>
                         <a href="#" id="btn-export" onclick="app.exportData(); return false;" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.6rem 1rem; font-size: 0.8rem; color: var(--text-primary); text-decoration: none; transition: background 0.15s;" onmouseover="this.style.background='var(--bg-warm)'" onmouseout="this.style.background='transparent'">
                             📥 Backup Database (JSON)
                         </a>
@@ -153,6 +174,15 @@
                         </a>
                         <a href="#" onclick="app.startTour(); return false;" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.6rem 1rem; font-size: 0.8rem; color: var(--text-primary); text-decoration: none; transition: background 0.15s; border-top: 1px solid var(--border-color);" onmouseover="this.style.background='var(--bg-warm)'" onmouseout="this.style.background='transparent'">
                             🙋 App Guided Tour
+                        </a>
+                        <a href="#" onclick="app.toggleSettingsModal(); return false;" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.6rem 1rem; font-size: 0.8rem; color: var(--text-primary); text-decoration: none; transition: background 0.15s; border-top: 1px solid var(--border-color);" onmouseover="this.style.background='var(--bg-warm)'" onmouseout="this.style.background='transparent'">
+                            ⚙️ App Settings & Profiles
+                        </a>
+                        <a href="#" id="desktop-link-storage" onclick="app.toggleStorageExplorerModal(); return false;" style="display: none; align-items: center; gap: 0.5rem; padding: 0.6rem 1rem; font-size: 0.8rem; color: var(--text-primary); text-decoration: none; transition: background 0.15s; border-top: 1px solid var(--border-color);" onmouseover="this.style.background='var(--bg-warm)'" onmouseout="this.style.background='transparent'">
+                            🗄️ Storage Drawer Explorer
+                        </a>
+                        <a href="#" id="desktop-link-ledger" onclick="app.toggleShopLedgerModal(); return false;" style="display: none; align-items: center; gap: 0.5rem; padding: 0.6rem 1rem; font-size: 0.8rem; color: var(--text-primary); text-decoration: none; transition: background 0.15s; border-top: 1px solid var(--border-color);" onmouseover="this.style.background='var(--bg-warm)'" onmouseout="this.style.background='transparent'">
+                            📊 Shop Commercial Ledger
                         </a>
                     </div>
                 </div>
@@ -206,6 +236,10 @@
                             <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
                             <span class="btn-text">Sold</span>
                         </button>
+                        <button type="button" id="btn-traded" class="toggle-btn" onclick="app.setView('traded')">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 3 21 8 16 13"/><line x1="21" y1="8" x2="9" y2="8"/><polyline points="8 21 3 16 8 11"/><line x1="3" y1="16" x2="15" y2="16"/></svg>
+                            <span class="btn-text">Traded</span>
+                        </button>
                         <button type="button" id="btn-sale" class="toggle-btn" onclick="app.setView('sale')">
                             <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg>
                             <span class="btn-text">For Sale</span>
@@ -227,6 +261,8 @@
                                 document.getElementById('btn-wishlist').classList.toggle('active', savedView === 'true');
                                 var btnSold = document.getElementById('btn-sold');
                                 if (btnSold) btnSold.classList.toggle('active', savedView === 'sold');
+                                var btnTraded = document.getElementById('btn-traded');
+                                if (btnTraded) btnTraded.classList.toggle('active', savedView === 'traded');
                                 var btnSale = document.getElementById('btn-sale');
                                 if (btnSale) btnSale.classList.toggle('active', savedView === 'sale');
                                 var btnCarts = document.getElementById('btn-carts');
@@ -244,13 +280,22 @@
             <!-- Row 3: Filter Dropdowns -->
             <div class="filter-row dropdowns-row">
                 <div class="form-group filter-select">
-                    <label for="filter-category">Category</label>
+                    <label for="filter-specimen-type">Type</label>
+                    <select id="filter-specimen-type" onchange="app.renderFossils()">
+                        <option value="">All Specimen Types</option>
+                        <option value="fossil">Fossils</option>
+                        <option value="mineral">Minerals</option>
+                    </select>
+                </div>
+
+                <div class="form-group filter-select">
+                    <label for="filter-category" id="lbl-filter-category">Category</label>
                     <select id="filter-category" onchange="app.renderFossils()">
                         <option value="">All Categories</option>
                     </select>
                 </div>
 
-                <div class="form-group filter-select">
+                <div class="form-group filter-select" id="filter-type-group">
                     <label for="filter-type">Fossil Type</label>
                     <select id="filter-type" onchange="app.renderFossils()">
                         <option value="">All Types</option>
@@ -258,7 +303,7 @@
                 </div>
 
                 <div class="form-group filter-select">
-                    <label for="filter-period">Period</label>
+                    <label for="filter-period" id="lbl-filter-period">Period</label>
                     <select id="filter-period" onchange="app.renderFossils()">
                         <option value="">All Periods</option>
                     </select>
@@ -414,6 +459,11 @@
 
             <div class="modal-header">
                 <h2 id="modal-title">Add New Fossil</h2>
+                <input type="checkbox" id="f-quick-add" style="display: none;">
+                <div class="editor-mode-toggle" style="display: flex; align-items: center; border: 1px solid var(--border-color); border-radius: var(--radius-sm); background: var(--bg-warm); padding: 2px; margin-right: auto; margin-left: 1.5rem; overflow: hidden; height: 28px;">
+                    <button type="button" id="btn-editor-simple" onclick="app.setEditorMode('simple')" style="border: none; border-radius: calc(var(--radius-sm) - 2px); padding: 0.2rem 0.6rem; font-size: 0.72rem; font-weight: 700; cursor: pointer; transition: all 0.2s; background: var(--bg-surface); color: var(--text-primary); height: 100%;">Simple</button>
+                    <button type="button" id="btn-editor-advanced" onclick="app.setEditorMode('advanced')" style="border: none; border-radius: calc(var(--radius-sm) - 2px); padding: 0.2rem 0.6rem; font-size: 0.72rem; font-weight: 700; cursor: pointer; transition: all 0.2s; background: transparent; color: var(--text-secondary); height: 100%;">Advanced</button>
+                </div>
                 <button type="button" class="btn-icon" aria-label="Close dialog" onclick="app.closeModal()">
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
                 </button>
@@ -424,6 +474,7 @@
                 <button type="button" class="modal-tab-btn active" onclick="app.setModalTab('classification')" id="tab-btn-classification" style="background: none; border: none; border-bottom: 2px solid var(--accent); padding: 0.85rem 1rem; font-weight: 600; color: var(--text-primary); cursor: pointer; font-size: 0.8rem; transition: all 0.2s; font-family: inherit;">🔬 Classification</button>
                 <button type="button" class="modal-tab-btn" onclick="app.setModalTab('geology')" id="tab-btn-geology" style="background: none; border: none; border-bottom: 2px solid transparent; padding: 0.85rem 1rem; font-weight: 600; color: var(--text-secondary); cursor: pointer; font-size: 0.8rem; transition: all 0.2s; font-family: inherit;">🌍 Geology & Location</button>
                 <button type="button" class="modal-tab-btn" onclick="app.setModalTab('curator')" id="tab-btn-curator" style="background: none; border: none; border-bottom: 2px solid transparent; padding: 0.85rem 1rem; font-weight: 600; color: var(--text-secondary); cursor: pointer; font-size: 0.8rem; transition: all 0.2s; font-family: inherit;">📐 Curation & Value</button>
+                <button type="button" class="modal-tab-btn" onclick="app.setModalTab('prep')" id="tab-btn-prep" style="background: none; border: none; border-bottom: 2px solid transparent; padding: 0.85rem 1rem; font-weight: 600; color: var(--text-secondary); cursor: pointer; font-size: 0.8rem; transition: all 0.2s; font-family: inherit;">🔧 Prep Log</button>
             </div>
 
             <div class="modal-body">
@@ -431,43 +482,84 @@
                     <!-- Section 1: Classification -->
                     <div id="tab-classification" class="tab-content active">
                     <div class="form-grid">
-                        <div class="form-group full-width">
+                        <div class="form-group quick-add-visible">
+                            <label for="f-type-select">Specimen Type</label>
+                            <select id="f-type-select" onchange="app.handleSpecimenTypeChange()">
+                                <option value="fossil">Fossil</option>
+                                <option value="mineral">Mineral</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group" id="f-anatomy-part-col">
+                            <label for="f-anatomy">Anatomy / Part</label>
+                            <input type="text" id="f-anatomy" placeholder="e.g. Anterior Tooth, Thoracic Vertebra, Leaf Impression...">
+                        </div>
+
+                        <div class="form-group full-width quick-add-visible">
                             <label for="f-specimen">Specimen Name *</label>
                             <div style="display: flex; gap: 0.5rem;">
-                                <input type="text" id="f-specimen" required placeholder="e.g. Megalodon" style="flex: 1;" oninput="window.app.autoSizeLookup()">
+                                <input type="text" id="f-specimen" required placeholder="e.g. Megalodon or Amethyst" style="flex: 1;" oninput="window.app.autoSizeLookup()">
                                 <button type="button" id="btn-auto-fetch-all" class="btn-primary" onclick="window.app.autoFetchAllSpecimenData(event)" title="⚡ Auto-Fetch all Taxonomy, Authority, Biology, Etymology & Coordinates" style="padding: 0.4rem 0.8rem; font-size: 0.75rem; white-space: nowrap; display: flex; align-items: center; gap: 0.35rem; background: linear-gradient(135deg, var(--accent) 0%, #3a86c8 100%); color: white; border: none; border-radius: var(--radius-sm); font-weight: 600; cursor: pointer; transition: all 0.2s ease; box-shadow: 0 4px 10px rgba(0,0,0,0.15);">
                                     ⚡ Auto-Fetch All
                                 </button>
                             </div>
                         </div>
 
-                        <div class="form-group full-width">
-                            <label for="f-authority">Taxonomic Authority / Named By</label>
-                            <input type="text" id="f-authority" placeholder="e.g. Agassiz, 1843 (Auto-filled on 'Auto-Fetch All')">
+                        <!-- Fossil Classification Fields -->
+                        <div id="fossil-class-group" class="form-contents-subgroup full-width" style="display: contents;">
+                            <div class="form-group full-width">
+                                <label for="f-authority">Taxonomic Authority / Named By</label>
+                                <input type="text" id="f-authority" placeholder="e.g. Agassiz, 1843 (Auto-filled on 'Auto-Fetch All')">
+                            </div>
+                            <div class="form-group">
+                                <label for="f-category" id="lbl-f-category">Category *</label>
+                                <select id="f-category" required></select>
+                            </div>
+                            <div class="form-group" id="group-f-type">
+                                <label for="f-type">Fossil Type</label>
+                                <select id="f-type"></select>
+                            </div>
                         </div>
 
-                        <div class="form-group full-width">
-                            <label for="f-anatomy">Anatomy / Part</label>
-                            <input type="text" id="f-anatomy" placeholder="e.g. Anterior Tooth, Thoracic Vertebra, Leaf Impression...">
+                        <!-- Mineralogical Classification Fields -->
+                        <div id="mineral-class-group" class="form-contents-subgroup full-width" style="display: none;">
+                            <div class="form-group">
+                                <label for="f-formula">Chemical Formula</label>
+                                <input type="text" id="f-formula" placeholder="e.g. SiO₂">
+                            </div>
+                            <div class="form-group">
+                                <label for="f-luster">Luster</label>
+                                <select id="f-luster">
+                                    <option value="">— Select Luster —</option>
+                                    <option value="Metallic">Metallic</option>
+                                    <option value="Submetallic">Submetallic</option>
+                                    <option value="Vitreous">Vitreous (Glassy)</option>
+                                    <option value="Pearly">Pearly</option>
+                                    <option value="Silky">Silky</option>
+                                    <option value="Adamantine">Adamantine</option>
+                                    <option value="Resinous">Resinous</option>
+                                    <option value="Greasy">Greasy / Waxy</option>
+                                    <option value="Dull">Dull / Earthy</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="f-streak">Streak</label>
+                                <input type="text" id="f-streak" placeholder="e.g. White, Red-brown">
+                            </div>
+                            <div class="form-group">
+                                <label for="f-cleavage">Cleavage</label>
+                                <input type="text" id="f-cleavage" placeholder="e.g. Perfect 3 directions, None">
+                            </div>
                         </div>
 
-                        <div class="form-group">
-                            <label for="f-category">Category *</label>
-                            <select id="f-category" required></select>
-                        </div>
-
-                        <div class="form-group">
-                            <label for="f-type">Fossil Type</label>
-                            <select id="f-type"></select>
-                        </div>
-
-                        <div class="form-group">
+                        <div class="form-group quick-add-visible">
                             <label for="f-wishlist">Ownership Status</label>
                             <select id="f-wishlist" onchange="app.toggleSalePriceField()">
                                 <option value="false">Owned</option>
                                 <option value="true">Wishlist</option>
                                 <option value="sale">For Sale</option>
                                 <option value="sold">Sold</option>
+                                <option value="traded">Traded</option>
                                 <option value="dream">Dream Specimen</option>
                             </select>
                         </div>
@@ -484,8 +576,28 @@
                             </div>
                         </div>
 
-                        <div class="form-group full-width">
-                            <label for="f-notes">Curation Notes</label>
+                        <div class="form-contents-subgroup full-width" id="group-trade-info" style="display: none; grid-column: 1 / -1;">
+                            <div class="form-grid" style="padding: 0; margin: 0; width: 100%;">
+                                <div class="form-group">
+                                    <label for="f-traded-with">Traded With</label>
+                                    <input type="text" id="f-traded-with" placeholder="e.g. Smithsonian Museum, Jane Doe">
+                                </div>
+                                <div class="form-group">
+                                    <label for="f-trade-date">Trade Date</label>
+                                    <input type="date" id="f-trade-date">
+                                </div>
+                                <div class="form-group full-width">
+                                    <label for="f-traded-for">Traded For (Items Received)</label>
+                                    <input type="text" id="f-traded-for" placeholder="e.g. Trilobite specimen, $50 store credit">
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="form-group full-width quick-add-visible">
+                            <label for="f-notes" style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+                                <span>Curation Notes</span>
+                                <button type="button" class="btn-dictate" onclick="app.toggleDictation('f-notes')" title="Dictate notes">🎙️</button>
+                            </label>
                             <textarea id="f-notes" rows="3" placeholder="Provenance details, preparation context, custom scientific information..."></textarea>
                         </div>
 
@@ -500,13 +612,23 @@
                             <textarea id="f-link" class="fossil-input" rows="2" placeholder="Paste one or more links here (separated by spaces, commas, or newlines)..." style="resize: vertical;"></textarea>
                         </div>
 
-                        <div class="form-group full-width">
-                            <label>Specimen Media (Images & Videos)</label>
-                            <div class="upload-area" onclick="document.getElementById('f-images').click()" onkeydown="if(event.key==='Enter')document.getElementById('f-images').click()" tabindex="0" role="button" aria-label="Click to upload media">
+                        <div class="form-group full-width quick-add-visible">
+                            <label style="margin-bottom: 0.5rem; display: block;">Specimen Media (Images & Videos)</label>
+                            <div class="upload-area" onclick="if(event.target.tagName !== 'BUTTON' && !event.target.closest('button')) document.getElementById('f-images').click()" onkeydown="if(event.key==='Enter' && event.target.tagName !== 'BUTTON' && !event.target.closest('button')) document.getElementById('f-images').click()" tabindex="0" role="button" aria-label="Click to upload media">
                                 <input type="file" id="f-images" accept="image/*,video/*,.heic,.heif" multiple onchange="app.handleImageUpload(event)" style="display:none;">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
-                                <span class="upload-text">Click to upload media</span>
-                                <span class="upload-hint">JPG, PNG, WEBP, MP4, WEBM · Multiple allowed</span>
+                                <span class="upload-text" style="font-weight: 600; margin-bottom: 0.25rem;">Drag & drop files or click to upload</span>
+                                <span class="upload-hint" style="margin-bottom: 0.75rem;">JPG, PNG, WEBP, MP4, WEBM · Multiple allowed</span>
+                                <div style="display: flex; gap: 0.5rem; justify-content: center; width: 100%;">
+                                    <button type="button" class="btn-primary" onclick="event.stopPropagation(); document.getElementById('f-images').click();" style="font-size: 0.75rem; padding: 0.4rem 0.8rem; display: flex; align-items: center; gap: 0.35rem; border-radius: var(--radius-sm);">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                                        Choose Files
+                                    </button>
+                                    <button type="button" class="btn-primary" onclick="event.stopPropagation(); app.openCameraCapture('standard');" style="font-size: 0.75rem; padding: 0.4rem 0.8rem; display: flex; align-items: center; gap: 0.35rem; border-radius: var(--radius-sm); background: var(--accent); border-color: var(--accent); color: var(--bg-surface);">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+                                        Take Photo
+                                    </button>
+                                </div>
                             </div>
                             <div id="image-preview" class="img-preview" aria-live="polite"></div>
                         </div>
@@ -516,38 +638,67 @@
                 <!-- Section 2: Geology & Location -->
                 <div id="tab-geology" class="tab-content">
                     <div class="form-grid">
-                        <div class="form-group">
-                            <label for="f-period">Geological Period</label>
-                            <select id="f-period" onchange="app.updateEpochs(); app.updateStratAges(); app.updateAgeSlider()"></select>
-                        </div>
-
-                        <div class="form-group">
-                            <label for="f-epoch">Epoch</label>
-                            <select id="f-epoch" onchange="app.updateStratAges()">
-                                <option value="">— Select Period First —</option>
-                            </select>
-                        </div>
-
-                        <div class="form-group">
-                            <label for="f-strat-age">Age (Stage)</label>
-                            <select id="f-strat-age">
-                                <option value="">— Select Epoch First —</option>
-                            </select>
-                        </div>
-
-                        <div class="form-group full-width">
-                            <label for="f-age">Estimated Age (Million Years Ago)</label>
-                            <div style="display: flex; gap: 1rem; align-items: center;">
-                                <input type="number" id="f-age" step="0.01" min="0" value="0" style="width: 120px;" oninput="document.getElementById('f-age-slider').value = Math.min(this.value, 541); app.updateDropdownsFromAge();">
-                                <input type="range" id="f-age-slider" min="0" max="541" value="0" step="0.1" style="flex: 1;" oninput="document.getElementById('f-age').value = this.value; app.updateDropdownsFromAge();">
+                        <!-- Fossil Geological Timeline Fields -->
+                        <div id="fossil-geology-group" class="form-contents-subgroup full-width" style="display: contents;">
+                            <div class="form-group">
+                                <label for="f-period">Geological Period</label>
+                                <select id="f-period" onchange="app.updateEpochs(); app.updateStratAges(); app.updateAgeSlider()"></select>
                             </div>
-                            <div class="slider-labels" style="margin-top: 0.25rem;">
-                                <span>Present</span>
-                                <span>541 Ma (Cambrian Base)</span>
+
+                            <div class="form-group">
+                                <label for="f-epoch">Epoch</label>
+                                <select id="f-epoch" onchange="app.updateStratAges()">
+                                    <option value="">— Select Period First —</option>
+                                </select>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="f-strat-age">Age (Stage)</label>
+                                <select id="f-strat-age">
+                                    <option value="">— Select Epoch First —</option>
+                                </select>
+                            </div>
+
+                            <div class="form-group full-width">
+                                <label for="f-age">Estimated Age (Million Years Ago)</label>
+                                <div style="display: flex; gap: 1rem; align-items: center;">
+                                    <input type="number" id="f-age" step="0.01" min="0" value="0" style="width: 120px;" oninput="document.getElementById('f-age-slider').value = Math.min(this.value, 541); app.updateDropdownsFromAge();">
+                                    <input type="range" id="f-age-slider" min="0" max="541" value="0" step="0.1" style="flex: 1;" oninput="document.getElementById('f-age').value = this.value; app.updateDropdownsFromAge();">
+                                </div>
+                                <div class="slider-labels" style="margin-top: 0.25rem;">
+                                    <span>Present</span>
+                                    <span>541 Ma (Cambrian Base)</span>
+                                </div>
                             </div>
                         </div>
 
-                        <div class="form-group">
+                        <!-- Mineralogical Crystallography Fields -->
+                        <div id="mineral-geology-group" class="form-contents-subgroup full-width" style="display: none;">
+                            <div class="form-group">
+                                <label for="f-crystal-system">Crystal System</label>
+                                <select id="f-crystal-system">
+                                    <option value="">— Select Crystal System —</option>
+                                    <option value="Isometric">Isometric (Cubic)</option>
+                                    <option value="Hexagonal">Hexagonal</option>
+                                    <option value="Trigonal">Trigonal</option>
+                                    <option value="Tetragonal">Tetragonal</option>
+                                    <option value="Orthorhombic">Orthorhombic</option>
+                                    <option value="Monoclinic">Monoclinic</option>
+                                    <option value="Triclinic">Triclinic</option>
+                                    <option value="Amorphous">Amorphous (None)</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="f-hardness">Hardness (Mohs Scale)</label>
+                                <input type="number" step="0.1" min="1" max="10" id="f-hardness" placeholder="e.g. 7.0 (Quartz)">
+                            </div>
+                            <div class="form-group full-width">
+                                <label for="f-color">Specimen Color</label>
+                                <input type="text" id="f-color" placeholder="e.g. Amethyst purple, gold-yellow metallic">
+                            </div>
+                        </div>
+
+                        <div class="form-group quick-add-visible">
                             <label for="f-country">Country of Origin</label>
                             <div style="display: flex; align-items: center; gap: 0.5rem; position: relative;">
                                 <div id="modal-flag-preview" style="min-width: 20px; text-align: center; height: 14px; display: flex; align-items: center;"></div>
@@ -555,12 +706,12 @@
                             </div>
                         </div>
 
-                        <div class="form-group">
+                        <div class="form-group quick-add-visible">
                             <label for="f-location">Precise Location</label>
                             <input type="text" id="f-location" placeholder="e.g. Kem Kem Beds">
                         </div>
 
-                        <div class="form-group full-width">
+                        <div class="form-group full-width" id="fossil-formation-col">
                             <label for="f-formation">Geological Formation</label>
                             <input type="text" id="f-formation" placeholder="e.g. Hell Creek Formation">
                         </div>
@@ -578,6 +729,31 @@
                         <div class="form-group full-width" style="display: flex; flex-direction: row; align-items: center; gap: 0.65rem; border-top: 1px dashed var(--border-color); padding-top: 1rem; margin-top: 0.5rem;">
                             <input type="checkbox" id="f-self-found" style="width: 18px; height: 18px; cursor: pointer; accent-color: var(--accent);">
                             <label for="f-self-found" style="margin: 0; cursor: pointer; white-space: nowrap; font-size: 0.85rem; font-weight: 500;">Field Discovery / Self Found</label>
+                        </div>
+
+                        <!-- Physical Storage Fields -->
+                        <div class="form-contents-subgroup full-width storage-field-group" style="display: contents;">
+                            <div style="grid-column: 1 / -1; border-top: 1px dashed var(--border-color); padding-top: 1rem; margin-top: 0.5rem; margin-bottom: 0.5rem;">
+                                <span style="font-size: 0.8rem; font-weight: 700; color: var(--accent); display: flex; align-items: center; gap: 0.25rem;">
+                                    🗄️ Physical Storage Mapping
+                                </span>
+                            </div>
+                            <div class="form-group">
+                                <label for="f-storage-room">Room / Location</label>
+                                <input type="text" id="f-storage-room" placeholder="e.g. Basement Vault, Main Office">
+                            </div>
+                            <div class="form-group">
+                                <label for="f-storage-unit">Cabinet / Shelf</label>
+                                <input type="text" id="f-storage-unit" placeholder="e.g. Cabinet A, Shelf 3">
+                            </div>
+                            <div class="form-group">
+                                <label for="f-storage-drawer">Drawer / Tray</label>
+                                <input type="text" id="f-storage-drawer" placeholder="e.g. Drawer 4, Tray B">
+                            </div>
+                            <div class="form-group">
+                                <label for="f-storage-box">Box / Slot ID</label>
+                                <input type="text" id="f-storage-box" placeholder="e.g. Box 12, Slot A-5">
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -617,22 +793,31 @@
                             <input type="number" step="0.1" id="f-weight" placeholder="e.g. 500">
                         </div>
 
-                        <div class="form-group full-width">
-                            <label for="f-animal-size">Animal Size (Estimated Meters)</label>
-                            <div style="display: flex; align-items: center; gap: 0.75rem;">
-                                <input type="number" step="0.1" id="f-animal-size" placeholder="e.g. 15.0" style="width: 120px;">
-                                <span class="upload-hint" style="margin:0;">Length or Height of the entire animal.</span>
+                        <!-- Fossil Curation Fields -->
+                        <div id="fossil-curation-group" class="form-contents-subgroup full-width" style="display: contents;">
+                            <div class="form-group full-width">
+                                <label for="f-animal-size">Animal Size (Estimated Meters)</label>
+                                <div style="display: flex; align-items: center; gap: 0.75rem;">
+                                    <input type="number" step="0.1" id="f-animal-size" placeholder="e.g. 15.0" style="width: 120px;">
+                                    <span class="upload-hint" style="margin:0;">Length or Height of the entire animal.</span>
+                                </div>
                             </div>
-                        </div>
 
-                        <div class="form-group full-width">
-                            <label for="f-description">Prehistoric Animal Biology / Description</label>
-                            <textarea id="f-description" rows="3" placeholder="Description of the prehistoric animal (Auto-filled on 'Auto-Fetch All')..." style="resize: vertical;"></textarea>
-                        </div>
+                            <div class="form-group full-width">
+                                <label for="f-description" style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+                                    <span>Prehistoric Animal Biology / Description</span>
+                                    <button type="button" class="btn-dictate" onclick="app.toggleDictation('f-description')" title="Dictate description">🎙️</button>
+                                </label>
+                                <textarea id="f-description" rows="3" placeholder="Description of the prehistoric animal (Auto-filled on 'Auto-Fetch All')..." style="resize: vertical;"></textarea>
+                            </div>
 
-                        <div class="form-group full-width">
-                            <label for="f-etymology">Etymology / Translation</label>
-                            <textarea id="f-etymology" rows="2" placeholder="e.g. 'Great tooth' in Greek..."></textarea>
+                            <div class="form-group full-width">
+                                <label for="f-etymology" style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+                                    <span>Etymology / Translation</span>
+                                    <button type="button" class="btn-dictate" onclick="app.toggleDictation('f-etymology')" title="Dictate etymology">🎙️</button>
+                                </label>
+                                <textarea id="f-etymology" rows="2" placeholder="e.g. 'Great tooth' in Greek..."></textarea>
+                            </div>
                         </div>
 
                         <div class="form-group">
@@ -672,7 +857,10 @@
                         </div>
 
                         <div class="form-group full-width">
-                            <label for="f-restoration">Restoration & Preparation Details</label>
+                            <label for="f-restoration" style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+                                <span id="lbl-f-restoration">Restoration & Preparation Details</span>
+                                <button type="button" class="btn-dictate" onclick="app.toggleDictation('f-restoration')" title="Dictate restoration details">🎙️</button>
+                            </label>
                             <textarea id="f-restoration" rows="2" placeholder="e.g. ~5% crack-fill on matrix, minor composite work, consolidated using Paraloid B-72..."></textarea>
                         </div>
 
@@ -709,7 +897,7 @@
                                 </label>
                                 <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; font-size: 0.8rem; font-weight: 500;">
                                     <input type="checkbox" id="treat-scribe" class="cond-checkbox" style="width: 16px; height: 16px; accent-color: var(--accent);">
-                                    <span>⛏️ Mechanically cleaned (Air scribe / needle)</span>
+                                    <span id="lbl-treat-scribe">⛏️ Mechanically cleaned (Air scribe / needle)</span>
                                 </label>
                                 <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; font-size: 0.8rem; font-weight: 500;">
                                     <input type="checkbox" id="treat-cyano" class="cond-checkbox" style="width: 16px; height: 16px; accent-color: var(--accent);">
@@ -721,14 +909,149 @@
                                 </label>
                             </div>
                         </div>
+
+                        <!-- Museum Archival Fields -->
+                        <div class="form-contents-subgroup full-width museum-field-group" style="display: contents;">
+                            <div style="grid-column: 1 / -1; border-top: 1px dashed var(--border-color); padding-top: 1rem; margin-top: 0.5rem; margin-bottom: 0.5rem;">
+                                <span style="font-size: 0.8rem; font-weight: 700; color: var(--accent); display: flex; align-items: center; gap: 0.25rem;">
+                                    🏛️ Museum Archival Records
+                                </span>
+                            </div>
+                            <div class="form-group">
+                                <label for="f-accession-code">Accession ID / Number</label>
+                                <input type="text" id="f-accession-code" placeholder="e.g. MUS-2026-0089">
+                            </div>
+                            <div class="form-group">
+                                <label for="f-donor-source">Donor / Source / Field Collector</label>
+                                <input type="text" id="f-donor-source" placeholder="e.g. Dr. Alan Grant / Gift">
+                            </div>
+                            <div class="form-group">
+                                <label for="f-exhibit-status">Display Case / Exhibit Status</label>
+                                <input type="text" id="f-exhibit-status" placeholder="e.g. Display Case 3, Vault Storage">
+                            </div>
+                            <div class="form-group full-width">
+                                <label for="f-condition-report" style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+                                    <span>Conservation & Condition Report</span>
+                                    <button type="button" class="btn-dictate" onclick="app.toggleDictation('f-condition-report')" title="Dictate condition report">🎙️</button>
+                                </label>
+                                <textarea id="f-condition-report" rows="2" placeholder="Conservation details, consolidant applications, structural stability logs..."></textarea>
+                            </div>
+                        </div>
+
+                        <!-- Commercial Shop Fields -->
+                        <div class="form-contents-subgroup full-width shop-field-group" style="display: contents;">
+                            <div style="grid-column: 1 / -1; border-top: 1px dashed var(--border-color); padding-top: 1rem; margin-top: 0.5rem; margin-bottom: 0.5rem;">
+                                <span style="font-size: 0.8rem; font-weight: 700; color: var(--accent); display: flex; align-items: center; gap: 0.25rem;">
+                                    🏷️ Commercial Shop Valuation
+                                </span>
+                            </div>
+                            <div class="form-group">
+                                <label for="f-cogs">Purchase Cost (COGS)</label>
+                                <div class="input-with-select">
+                                    <input type="number" step="0.01" id="f-cogs" class="fossil-input" placeholder="e.g. 50" oninput="app.calculateMargin()">
+                                    <select id="f-cogs-currency" class="fossil-input">
+                                        <option value="USD">USD</option>
+                                        <option value="EUR">EUR</option>
+                                        <option value="SEK">SEK</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label for="f-sold-price">Sold Price</label>
+                                <div class="input-with-select">
+                                    <input type="number" step="0.01" id="f-sold-price" class="fossil-input" placeholder="e.g. 150" oninput="app.calculateMargin()">
+                                    <select id="f-sold-currency" class="fossil-input">
+                                        <option value="USD">USD</option>
+                                        <option value="EUR">EUR</option>
+                                        <option value="SEK">SEK</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="form-group full-width">
+                                <div style="font-size: 0.75rem; font-weight: 600; color: var(--text-secondary); background: var(--bg-warm); padding: 0.5rem; border-radius: var(--radius-sm); border: 1px dashed var(--border-color); display: inline-flex; align-items: center; gap: 0.5rem;">
+                                    <span>Projected/Realized Net Profit: <strong id="shop-margin-profit">$0.00</strong></span>
+                                    <span>•</span>
+                                    <span>Margin: <strong id="shop-margin-percent">0.0%</strong></span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Section 4: Preparation Log -->
+                    <div id="tab-prep" class="tab-content">
+                        <div class="form-grid">
+                            <div class="form-group">
+                                <label for="f-prep-status">Preparation Status</label>
+                                <select id="f-prep-status">
+                                    <option value="Not Started">Not Started</option>
+                                    <option value="In Progress">In Progress</option>
+                                    <option value="Completed">Completed</option>
+                                    <option value="Not Required">Not Required</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="f-prep-hours">Total Hours Spent</label>
+                                <input type="number" id="f-prep-hours" placeholder="e.g. 15" min="0" step="0.5">
+                            </div>
+                            <div class="form-group full-width">
+                                <label>Tools Used</label>
+                                <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 0.5rem; margin-top: 0.25rem;">
+                                    <label style="font-weight: 500; cursor: pointer; display: flex; align-items: center; gap: 6px;"><input type="checkbox" name="prep-tools" value="Air Scribe"> Air Scribe</label>
+                                    <label style="font-weight: 500; cursor: pointer; display: flex; align-items: center; gap: 6px;"><input type="checkbox" name="prep-tools" value="Micro-blaster"> Micro-blaster</label>
+                                    <label style="font-weight: 500; cursor: pointer; display: flex; align-items: center; gap: 6px;"><input type="checkbox" name="prep-tools" value="Pneumatic Pen"> Pneumatic Pen</label>
+                                    <label style="font-weight: 500; cursor: pointer; display: flex; align-items: center; gap: 6px;"><input type="checkbox" name="prep-tools" value="Manual Needles"> Manual Needles</label>
+                                    <label style="font-weight: 500; cursor: pointer; display: flex; align-items: center; gap: 6px;"><input type="checkbox" name="prep-tools" value="Chemical Bath"> Chemical Bath</label>
+                                </div>
+                            </div>
+                            <div class="form-group full-width">
+                                <label for="f-prep-stabilizers">Stabilizers Applied</label>
+                                <input type="text" id="f-prep-stabilizers" placeholder="e.g. Paraloid B-72, Butvar B-76, Cyanoacrylate">
+                            </div>
+                            <div class="form-group full-width">
+                                <label for="f-prep-notes" style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+                                    <span>Preparation Notes</span>
+                                    <button type="button" class="btn-dictate" onclick="app.toggleDictation('f-prep-notes')" title="Dictate preparation notes">🎙️</button>
+                                </label>
+                                <textarea id="f-prep-notes" rows="2" placeholder="Describe extraction details, rock hardness, fractures encountered..."></textarea>
+                            </div>
+
+                            <!-- Preparation Milestones Section -->
+                            <div class="form-contents-subgroup full-width" style="display: contents;">
+                                <div style="grid-column: 1 / -1; border-top: 1px dashed var(--border-color); padding-top: 1rem; margin-top: 0.5rem; margin-bottom: 0.5rem;">
+                                    <span style="font-size: 0.8rem; font-weight: 700; color: var(--accent); display: flex; align-items: center; gap: 0.25rem;">
+                                        📸 Preparation Milestones (Visual Progress)
+                                    </span>
+                                </div>
+                                <div class="form-group full-width" style="background: var(--bg-warm); padding: 1rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color); box-sizing: border-box;">
+                                    <div style="display: grid; grid-template-columns: 1fr 1fr auto; gap: 0.5rem; align-items: flex-end; margin-bottom: 0.75rem;">
+                                        <div>
+                                            <label for="f-prep-milestone-label" style="font-size: 0.75rem;">Milestone Description</label>
+                                            <input type="text" id="f-prep-milestone-label" placeholder="e.g. In the matrix, 50% prepped, Complete">
+                                        </div>
+                                        <div>
+                                            <label for="f-prep-milestone-date" style="font-size: 0.75rem;">Date</label>
+                                            <input type="date" id="f-prep-milestone-date">
+                                        </div>
+                                        <div style="display: flex; gap: 0.25rem;">
+                                            <button type="button" class="btn-secondary" onclick="app.triggerMilestoneUpload()" style="font-size: 0.75rem; padding: 0.4rem 0.6rem; height: 34px;">Choose Photo</button>
+                                            <button type="button" class="btn-primary" onclick="app.triggerMilestoneCamera()" style="font-size: 0.75rem; padding: 0.4rem 0.6rem; height: 34px; background: var(--accent);">📷 Snap</button>
+                                            <input type="file" id="f-prep-milestone-file" accept="image/*" style="display: none;" onchange="app.handleMilestoneUpload(event)">
+                                        </div>
+                                    </div>
+                                    <div id="prep-milestones-preview" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 0.5rem;">
+                                        <!-- Milestone thumbnails will render here -->
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
         </div>
 
         <div class="modal-footer">
-                <button type="button" class="btn-secondary" onclick="app.closeModal()">Cancel</button>
-                <button type="submit" class="btn-primary">Save Fossil</button>
+                                <button type="button" class="btn-secondary" onclick="app.closeModal()">Cancel</button>
+                                <button type="submit" id="fossil-submit-btn" class="btn-primary">Save Fossil</button>
             </div>
         </form>
     </dialog>
@@ -961,16 +1284,16 @@
 
                 <!-- "Day in the Life" Behavior Simulator -->
                 <div class="deep-dive-simulator-card">
-                    <h3 class="simulator-title">🦖 "Day in the Life" Prehistoric Simulator</h3>
-                    <p class="simulator-desc">Run interactive, educational behavior simulations to see how this specimen survived in its ancient habitat.</p>
+                    <h3 id="deep-dive-simulator-title" class="simulator-title">🦖 "Day in the Life" Prehistoric Simulator</h3>
+                    <p id="deep-dive-simulator-desc" class="simulator-desc">Run interactive, educational behavior simulations to see how this specimen survived in its ancient habitat.</p>
                     <div class="simulator-actions">
-                        <button type="button" class="sim-btn hunt" onclick="app.simulatePrehistoricBehavior('hunt')">
+                        <button type="button" id="deep-dive-sim-btn-hunt" class="sim-btn hunt" onclick="app.simulatePrehistoricBehavior('hunt')">
                             <span class="sim-icon">🔍</span> Forage & Hunt
                         </button>
-                        <button type="button" class="sim-btn defend" onclick="app.simulatePrehistoricBehavior('defend')">
+                        <button type="button" id="deep-dive-sim-btn-defend" class="sim-btn defend" onclick="app.simulatePrehistoricBehavior('defend')">
                             <span class="sim-icon">🛡️</span> Defend Territory
                         </button>
-                        <button type="button" class="sim-btn rest" onclick="app.simulatePrehistoricBehavior('rest')">
+                        <button type="button" id="deep-dive-sim-btn-rest" class="sim-btn rest" onclick="app.simulatePrehistoricBehavior('rest')">
                             <span class="sim-icon">⏳</span> Rest & Conserve
                         </button>
                     </div>
@@ -985,37 +1308,57 @@
             <div class="deep-dive-dossier-pane">
                 <!-- Ecosystem & Climate Dossier -->
                 <div class="deep-dive-card">
-                    <h3 class="dossier-card-title"><span class="dossier-icon">🌍</span> Paleo-Environment & Ecosystem</h3>
+                    <h3 id="deep-dive-dossier-title" class="dossier-card-title"><span class="dossier-icon">🌍</span> Paleo-Environment & Ecosystem</h3>
                     <div class="dossier-grid">
                         <div class="dossier-item">
-                            <span class="dossier-label">Ancient Climate</span>
+                            <span id="deep-dive-label-climate" class="dossier-label">Ancient Climate</span>
                             <span id="deep-dive-dossier-climate" class="dossier-val">Warm Cretaceous Coastal Forest</span>
                         </div>
                         <div class="dossier-item">
-                            <span class="dossier-label">Average Temperature</span>
+                            <span id="deep-dive-label-temp" class="dossier-label">Average Temperature</span>
                             <span id="deep-dive-dossier-temp" class="dossier-val">22°C (Warm & Humid)</span>
                         </div>
                         <div class="dossier-item">
-                            <span class="dossier-label">Atmospheric Oxygen Level</span>
+                            <span id="deep-dive-label-oxygen" class="dossier-label">Atmospheric Oxygen Level</span>
                             <span id="deep-dive-dossier-oxygen" class="dossier-val">150% of Modern levels (30%)</span>
                         </div>
                         <div class="dossier-item">
-                            <span class="dossier-label">Co-Existing Life</span>
+                            <span id="deep-dive-label-coexisting" class="dossier-label">Co-Existing Life</span>
                             <span id="deep-dive-dossier-coexisting" class="dossier-val">Triceratops, Edmontosaurus, Pteranodon</span>
                         </div>
                     </div>
                     <div class="dossier-notes-box">
-                        <span class="dossier-label">Ecology & Feeding Niche</span>
+                        <span id="deep-dive-label-ecology" class="dossier-label">Ecology & Feeding Niche</span>
                         <p id="deep-dive-dossier-ecology" class="dossier-notes">Active marine apex predator hunting ammonites...</p>
                     </div>
                 </div>
 
                 <!-- Anatomical Superpowers & Functions -->
                 <div class="deep-dive-card">
-                    <h3 class="dossier-card-title"><span class="dossier-icon">📐</span> Preserved Anatomy & Adaptation</h3>
+                    <h3 id="deep-dive-anatomy-title" class="dossier-card-title"><span class="dossier-icon">📐</span> Preserved Anatomy & Adaptation</h3>
                     <div class="anatomy-box">
                         <span id="deep-dive-anatomy-part" class="anatomy-part-label">Preserved Part: Tooth</span>
                         <p id="deep-dive-anatomy-desc" class="anatomy-desc">Exhibits heavy serrated borders optimized for tearing flesh and crushing bone...</p>
+                    </div>
+                </div>
+
+                <!-- Fossil Preparation Tracker -->
+                <div class="deep-dive-card" id="deep-dive-prep-card" style="display: none;">
+                    <h3 class="dossier-card-title"><span class="dossier-icon">🔧</span> Fossil Preparation & Matrix</h3>
+                    <div style="display: flex; flex-direction: column; gap: 0.75rem;">
+                        <div class="prep-stats-row" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.5rem; font-size: 0.8rem; background: var(--bg-warm); padding: 0.6rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
+                            <div><strong>Prep Status:</strong> <span id="dd-prep-status">-</span></div>
+                            <div><strong>Hours Invested:</strong> <span id="dd-prep-hours">0 hrs</span></div>
+                            <div style="grid-column: span 2;"><strong>Tools:</strong> <span id="dd-prep-tools">-</span></div>
+                            <div style="grid-column: span 2;"><strong>Stabilizers:</strong> <span id="dd-prep-stabilizers">-</span></div>
+                        </div>
+                        <div id="dd-prep-visual-container" style="display: flex; flex-direction: column; gap: 0.5rem;">
+                            <!-- Slider or timeline gets dynamically injected here -->
+                        </div>
+                        <div id="dd-prep-notes-box" style="display: none; margin-top: 0.5rem; border-top: 1px dashed var(--border-color); padding-top: 0.5rem;">
+                            <span class="dossier-label">Preparation Notes</span>
+                            <p id="dd-prep-notes-content" style="font-size: 0.8rem; line-height: 1.35; color: var(--text-secondary); margin-top: 0.25rem; font-style: italic;"></p>
+                        </div>
                     </div>
                 </div>
 
@@ -1070,12 +1413,14 @@
             </p>
             
             <div style="background: var(--bg-warm); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 0.75rem; margin-bottom: 1rem; font-family: monospace; font-size: 0.75rem; color: var(--text-primary); overflow-x: auto; white-space: nowrap;">
-                <strong>Headers:</strong> Specimen Name | Category | Period | Epoch | Stage | Size | Unit | Price | Currency | Notes | Wishlist | Sold | Dream
+                <strong>Headers:</strong> Specimen Name | Type | Category | Period | Epoch | Stage | Formula | Crystal System | Hardness | Luster | Streak | Cleavage | Color | Size | Unit | Price | Wishlist | Sold | Dream
             </div>
 
             <ul style="margin: 0 0 1rem 1.25rem; padding: 0; display: flex; flex-direction: column; gap: 0.35rem;">
-                <li><strong>Required:</strong> <code>Specimen Name</code> (or <code>Name</code>) to identify the fossil.</li>
-                <li><strong>Taxonomy & Origin:</strong> <code>Category</code>, <code>Geological Period</code>, <code>Epoch</code>, <code>Stage</code>, <code>Country</code>, <code>Location</code>, and <code>Formation</code>.</li>
+                <li><strong>Required:</strong> <code>Specimen Name</code> (or <code>Name</code>) to identify the specimen.</li>
+                <li><strong>Specimen Type:</strong> <code>Type</code> (set to <code>fossil</code> or <code>mineral</code>). Defaults to fossil.</li>
+                <li><strong>Mineral Fields:</strong> <code>Formula</code>, <code>Crystal System</code>, <code>Hardness</code> (Mohs scale), <code>Luster</code>, <code>Streak</code>, <code>Cleavage</code>, <code>Color</code>.</li>
+                <li><strong>Fossil Taxonomy & Origin:</strong> <code>Category</code>, <code>Geological Period</code>, <code>Epoch</code>, <code>Stage</code>, <code>Country</code>, <code>Location</code>, and <code>Formation</code>.</li>
                 <li><strong>Status Flags:</strong> Mark items as <code>Is Wishlist</code>, <code>Is Sold</code>, or <code>Is Dream</code> with <code>true</code> or <code>false</code>.</li>
                 <li><strong>Valuation & Size:</strong> Numeric values for <code>Size</code>, <code>Weight</code>, <code>Price</code>, and <code>Sale Price</code>.</li>
             </ul>
@@ -1176,7 +1521,7 @@
                     </div>
 
                     <div class="form-group full-width">
-                        <label>Specimen Media (Images & Videos)</label>
+                        <label style="margin-bottom: 0.5rem; display: block;">Specimen Media (Images & Videos)</label>
                         <div style="display: flex; flex-direction: column; gap: 0.65rem;">
                             <!-- Paste URL input -->
                             <div style="display: flex; gap: 0.5rem;">
@@ -1184,11 +1529,20 @@
                                 <button type="button" class="btn-secondary" onclick="app.addCartPhotoUrl()" style="padding: 0 1rem; height: 38px;">Add URL</button>
                             </div>
                             <!-- Upload file button -->
-                            <div class="upload-area" onclick="document.getElementById('cart-f-photo-file-multiple').click()" style="border: 1px dashed var(--border-color); padding: 1rem; border-radius: var(--radius-sm); background: var(--bg-warm); text-align: center; cursor: pointer; transition: border-color 0.2s;">
+                            <div class="upload-area" onclick="if(event.target.tagName !== 'BUTTON' && !event.target.closest('button')) document.getElementById('cart-f-photo-file-multiple').click()" style="border: 1px dashed var(--border-color); padding: 1.25rem 1rem; border-radius: var(--radius-sm); background: var(--bg-warm); text-align: center; cursor: pointer; transition: border-color 0.2s;">
                                 <input type="file" id="cart-f-photo-file-multiple" accept="image/*,video/*,.heic,.heif" multiple onchange="app.handleCartMultipleImagesUpload(event)" style="display: none;">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom: 0.25rem; opacity: 0.6;"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
-                                <div style="font-size: 0.75rem; font-weight: 600; color: var(--text-secondary);">Click to upload images/videos</div>
-                                <div style="font-size: 0.65rem; color: var(--text-secondary); opacity: 0.8; margin-top: 0.1rem;">Multiple files allowed</div>
+                                <div style="font-size: 0.75rem; font-weight: 600; color: var(--text-secondary); margin-bottom: 0.5rem;">Click to upload images/videos</div>
+                                <div style="display: flex; gap: 0.5rem; justify-content: center; width: 100%;">
+                                    <button type="button" class="btn-primary" onclick="event.stopPropagation(); document.getElementById('cart-f-photo-file-multiple').click();" style="font-size: 0.75rem; padding: 0.35rem 0.75rem; display: flex; align-items: center; gap: 0.25rem; border-radius: var(--radius-sm);">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                                        Choose Files
+                                    </button>
+                                    <button type="button" class="btn-primary" onclick="event.stopPropagation(); app.openCameraCapture('cart');" style="font-size: 0.75rem; padding: 0.35rem 0.75rem; display: flex; align-items: center; gap: 0.25rem; border-radius: var(--radius-sm); background: var(--accent); border-color: var(--accent); color: var(--bg-surface);">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+                                        Take Photo
+                                    </button>
+                                </div>
                             </div>
                             <!-- Preview container -->
                             <div id="cart-images-preview-container" style="display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.25rem;"></div>
@@ -1196,7 +1550,10 @@
                     </div>
 
                     <div class="form-group full-width">
-                        <label for="cart-f-notes">Curator Notes / Details</label>
+                        <label for="cart-f-notes" style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+                            <span>Curator Notes / Details</span>
+                            <button type="button" class="btn-dictate" onclick="app.toggleDictation('cart-f-notes')" title="Dictate notes">🎙️</button>
+                        </label>
                         <textarea id="cart-f-notes" rows="3" placeholder="Describe quality, weathering, defects, seller information..."></textarea>
                     </div>
                 </div>
@@ -1261,7 +1618,7 @@
                     </div>
 
                     <div class="form-group full-width">
-                        <label>Specimen Media (Images & Videos)</label>
+                        <label style="margin-bottom: 0.5rem; display: block;">Specimen Media (Images & Videos)</label>
                         <div style="display: flex; flex-direction: column; gap: 0.65rem;">
                             <!-- Paste URL input -->
                             <div style="display: flex; gap: 0.5rem;">
@@ -1269,11 +1626,20 @@
                                 <button type="button" class="btn-secondary" onclick="app.addDreamPhotoUrl()" style="padding: 0 1rem; height: 38px;">Add URL</button>
                             </div>
                             <!-- Upload file button -->
-                            <div class="upload-area" onclick="document.getElementById('dream-f-photo-file-multiple').click()" style="border: 1px dashed var(--border-color); padding: 1rem; border-radius: var(--radius-sm); background: var(--bg-warm); text-align: center; cursor: pointer; transition: border-color 0.2s;">
+                            <div class="upload-area" onclick="if(event.target.tagName !== 'BUTTON' && !event.target.closest('button')) document.getElementById('dream-f-photo-file-multiple').click()" style="border: 1px dashed var(--border-color); padding: 1.25rem 1rem; border-radius: var(--radius-sm); background: var(--bg-warm); text-align: center; cursor: pointer; transition: border-color 0.2s;">
                                 <input type="file" id="dream-f-photo-file-multiple" accept="image/*,video/*,.heic,.heif" multiple onchange="app.handleDreamMultipleImagesUpload(event)" style="display: none;">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom: 0.25rem; opacity: 0.6;"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
-                                <div style="font-size: 0.75rem; font-weight: 600; color: var(--text-secondary);">Click to upload images/videos</div>
-                                <div style="font-size: 0.65rem; color: var(--text-secondary); opacity: 0.8; margin-top: 0.1rem;">Multiple files allowed</div>
+                                <div style="font-size: 0.75rem; font-weight: 600; color: var(--text-secondary); margin-bottom: 0.5rem;">Click to upload images/videos</div>
+                                <div style="display: flex; gap: 0.5rem; justify-content: center; width: 100%;">
+                                    <button type="button" class="btn-primary" onclick="event.stopPropagation(); document.getElementById('dream-f-photo-file-multiple').click();" style="font-size: 0.75rem; padding: 0.35rem 0.75rem; display: flex; align-items: center; gap: 0.25rem; border-radius: var(--radius-sm);">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                                        Choose Files
+                                    </button>
+                                    <button type="button" class="btn-primary" onclick="event.stopPropagation(); app.openCameraCapture('dream');" style="font-size: 0.75rem; padding: 0.35rem 0.75rem; display: flex; align-items: center; gap: 0.25rem; border-radius: var(--radius-sm); background: var(--accent); border-color: var(--accent); color: var(--bg-surface);">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+                                        Take Photo
+                                    </button>
+                                </div>
                             </div>
                             <!-- Preview container -->
                             <div id="dream-images-preview-container" style="display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.25rem;"></div>
@@ -1281,7 +1647,10 @@
                     </div>
 
                     <div class="form-group full-width">
-                        <label for="dream-f-notes">Curator Notes / Details</label>
+                        <label for="dream-f-notes" style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+                            <span>Curator Notes / Details</span>
+                            <button type="button" class="btn-dictate" onclick="app.toggleDictation('dream-f-notes')" title="Dictate notes">🎙️</button>
+                        </label>
                         <textarea id="dream-f-notes" rows="3" placeholder="Describe why this specimen is superb, quality, weathering, defects..."></textarea>
                     </div>
                 </div>
@@ -1338,6 +1707,309 @@
                 <button type="submit" class="btn-primary">Submit Report</button>
             </div>
         </form>
+    </dialog>
+
+    <!-- Camera Modal -->
+    <dialog id="camera-modal" style="width: 95%; max-width: 500px; border: 1px solid var(--border-color); border-radius: var(--radius-md); background: var(--bg-surface); padding: 1.5rem; box-shadow: var(--shadow-lg); color: var(--text-primary); outline: none;">
+        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 0.75rem; margin-bottom: 1.25rem;">
+            <h2 style="font-size: 1.1rem; font-weight: 700; margin: 0; display: flex; align-items: center; gap: 0.5rem;">📷 Take Photo</h2>
+            <button type="button" class="btn-icon" aria-label="Close dialog" onclick="app.closeCameraCapture()" style="border: none; background: transparent; color: var(--text-secondary); cursor: pointer; display: flex; align-items: center; justify-content: center; padding: 0.25rem; border-radius: 50%;">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 1rem; margin-bottom: 1.5rem;">
+            <!-- Viewport for camera -->
+            <div id="camera-viewport-container" style="position: relative; width: 100%; aspect-ratio: 4 / 3; background: #000; border-radius: var(--radius-sm); overflow: hidden; display: flex; align-items: center; justify-content: center; border: 1px solid var(--border-color);">
+                <video id="camera-video" autoplay playsinline style="width: 100%; height: 100%; object-fit: cover;"></video>
+                <canvas id="camera-canvas" style="display: none; width: 100%; height: 100%; object-fit: cover;"></canvas>
+                <div id="camera-loading" style="position: absolute; color: #fff; font-size: 0.8rem; display: none; align-items: center; gap: 0.5rem; background: rgba(0,0,0,0.7); padding: 0.5rem 1rem; border-radius: var(--radius-sm); z-index: 10;">
+                    <div class="spinner" style="width: 16px; height: 16px; border: 2px solid rgba(255,255,255,0.1); border-top-color: #fff; border-radius: 50%; animation: spin 1s linear infinite;"></div>
+                    <span>Initializing camera...</span>
+                </div>
+            </div>
+
+            <!-- Device Selector -->
+            <div class="form-group" id="camera-device-group" style="display: none; margin-bottom: 0.5rem;">
+                <label for="camera-device-select" style="font-size: 0.75rem; margin-bottom: 0.25rem;">Select Camera</label>
+                <select id="camera-device-select" style="width: 100%; font-size: 0.8rem;" onchange="app.changeCameraDevice(this.value)"></select>
+            </div>
+        </div>
+
+        <div class="modal-footer" style="display: flex; justify-content: space-between; align-items: center; border-top: 1px solid var(--border-color); padding-top: 0.75rem;">
+            <div>
+                <button type="button" class="btn-secondary" onclick="app.closeCameraCapture()">Cancel</button>
+            </div>
+            <div style="display: flex; gap: 0.5rem;">
+                <!-- States buttons -->
+                <button type="button" id="btn-camera-capture" class="btn-primary" onclick="app.captureCameraSnapshot()" style="display: flex; align-items: center; gap: 0.35rem;">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3"/></svg>
+                    Capture
+                </button>
+                <button type="button" id="btn-camera-retake" class="btn-secondary" onclick="app.retakeCameraSnapshot()" style="display: none; align-items: center; gap: 0.35rem;">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
+                    Retake
+                </button>
+                <button type="button" id="btn-camera-save" class="btn-primary" onclick="app.saveCameraSnapshot()" style="display: none; align-items: center; gap: 0.35rem;">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                    Use Photo
+                </button>
+            </div>
+        </div>
+    </dialog>
+
+    <!-- Cloud Sync Modal -->
+    <dialog id="cloud-sync-modal" style="width: 95%; max-width: 500px; border: 1px solid var(--border-color); border-radius: var(--radius-md); background: var(--bg-surface); padding: 1.5rem; box-shadow: var(--shadow-lg); color: var(--text-primary); outline: none;">
+        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 0.75rem; margin-bottom: 1rem;">
+            <h2 style="font-size: 1.1rem; font-weight: 700; margin: 0; display: flex; align-items: center; gap: 0.5rem;">🔄 Specimenry Sync Center</h2>
+            <button type="button" class="btn-icon" aria-label="Close dialog" onclick="app.toggleCloudSyncModal()" style="border: none; background: transparent; color: var(--text-secondary); cursor: pointer; display: flex; align-items: center; justify-content: center; padding: 0.25rem; border-radius: 50%;">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+        </div>
+
+        <!-- Sync Tab Switcher -->
+        <div style="display: flex; gap: 0.5rem; border-bottom: 1px solid var(--border-color); padding-bottom: 0.5rem; margin-bottom: 1.25rem;">
+            <button type="button" id="btn-sync-tab-cloud" onclick="app.setSyncTab('cloud')" style="flex: 1; padding: 0.5rem; border: none; background: transparent; border-bottom: 2px solid var(--accent); font-weight: 700; font-size: 0.8rem; cursor: pointer; color: var(--text-primary); transition: all 0.2s;">☁️ Cloud (Drive)</button>
+            <button type="button" id="btn-sync-tab-p2p" onclick="app.setSyncTab('p2p')" style="flex: 1; padding: 0.5rem; border: none; background: transparent; border-bottom: 2px solid transparent; font-weight: 500; font-size: 0.8rem; cursor: pointer; color: var(--text-secondary); transition: all 0.2s;">📲 Direct P2P</button>
+        </div>
+
+        <!-- Panel 1: Cloud Sync (Google Drive) -->
+        <div id="panel-sync-cloud" style="display: flex; flex-direction: column; gap: 1.25rem; margin-bottom: 1.5rem;">
+            <p style="font-size: 0.8rem; line-height: 1.4; color: var(--text-secondary); margin: 0;">
+                Synchronize your database automatically in the background across all your devices using your personal Google Drive account.
+            </p>
+
+            <!-- Status Indicator -->
+            <div id="sync-status-card" style="display: flex; align-items: center; gap: 0.75rem; padding: 0.75rem 1rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color); background: var(--bg-warm);">
+                <div id="sync-status-dot" style="width: 10px; height: 10px; border-radius: 50%; background: #94a3b8;"></div>
+                <div style="flex: 1;">
+                    <div id="sync-status-text" style="font-size: 0.8rem; font-weight: 700; color: var(--text-primary);">Not Connected</div>
+                    <div id="sync-status-details" style="font-size: 0.65rem; color: var(--text-secondary); margin-top: 0.05rem;">Connect to begin backup.</div>
+                </div>
+            </div>
+
+            <!-- Configuration / Client ID Setup -->
+            <div id="sync-config-area">
+                <div class="form-group" style="margin-bottom: 0.5rem;">
+                    <label for="gdrive-client-id">Google OAuth Client ID</label>
+                    <input type="text" id="gdrive-client-id" placeholder="Paste your 72-character client ID here..." style="width: 100%; font-size: 0.8rem; font-family: monospace;">
+                </div>
+                
+                <!-- Quick Accordion/Help Guide -->
+                <details style="border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 0.5rem; background: var(--bg-warm); cursor: pointer; transition: all 0.2s;">
+                    <summary style="font-size: 0.725rem; font-weight: 700; color: var(--accent); outline: none; list-style: none; display: flex; align-items: center; gap: 0.25rem;">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+                        How to get a Client ID? (Free, 2 mins)
+                    </summary>
+                    <div style="font-size: 0.7rem; color: var(--text-secondary); line-height: 1.4; margin-top: 0.5rem; padding-left: 0.25rem; display: flex; flex-direction: column; gap: 0.4rem; cursor: default;" onclick="event.stopPropagation();">
+                        <div>1. Visit the <a href="https://console.cloud.google.com/" target="_blank" style="color: var(--accent); font-weight: 600;">Google Cloud Console</a>.</div>
+                        <div>2. Create a Project, go to **Credentials**, and select **Create Credentials** &rarr; **OAuth client ID**.</div>
+                        <div>3. Set Application Type to **Web application**.</div>
+                        <div>4. Add authorized origins in Google Console:
+                            <code id="sync-authorized-origin-hint" style="display:block; background:rgba(0,0,0,0.05); padding:0.2rem; border-radius:3px; margin:0.25rem 0; word-break:break-all;">http://localhost</code>
+                            *(or your own custom GitHub Pages site domain)*
+                        </div>
+                        <div>5. Save, copy the resulting Client ID string, and paste it above!</div>
+                    </div>
+                </details>
+            </div>
+
+            <!-- Action buttons while connected -->
+            <div id="sync-active-actions" style="display: none; flex-direction: column; gap: 0.5rem;">
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;">
+                    <button type="button" class="btn-primary" onclick="app.syncWithGoogleDrive('sync')" style="display: flex; align-items: center; justify-content: center; gap: 0.35rem; font-size: 0.75rem; padding: 0.5rem;">
+                        🔄 Sync Now
+                    </button>
+                    <button type="button" class="btn-secondary" onclick="app.disconnectGoogleDrive()" style="display: flex; align-items: center; justify-content: center; gap: 0.35rem; font-size: 0.75rem; padding: 0.5rem;">
+                        🔌 Disconnect
+                    </button>
+                </div>
+                <details style="border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 0.5rem; background: var(--bg-warm); cursor: pointer;">
+                    <summary style="font-size: 0.7rem; font-weight: 600; color: var(--text-secondary); display: flex; align-items: center; gap: 0.25rem;">🛠️ Advanced Cloud Tools</summary>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-top: 0.5rem;" onclick="event.stopPropagation();">
+                        <button type="button" class="btn-secondary" onclick="app.syncWithGoogleDrive('push')" style="font-size: 0.65rem; padding: 0.4rem; font-weight: 600;">
+                            ⬆️ Force Push to Cloud
+                        </button>
+                        <button type="button" class="btn-secondary" onclick="app.syncWithGoogleDrive('pull')" style="font-size: 0.65rem; padding: 0.4rem; font-weight: 600;">
+                            ⬇️ Force Pull from Cloud
+                        </button>
+                    </div>
+                </details>
+            </div>
+        </div>
+
+        <!-- Panel 2: Direct Sync (WebRTC P2P) -->
+        <div id="panel-sync-p2p" style="display: none; flex-direction: column; gap: 1.25rem; margin-bottom: 1.5rem;">
+            <p style="font-size: 0.8rem; line-height: 1.4; color: var(--text-secondary); margin: 0;">
+                Direct device-to-device synchronization. Sync your local collection instantly with another device in the same room. No accounts required.
+            </p>
+
+            <!-- P2P Status Indicator -->
+            <div id="p2p-status-card" style="display: flex; align-items: center; gap: 0.75rem; padding: 0.75rem 1rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color); background: var(--bg-warm);">
+                <div id="p2p-status-dot" style="width: 10px; height: 10px; border-radius: 50%; background: #94a3b8; transition: all 0.3s;"></div>
+                <div style="flex: 1;">
+                    <div id="p2p-status-text" style="font-size: 0.8rem; font-weight: 700; color: var(--text-primary);">P2P Offline</div>
+                    <div id="p2p-status-details" style="font-size: 0.65rem; color: var(--text-secondary); margin-top: 0.05rem;">Initialize to connect to network.</div>
+                </div>
+            </div>
+
+            <!-- Host Area (Sync Code & QR Code) -->
+            <div id="p2p-host-area" style="display: none; flex-direction: column; align-items: center; gap: 0.75rem; border: 1px solid var(--border-color); padding: 1rem; border-radius: var(--radius-sm); background: var(--bg-surface);">
+                <span style="font-size: 0.75rem; font-weight: 600; color: var(--text-primary);">Your Sync Code:</span>
+                <div id="p2p-sync-code" style="font-size: 1.25rem; font-weight: 800; color: var(--accent); letter-spacing: 0.2em; font-family: monospace; background: var(--bg-warm); padding: 0.35rem 1rem; border-radius: 4px; border: 1px dashed var(--border-color);">------</div>
+                <div id="p2p-qr-wrapper" style="width: 180px; height: 180px; display: flex; align-items: center; justify-content: center; background: white; padding: 10px; border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
+                    <img id="p2p-qr-img" style="max-width: 100%; max-height: 100%; object-fit: contain;" src="" alt="Signaling QR Code" />
+                </div>
+                <span style="font-size: 0.65rem; color: var(--text-secondary); text-align: center;">Scan this QR code with the other device, or enter the code above manually.</span>
+            </div>
+
+            <!-- Join Area (Enter code or Scan camera) -->
+            <div id="p2p-join-area" style="display: none; flex-direction: column; gap: 0.75rem;">
+                <div class="form-group" style="margin: 0;">
+                    <label for="p2p-target-code" style="margin-bottom: 0.25rem; font-size: 0.75rem; font-weight: 600;">Enter Remote Sync Code</label>
+                    <div style="display: flex; gap: 0.5rem;">
+                        <input type="text" id="p2p-target-code" placeholder="e.g. 12A4B8" style="flex: 1; font-size: 0.8rem; font-family: monospace; text-transform: uppercase;">
+                        <button type="button" class="btn-primary" onclick="app.connectToPeer()" style="font-size: 0.75rem; padding: 0.4rem 1rem;">Connect</button>
+                    </div>
+                </div>
+
+                <!-- QR Scanner Area -->
+                <div id="p2p-scanner-container" style="display: none; flex-direction: column; gap: 0.5rem; border: 1px dashed var(--accent); padding: 0.75rem; border-radius: var(--radius-sm); background: var(--bg-warm);">
+                    <div id="p2p-qr-scanner-mount" style="width: 100%; overflow: hidden; border-radius: var(--radius-sm); background: #000;"></div>
+                    <span style="font-size: 0.65rem; color: var(--text-secondary); text-align: center;">Point camera at another device's QR code.</span>
+                </div>
+
+                <button type="button" id="btn-p2p-scanner-toggle" class="btn-secondary" onclick="app.toggleP2PScanner()" style="display: flex; align-items: center; justify-content: center; gap: 0.35rem; font-size: 0.75rem; padding: 0.5rem; width: 100%;">
+                    📷 Scan QR Code
+                </button>
+            </div>
+        </div>
+
+        <div class="modal-footer" style="display: flex; justify-content: flex-end; gap: 0.5rem; border-top: 1px solid var(--border-color); padding-top: 0.75rem;">
+            <button type="button" class="btn-secondary" onclick="app.toggleCloudSyncModal()">Close</button>
+            <button type="button" id="btn-sync-connect" class="btn-primary" onclick="app.connectGoogleDrive()" style="display: flex; align-items: center; gap: 0.35rem;">
+                🔌 Connect Account
+            </button>
+            <button type="button" id="btn-p2p-init" class="btn-primary" onclick="app.initP2PConnection()" style="display: none; align-items: center; gap: 0.35rem;">
+                🔌 Initialize P2P Sync
+            </button>
+        </div>
+    </dialog>
+
+    <!-- App Settings & Profiles Modal -->
+    <dialog id="settings-modal" style="width: 95%; max-width: 500px; border: 1px solid var(--border-color); border-radius: var(--radius-md); background: var(--bg-surface); padding: 1.5rem; box-shadow: var(--shadow-lg); color: var(--text-primary); outline: none;">
+        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 0.75rem; margin-bottom: 1rem;">
+            <h2 style="font-size: 1.1rem; font-weight: 700; margin: 0; display: flex; align-items: center; gap: 0.5rem;">⚙️ App Settings & Profiles</h2>
+            <button type="button" class="btn-icon" aria-label="Close dialog" onclick="app.toggleSettingsModal()" style="border: none; background: transparent; color: var(--text-secondary); cursor: pointer; display: flex; align-items: center; justify-content: center; padding: 0.25rem; border-radius: 50%;">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 1.25rem; margin-bottom: 1.5rem;">
+            <p style="font-size: 0.8rem; line-height: 1.4; color: var(--text-secondary); margin: 0;">
+                Customize your curation workflow. Enable advanced layout profiles to unlock specialized museum accession fields, retail/financial shop parameters, or physical collection cabinet tracking.
+            </p>
+
+            <div style="display: flex; flex-direction: column; gap: 0.75rem;">
+                <label style="display: flex; align-items: flex-start; gap: 0.75rem; padding: 0.75rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color); background: var(--bg-warm); cursor: pointer;">
+                    <input type="checkbox" id="settings-museum-enabled" onchange="app.saveSettings()" style="width: 18px; height: 18px; margin-top: 0.1rem; accent-color: var(--accent);">
+                    <div>
+                        <span style="display: block; font-size: 0.85rem; font-weight: 700; color: var(--text-primary);">🏛️ Museum Archival Tools</span>
+                        <span style="display: block; font-size: 0.7rem; color: var(--text-secondary); margin-top: 0.15rem;">Unlocks Accession Number, Donor/Source, Exhibition Casing location, and conservation condition reports.</span>
+                    </div>
+                </label>
+
+                <label style="display: flex; align-items: flex-start; gap: 0.75rem; padding: 0.75rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color); background: var(--bg-warm); cursor: pointer;">
+                    <input type="checkbox" id="settings-shop-enabled" onchange="app.saveSettings()" style="width: 18px; height: 18px; margin-top: 0.1rem; accent-color: var(--accent);">
+                    <div>
+                        <span style="display: block; font-size: 0.85rem; font-weight: 700; color: var(--text-primary);">🏷️ Commercial Shop Tools</span>
+                        <span style="display: block; font-size: 0.7rem; color: var(--text-secondary); margin-top: 0.15rem;">Unlocks purchase cost (COGS), sold margins, and commercial ledger reports under the utilities menu.</span>
+                    </div>
+                </label>
+
+                <label style="display: flex; align-items: flex-start; gap: 0.75rem; padding: 0.75rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color); background: var(--bg-warm); cursor: pointer;">
+                    <input type="checkbox" id="settings-storage-enabled" onchange="app.saveSettings()" style="width: 18px; height: 18px; margin-top: 0.1rem; accent-color: var(--accent);">
+                    <div>
+                        <span style="display: block; font-size: 0.85rem; font-weight: 700; color: var(--text-primary);">🗄️ Physical Storage Mapping</span>
+                        <span style="display: block; font-size: 0.7rem; color: var(--text-secondary); margin-top: 0.15rem;">Unlocks Room, Cabinet/Shelf, Drawer, and Box mappings, enabling the visual storage drawer explorer.</span>
+                    </div>
+                </label>
+            </div>
+        </div>
+        <div class="modal-footer" style="display: flex; justify-content: flex-end; border-top: 1px solid var(--border-color); padding-top: 0.75rem;">
+            <button type="button" class="btn-primary" onclick="app.toggleSettingsModal()">Done</button>
+        </div>
+    </dialog>
+
+    <!-- Physical Storage Explorer Modal -->
+    <dialog id="storage-explorer-modal" style="width: 95%; max-width: 600px; border: 1px solid var(--border-color); border-radius: var(--radius-md); background: var(--bg-surface); padding: 1.5rem; box-shadow: var(--shadow-lg); color: var(--text-primary); outline: none;">
+        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 0.75rem; margin-bottom: 1rem;">
+            <h2 style="font-size: 1.1rem; font-weight: 700; margin: 0; display: flex; align-items: center; gap: 0.5rem;">🗄️ Physical Storage Explorer</h2>
+            <button type="button" class="btn-icon" aria-label="Close dialog" onclick="app.toggleStorageExplorerModal()" style="border: none; background: transparent; color: var(--text-secondary); cursor: pointer; display: flex; align-items: center; justify-content: center; padding: 0.25rem; border-radius: 50%;">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+        </div>
+        <div style="max-height: 400px; overflow-y: auto; padding-right: 0.5rem;">
+            <p style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 1rem; line-height: 1.4;">
+                Browse your collection by physical locations. Click on any Cabinet or Drawer level to filter the main collection layout.
+            </p>
+            <div id="storage-explorer-tree" style="font-size: 0.85rem; display: flex; flex-direction: column; gap: 0.5rem;">
+                <!-- Populated dynamically via JS -->
+            </div>
+        </div>
+        <div class="modal-footer" style="display: flex; justify-content: flex-end; border-top: 1px solid var(--border-color); padding-top: 0.75rem; margin-top: 1rem;">
+            <button type="button" class="btn-secondary" onclick="app.toggleStorageExplorerModal()">Close</button>
+        </div>
+    </dialog>
+
+    <!-- Commercial Shop Ledger Modal -->
+    <dialog id="shop-ledger-modal" style="width: 95%; max-width: 750px; border: 1px solid var(--border-color); border-radius: var(--radius-md); background: var(--bg-surface); padding: 1.5rem; box-shadow: var(--shadow-lg); color: var(--text-primary); outline: none;">
+        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 0.75rem; margin-bottom: 1rem;">
+            <h2 style="font-size: 1.1rem; font-weight: 700; margin: 0; display: flex; align-items: center; gap: 0.5rem;">📊 Shop Commercial Ledger</h2>
+            <button type="button" class="btn-icon" aria-label="Close dialog" onclick="app.toggleShopLedgerModal()" style="border: none; background: transparent; color: var(--text-secondary); cursor: pointer; display: flex; align-items: center; justify-content: center; padding: 0.25rem; border-radius: 50%;">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 1rem; max-height: 450px; overflow-y: auto; padding-right: 0.5rem;">
+            <!-- Financial summary grid -->
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 0.75rem; margin-bottom: 0.5rem;">
+                <div style="background: var(--bg-warm); border: 1px solid var(--border-color); padding: 0.75rem; border-radius: var(--radius-sm);">
+                    <span style="font-size: 0.65rem; text-transform: uppercase; color: var(--text-secondary); font-weight: 700;">Total Acquisition (COGS)</span>
+                    <span id="ledger-total-cost" style="display: block; font-size: 1.1rem; font-weight: 800; color: var(--text-primary); margin-top: 0.25rem;">$0.00</span>
+                </div>
+                <div style="background: var(--bg-warm); border: 1px solid var(--border-color); padding: 0.75rem; border-radius: var(--radius-sm);">
+                    <span style="font-size: 0.65rem; text-transform: uppercase; color: var(--text-secondary); font-weight: 700;">Total Sales Revenue</span>
+                    <span id="ledger-total-sales" style="display: block; font-size: 1.1rem; font-weight: 800; color: var(--text-primary); margin-top: 0.25rem;">$0.00</span>
+                </div>
+                <div style="background: var(--bg-warm); border: 1px solid var(--border-color); padding: 0.75rem; border-radius: var(--radius-sm);">
+                    <span style="font-size: 0.65rem; text-transform: uppercase; color: var(--text-secondary); font-weight: 700;">Total Net Profit</span>
+                    <span id="ledger-total-profit" style="display: block; font-size: 1.1rem; font-weight: 800; color: var(--accent); margin-top: 0.25rem;">$0.00</span>
+                </div>
+                <div style="background: var(--bg-warm); border: 1px solid var(--border-color); padding: 0.75rem; border-radius: var(--radius-sm);">
+                    <span style="font-size: 0.65rem; text-transform: uppercase; color: var(--text-secondary); font-weight: 700;">Average Profit Margin</span>
+                    <span id="ledger-avg-margin" style="display: block; font-size: 1.1rem; font-weight: 800; color: var(--text-primary); margin-top: 0.25rem;">0.0%</span>
+                </div>
+            </div>
+            
+            <table style="width: 100%; border-collapse: collapse; font-size: 0.8rem; text-align: left;">
+                <thead>
+                    <tr style="border-bottom: 2px solid var(--border-color);">
+                        <th style="padding: 0.5rem;">Specimen Name</th>
+                        <th style="padding: 0.5rem;">Status</th>
+                        <th style="padding: 0.5rem; text-align: right;">Cost (COGS)</th>
+                        <th style="padding: 0.5rem; text-align: right;">Retail / Sold</th>
+                        <th style="padding: 0.5rem; text-align: right;">Net Profit</th>
+                        <th style="padding: 0.5rem; text-align: right;">Margin</th>
+                    </tr>
+                </thead>
+                <tbody id="ledger-table-body">
+                    <!-- Populated dynamically via JS -->
+                </tbody>
+            </table>
+        </div>
+        <div class="modal-footer" style="display: flex; justify-content: flex-end; gap: 0.5rem; border-top: 1px solid var(--border-color); padding-top: 0.75rem; margin-top: 1rem;">
+            <button type="button" class="btn-primary" onclick="app.generateShopLedgerReport()" style="margin-right: auto; display: flex; align-items: center; gap: 0.35rem;">🖨️ Export Report</button>
+            <button type="button" class="btn-secondary" onclick="app.toggleShopLedgerModal()">Close</button>
+        </div>
     </dialog>
 
     <script src="js/app.js"></script>

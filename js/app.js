@@ -27,6 +27,34 @@ var FOSSIL_TYPES = [
     "Other"
 ];
 
+var MINERAL_GROUPS = [
+    "Silicates",
+    "Carbonates",
+    "Sulfates",
+    "Halides",
+    "Oxides",
+    "Sulfides",
+    "Phosphates",
+    "Native Elements",
+    "Organic Minerals"
+];
+
+var CRYSTAL_SYSTEMS = [
+    "Isometric",
+    "Hexagonal",
+    "Trigonal",
+    "Tetragonal",
+    "Orthorhombic",
+    "Monoclinic",
+    "Triclinic",
+    "Amorphous"
+];
+
+function formatChemicalFormula(formula) {
+    if (!formula) return '';
+    return formula.replace(/(\d+)/g, '<sub>$1</sub>');
+}
+
 var PERIODS_AND_EPOCHS = {
     "Cenozoic Era": {
         "Quaternary": ["Holocene", "Pleistocene"],
@@ -177,6 +205,11 @@ function hexToRgb(hex) {
         return [(c>>16)&255, (c>>8)&255, c&255].join(',');
     }
     return '127,127,127';
+}
+
+function formatChemicalFormula(formula) {
+    if (!formula) return '';
+    return formula.replace(/(\d+)/g, '<sub>$1</sub>');
 }
 
 function getFlagHtml(countryName) {
@@ -588,6 +621,10 @@ function annotateSpecimenName(rawName, fossil) {
     if (!rawName) return '';
     var safeName = escapeHtml(rawName);
     
+    if (fossil && fossil.type === 'mineral') {
+        return safeName;
+    }
+    
     var authHtml = '';
     if (fossil && fossil.authority) {
         var cleanAuth = fossil.authority.trim();
@@ -874,37 +911,101 @@ function getAllFossils() {
     });
 }
 
-function addFossil(fossil) {
+function addFossil(fossil, options) {
+    var keep = options && options.keepTimestamps;
+    if (!keep) {
+        if (!fossil.createdAt) {
+            fossil.createdAt = Date.now();
+        }
+        fossil.updatedAt = Date.now();
+    } else {
+        if (!fossil.createdAt) fossil.createdAt = Date.now();
+        if (!fossil.updatedAt) fossil.updatedAt = Date.now();
+    }
     return withStore('readwrite', function(store, resolve, reject) {
         var request = store.add(fossil);
-        request.onsuccess = function() { fossilsCacheLoaded = false; resolve(); };
+        request.onsuccess = function() { 
+            fossilsCacheLoaded = false; 
+            resolve(); 
+            if (!keep && window.app && typeof window.app.autoPushCloud === 'function') {
+                window.app.autoPushCloud();
+            }
+        };
         request.onerror = function() { reject(request.error); };
     });
 }
 
-function updateFossil(fossil) {
+function updateFossil(fossil, options) {
+    var keep = options && options.keepTimestamps;
+    if (!keep) {
+        if (!fossil.createdAt) {
+            fossil.createdAt = Date.now();
+        }
+        fossil.updatedAt = Date.now();
+    } else {
+        if (!fossil.createdAt) fossil.createdAt = Date.now();
+        if (!fossil.updatedAt) fossil.updatedAt = Date.now();
+    }
     return withStore('readwrite', function(store, resolve, reject) {
         var request = store.put(fossil);
-        request.onsuccess = function() { fossilsCacheLoaded = false; resolve(); };
+        request.onsuccess = function() { 
+            fossilsCacheLoaded = false; 
+            resolve(); 
+            if (!keep && window.app && typeof window.app.autoPushCloud === 'function') {
+                window.app.autoPushCloud();
+            }
+        };
         request.onerror = function() { reject(request.error); };
     });
 }
 
 function deleteFossil(id) {
+    var deletedIds = [];
+    try {
+        deletedIds = JSON.parse(localStorage.getItem('fossil_deleted_ids') || '[]');
+    } catch(e) {}
+    if (deletedIds.indexOf(id) === -1) {
+        deletedIds.push(id);
+        localStorage.setItem('fossil_deleted_ids', JSON.stringify(deletedIds));
+    }
+
     return withStore('readwrite', function(store, resolve, reject) {
         var request = store.delete(id);
-        request.onsuccess = function() { fossilsCacheLoaded = false; resolve(); };
+        request.onsuccess = function() { 
+            fossilsCacheLoaded = false; 
+            resolve(); 
+            if (window.app && typeof window.app.autoPushCloud === 'function') {
+                window.app.autoPushCloud();
+            }
+        };
         request.onerror = function() { reject(request.error); };
     });
 }
 
 function deleteMultipleFossils(ids) {
+    var deletedIds = [];
+    try {
+        deletedIds = JSON.parse(localStorage.getItem('fossil_deleted_ids') || '[]');
+    } catch(e) {}
+    ids.forEach(function(id) {
+        if (deletedIds.indexOf(id) === -1) {
+            deletedIds.push(id);
+        }
+    });
+    localStorage.setItem('fossil_deleted_ids', JSON.stringify(deletedIds));
+
     return initDB().then(function(db) {
         return new Promise(function(resolve, reject) {
             var tx = db.transaction('fossils', 'readwrite');
             var store = tx.objectStore('fossils');
             tx.onerror = function(e) { reject(e); };
-            tx.oncomplete = function() { fossilsCacheLoaded = false; resolve(); };
+            tx.oncomplete = function() { 
+                fossilsCacheLoaded = false; 
+                resolve(); 
+                if (window.app && typeof window.app.autoPushCloud === 'function') {
+                    window.app.autoPushCloud();
+                }
+            };
             ids.forEach(function(id) { store.delete(id); });
         });
     });
@@ -955,7 +1056,21 @@ function normalizeCSVRow(row) {
 
     mapped.specimen   = keyMap['specimen'] || keyMap['specimen name'] || keyMap['name'] || keyMap['fossil'] || keyMap['fossil name'] || '';
     mapped.anatomy    = keyMap['anatomy'] || keyMap['part'] || '';
-    mapped.category   = keyMap['category'] || keyMap['type'] || keyMap['fossil type'] || keyMap['type of fossil'] || '';
+    mapped.category   = keyMap['category'] || keyMap['type'] || keyMap['fossil type'] || keyMap['type of fossil'] || keyMap['mineral group'] || keyMap['group'] || '';
+    mapped.type       = keyMap['type'] || keyMap['specimentype'] || keyMap['specimen type'] || 'fossil';
+    if (mapped.type.toLowerCase().trim() === 'mineral' || keyMap['formula'] || keyMap['crystalsystem'] || keyMap['hardness']) {
+        mapped.type = 'mineral';
+    } else {
+        mapped.type = 'fossil';
+    }
+
+    mapped.formula       = keyMap['formula'] || keyMap['chemicalformula'] || keyMap['chemical formula'] || '';
+    mapped.crystalSystem = keyMap['crystalsystem'] || keyMap['crystal system'] || '';
+    mapped.hardness      = keyMap['hardness'] || keyMap['mohs'] || keyMap['mohs hardness'] || '';
+    mapped.luster        = keyMap['luster'] || keyMap['optical luster'] || '';
+    mapped.streak        = keyMap['streak'] || '';
+    mapped.cleavage      = keyMap['cleavage'] || '';
+    mapped.color         = keyMap['color'] || '';
 
     var wl = (keyMap['iswishlist'] || keyMap['wishlist'] || keyMap['is wishlist'] || '').toLowerCase();
     mapped.isWishlist  = (wl === 'true' || wl === '1' || wl === 'yes');
@@ -1176,6 +1291,7 @@ var fossilsCacheLoaded = false;
 var selectedFossils = new Set();
 var expandedTaxonomyIds = new Set();
 var currentImages = [];
+var currentMilestones = [];
 var currentView = localStorage.getItem('current_view') || 'false'; // 'false' = Collection, 'true' = Wishlist
 var isStatsOpen = false;
 var isAutoEnhanceActive = localStorage.getItem('photo_auto_enhance') === 'true';
@@ -1252,6 +1368,10 @@ function fetchExchangeRates() {
 }
 
 window.addEventListener('DOMContentLoaded', function() {
+    // Apply curation profile settings immediately to prevent visual flashing
+    if (window.app && typeof window.app.applySettingsVisibility === 'function') {
+        window.app.applySettingsVisibility();
+    }
     // Sync active view classes immediately to prevent visual flashing
     try {
         var savedView = localStorage.getItem('current_view') || 'false';
@@ -1379,14 +1499,87 @@ window.addEventListener('DOMContentLoaded', function() {
     fetchExchangeRates();
     initDB().then(function() {
         checkAndSeedFromServer().then(function() {
+            // Apply settings visibility and initialize autocompletes
+            if (window.app && typeof window.app.applySettingsVisibility === 'function') {
+                window.app.applySettingsVisibility();
+            }
+            if (window.app && typeof window.app.initAllAutocompletes === 'function') {
+                window.app.initAllAutocompletes();
+            }
             var savedView = localStorage.getItem('current_view') || 'false';
             window.app.setView(savedView, true);
             // Run background check for bloated images 2 seconds after load
             setTimeout(optimizeExistingDatabase, 2000);
             // Automatic ID Migration (UUID -> Catalog) 1 second after load
             setTimeout(migrateToCatalogIds, 1000);
-            // Automatic Background Data Enrichment 3 seconds after load
+            // Automatic Background Background Data Enrichment 3 seconds after load
             setTimeout(enrichDatabaseInBackground, 3000);
+            
+            // Auto sync on load if connected to Google Drive
+            if (window.app && typeof window.app.autoSyncOnLoad === 'function') {
+                window.app.autoSyncOnLoad();
+            }
+
+            // Dynamically show the sync authorized origin hint in sync instructions
+            var originHint = document.getElementById('sync-authorized-origin-hint');
+            if (originHint) {
+                var currentOrigin = window.location.origin;
+                if (currentOrigin !== 'http://localhost' && currentOrigin !== 'http://127.0.0.1') {
+                    originHint.innerHTML = 'http://localhost<br>' + currentOrigin;
+                } else {
+                    originHint.innerHTML = currentOrigin;
+                }
+            }
+
+            // Check for WebRTC sync parameter
+            try {
+                var urlParams = new URLSearchParams(window.location.search);
+                var connectId = urlParams.get('connect');
+                if (connectId) {
+                    var newUrl = window.location.protocol + "//" + window.location.host + window.location.pathname;
+                    window.history.replaceState({path: newUrl}, '', newUrl);
+
+                    setTimeout(function() {
+                        if (window.app) {
+                            window.app.toggleCloudSyncModal();
+                            window.app.setSyncTab('p2p');
+                            window.app.initP2PConnection();
+                            setTimeout(function() {
+                                var input = document.getElementById('p2p-target-code');
+                                if (input) input.value = connectId;
+                                window.app.connectToPeer(connectId);
+                            }, 1000);
+                        }
+                    }, 500);
+                }
+            } catch(e) {
+                console.error('Failed to auto-connect to peer from URL:', e);
+            }
+
+            // Check for specimen deep-link to auto-open
+            try {
+                var specId = urlParams.get('specimen') || urlParams.get('id');
+                if (specId) {
+                    setTimeout(function() {
+                        if (window.app) {
+                            var f = fossils.find(function(x) { return x.id === specId; });
+                            if (f) {
+                                if (f.isDream) {
+                                    if (typeof window.app.openDreamItemModal === 'function') {
+                                        window.app.openDreamItemModal(specId);
+                                    }
+                                } else {
+                                    if (typeof window.app.openModal === 'function') {
+                                        window.app.openModal(specId);
+                                    }
+                                }
+                            }
+                        }
+                    }, 1200);
+                }
+            } catch(e) {
+                console.error('Failed to parse auto-open deep-link:', e);
+            }
         });
     });
 
@@ -1701,12 +1894,12 @@ window.app = {
 
     // --- Modal Tab Sizing & Switching ---
     setModalTab: function(tabName) {
-        var tabs = ['classification', 'geology', 'curator'];
+        var tabs = ['classification', 'geology', 'curator', 'prep'];
         var slider = document.getElementById('tab-slider-wrapper');
         var tabIndex = tabs.indexOf(tabName);
         
         if (slider && tabIndex !== -1) {
-            slider.style.transform = 'translateX(' + (-tabIndex * (100 / 3)) + '%)';
+            slider.style.transform = 'translateX(' + (-tabIndex * (100 / 4)) + '%)';
         }
 
         tabs.forEach(function(t) {
@@ -1742,16 +1935,174 @@ window.app = {
     toggleSalePriceField: function() {
         var wishlistSelect = document.getElementById('f-wishlist');
         var salePriceGroup = document.getElementById('group-sale-price');
-        if (wishlistSelect && salePriceGroup) {
-            var labelEl = salePriceGroup.querySelector('label');
-            if (wishlistSelect.value === 'sold') {
-                salePriceGroup.style.display = 'block';
-                if (labelEl) labelEl.innerHTML = 'Sale Price <span class="required-asterisk">*</span>';
-            } else if (wishlistSelect.value === 'sale') {
-                salePriceGroup.style.display = 'block';
-                if (labelEl) labelEl.innerHTML = 'Asking Price <span class="required-asterisk">*</span>';
+        var tradeInfoGroup = document.getElementById('group-trade-info');
+        if (wishlistSelect) {
+            if (salePriceGroup) {
+                var labelEl = salePriceGroup.querySelector('label');
+                if (wishlistSelect.value === 'sold') {
+                    salePriceGroup.style.display = 'block';
+                    if (labelEl) labelEl.innerHTML = 'Sale Price <span class="required-asterisk">*</span>';
+                } else if (wishlistSelect.value === 'sale') {
+                    salePriceGroup.style.display = 'block';
+                    if (labelEl) labelEl.innerHTML = 'Asking Price <span class="required-asterisk">*</span>';
+                } else {
+                    salePriceGroup.style.display = 'none';
+                }
+            }
+            if (tradeInfoGroup) {
+                if (wishlistSelect.value === 'traded') {
+                    tradeInfoGroup.style.display = 'block';
+                } else {
+                    tradeInfoGroup.style.display = 'none';
+                }
+            }
+        }
+    },
+
+    handleSpecimenTypeChange: function() {
+        var typeSelect = document.getElementById('f-type-select');
+        if (!typeSelect) return;
+        var val = typeSelect.value;
+        
+        var fossilClass = document.getElementById('fossil-class-group');
+        var fossilGeol = document.getElementById('fossil-geology-group');
+        var fossilCur = document.getElementById('fossil-curation-group');
+        var mineralClass = document.getElementById('mineral-class-group');
+        var mineralGeol = document.getElementById('mineral-geology-group');
+        
+        var catSelect = document.getElementById('f-category');
+        var catLabel = document.querySelector('label[for="f-category"]');
+
+        var currentVal = catSelect ? catSelect.value : '';
+
+        var prepTabBtn = document.getElementById('tab-btn-prep');
+
+        // Dynamic labels, titles, and placeholders depending on type (Fossil vs Mineral)
+        var titleEl = document.getElementById('modal-title');
+        if (titleEl) {
+            var currentTitle = titleEl.innerText;
+            if (val === 'mineral') {
+                if (currentTitle.indexOf('Edit') !== -1) {
+                    titleEl.innerText = 'Edit Mineral';
+                } else if (currentTitle.indexOf('Duplicate') !== -1) {
+                    titleEl.innerText = 'Duplicate Mineral';
+                } else {
+                    titleEl.innerText = 'Add New Mineral';
+                }
             } else {
-                salePriceGroup.style.display = 'none';
+                if (currentTitle.indexOf('Edit') !== -1) {
+                    titleEl.innerText = 'Edit Fossil';
+                } else if (currentTitle.indexOf('Duplicate') !== -1) {
+                    titleEl.innerText = 'Duplicate Fossil';
+                } else {
+                    titleEl.innerText = 'Add New Fossil';
+                }
+            }
+        }
+
+        var submitBtn = document.getElementById('fossil-submit-btn');
+        if (submitBtn) {
+            submitBtn.innerText = val === 'mineral' ? 'Save Mineral' : 'Save Fossil';
+        }
+
+        var restLabel = document.getElementById('lbl-f-restoration');
+        if (restLabel) {
+            restLabel.innerText = val === 'mineral' ? 'Lapidary Treatment & Stabilization Details' : 'Restoration & Preparation Details';
+        }
+
+        var restTextarea = document.getElementById('f-restoration');
+        if (restTextarea) {
+            restTextarea.placeholder = val === 'mineral' ? 
+                'e.g. oiling, heat treatment, dye, minor stabilization, resin filled...' : 
+                'e.g. ~5% crack-fill on matrix, minor composite work, consolidated using Paraloid B-72...';
+        }
+
+        var treatLabel = document.getElementById('lbl-treat-scribe');
+        if (treatLabel) {
+            treatLabel.innerText = val === 'mineral' ? '⛏️ Trimmed / Cleaned (Chisel / Pick / Acid)' : '⛏️ Mechanically cleaned (Air scribe / needle)';
+        }
+
+        var notesTextarea = document.getElementById('f-notes');
+        if (notesTextarea) {
+            notesTextarea.placeholder = val === 'mineral' ? 
+                'Add any additional mineral characteristics or notes...' : 
+                'Add any additional details (associated fauna, preparation notes, preservation quality, etc.)';
+        }
+
+        var tagsInput = document.getElementById('f-tags');
+        if (tagsInput) {
+            tagsInput.placeholder = val === 'mineral' ? 
+                'e.g., iridescent, fluorescent, matrix, choice' : 
+                'e.g., path of travel, database export, self-collected, choice';
+        }
+
+        var specimenInput = document.getElementById('f-specimen');
+        if (specimenInput) {
+            specimenInput.placeholder = val === 'mineral' ? 
+                'e.g. Amethyst, Pyrite, Quartz...' : 
+                'e.g. Megalodon, Trilobite, Ammonite...';
+        }
+
+        var autoFetchBtn = document.getElementById('btn-auto-fetch-all');
+        if (autoFetchBtn) {
+            autoFetchBtn.innerHTML = val === 'mineral' ? '⚡ Auto-Geocode' : '⚡ Auto-Fetch All';
+            autoFetchBtn.title = val === 'mineral' ?
+                '⚡ Auto-Geocode coordinates using Location/Country info' :
+                '⚡ Auto-Fetch all Taxonomy, Authority, Biology, Etymology & Coordinates';
+        }
+
+        var anatomyCol = document.getElementById('f-anatomy-part-col');
+        if (anatomyCol) {
+            anatomyCol.style.display = val === 'mineral' ? 'none' : '';
+        }
+
+        if (val === 'mineral') {
+            if (fossilClass) fossilClass.style.display = 'none';
+            if (fossilGeol) fossilGeol.style.display = 'none';
+            if (fossilCur) fossilCur.style.display = 'none';
+            if (prepTabBtn) prepTabBtn.style.display = 'none';
+            var activeTabBtn = document.querySelector('.modal-tab-btn.active');
+            if (activeTabBtn && activeTabBtn.id === 'tab-btn-prep') {
+                this.setModalTab('classification');
+            }
+            
+            if (mineralClass) mineralClass.style.display = 'contents';
+            if (mineralGeol) mineralGeol.style.display = 'contents';
+            
+            if (catLabel) catLabel.innerHTML = 'Mineral Group <span class="required-asterisk">*</span>';
+            if (catSelect) {
+                var html = '';
+                MINERAL_GROUPS.forEach(function(grp) {
+                    html += '<option value="' + escapeHtml(grp) + '">' + escapeHtml(grp) + '</option>';
+                });
+                catSelect.innerHTML = html;
+                if (MINERAL_GROUPS.indexOf(currentVal) !== -1) {
+                    catSelect.value = currentVal;
+                } else {
+                    catSelect.value = MINERAL_GROUPS[0];
+                }
+            }
+        } else {
+            if (mineralClass) mineralClass.style.display = 'none';
+            if (mineralGeol) mineralGeol.style.display = 'none';
+            
+            if (fossilClass) fossilClass.style.display = 'contents';
+            if (fossilGeol) fossilGeol.style.display = 'contents';
+            if (fossilCur) fossilCur.style.display = 'contents';
+            if (prepTabBtn) prepTabBtn.style.display = '';
+            
+            if (catLabel) catLabel.innerHTML = 'Taxonomic Group (Category) <span class="required-asterisk">*</span>';
+            if (catSelect) {
+                var html = '';
+                CATEGORIES.forEach(function(cat) {
+                    html += '<option value="' + escapeHtml(cat) + '">' + escapeHtml(cat) + '</option>';
+                });
+                catSelect.innerHTML = html;
+                if (CATEGORIES.indexOf(currentVal) !== -1) {
+                    catSelect.value = currentVal;
+                } else {
+                    catSelect.value = CATEGORIES[0];
+                }
             }
         }
     },
@@ -2787,6 +3138,16 @@ window.app = {
         if (filtered.length > 0) {
             statsContainer.style.display = 'flex';
 
+            // Dynamically change chart titles based on specimen type
+            var isOnlyMinerals = filtered.length > 0 && filtered.every(function(x) { return x.type === 'mineral'; });
+            var periodChartElem = document.getElementById('chart-period');
+            if (periodChartElem) {
+                var periodChartTitle = periodChartElem.previousElementSibling;
+                if (periodChartTitle && periodChartTitle.classList.contains('chart-title')) {
+                    periodChartTitle.textContent = isOnlyMinerals ? 'Crystallography Distribution' : 'Geological Distribution';
+                }
+            }
+
             // GROUP AND TALLY VALUE
             var valueByCurrency = {};
             var estValueByCurrency = {};
@@ -2821,13 +3182,13 @@ window.app = {
                 }
 
                 // Tally Purchase Value
-                if (f.price > 0) {
+                if (f.price > 0 && !f.isWishlist && !f.isSold && !f.isDream && !f.isTraded) {
                     var curr = f.currency || 'USD';
                     valueByCurrency[curr] = (valueByCurrency[curr] || 0) + f.price;
                 }
 
                 // Tally Estimated Value
-                if (f.estimatedValue > 0) {
+                if (f.estimatedValue > 0 && !f.isWishlist && !f.isSold && !f.isDream && !f.isTraded) {
                     var estCurr = f.estimatedCurrency || 'USD';
                     estValueByCurrency[estCurr] = (estValueByCurrency[estCurr] || 0) + f.estimatedValue;
                 }
@@ -2841,8 +3202,8 @@ window.app = {
                     mostCommonCountry = cntry;
                 }
 
-                // Tally Period
-                var per = f.geologicalPeriod ? f.geologicalPeriod : 'Unknown';
+                // Tally Period / Crystal System
+                var per = f.type === 'mineral' ? (f.crystalSystem || 'Amorphous') : (f.geologicalPeriod || 'Unknown');
                 periodCounts[per] = (periodCounts[per] || 0) + 1;
 
                 // Tally Weight
@@ -2942,6 +3303,15 @@ window.app = {
                                 '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2v11z"/></svg>' +
                                 '<span><strong>' + filtered.length + '</strong> Specimens</span>' +
                               '</div>';
+
+                // Traded specimens count pill
+                var overallTradedCount = fossils.filter(function(f) { return !!f.isTraded; }).length;
+                if (overallTradedCount > 0) {
+                    statsHtml += '<div class="stats-pill" style="display: flex; align-items: center; gap: 0.5rem; background: rgba(49, 151, 149, 0.1); color: #319795; padding: 0.4rem 0.85rem; border-radius: 2rem; border: 1px solid rgba(49, 151, 149, 0.2); font-size: 0.85rem; font-weight: 500;">' +
+                                    '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 3h5v5"/><path d="M8 21H3v-5"/><path d="M12 20v-3"/><path d="M12 4v3"/><path d="M2 12h3"/><path d="M19 12h3"/><path d="M20 20 4 4"/></svg>' +
+                                    '<span><strong>' + overallTradedCount + '</strong> Traded</span>' +
+                                  '</div>';
+                }
 
                 // Top Origin Pill
                 if (mostCommonCountry && mostCommonCountry !== 'Unknown') {
@@ -3080,19 +3450,31 @@ window.app = {
                     var avgSize = sizeCount > 0 ? (totalSizeCm / sizeCount).toFixed(2) : 0;
                     var weightStr = totalWeight >= 1000 ? (totalWeight / 1000).toFixed(2) + ' kg' : totalWeight.toFixed(1) + ' g';
                     
-                    // --- CALCULATE MISSING PERIODS ---
+                    // --- CALCULATE MISSING PERIODS / MINERAL GROUPS ---
                     var missingByEra = {};
+                    var mineralGroupsMissing = [];
                     var totalMissing = 0;
-                    for (var era in PERIODS_AND_EPOCHS) {
-                        var eraMissing = [];
-                        for (var per in PERIODS_AND_EPOCHS[era]) {
-                            if (!periodCounts[per]) {
-                                eraMissing.push(per);
+
+                    if (isOnlyMinerals) {
+                        MINERAL_GROUPS.forEach(function(group) {
+                            var hasGroup = filtered.some(function(f) { return f.category === group; });
+                            if (!hasGroup) {
+                                mineralGroupsMissing.push(group);
                                 totalMissing++;
                             }
-                        }
-                        if (eraMissing.length > 0) {
-                            missingByEra[era] = eraMissing;
+                        });
+                    } else {
+                        for (var era in PERIODS_AND_EPOCHS) {
+                            var eraMissing = [];
+                            for (var per in PERIODS_AND_EPOCHS[era]) {
+                                if (!periodCounts[per]) {
+                                    eraMissing.push(per);
+                                    totalMissing++;
+                                }
+                            }
+                            if (eraMissing.length > 0) {
+                                missingByEra[era] = eraMissing;
+                            }
                         }
                     }
 
@@ -3102,28 +3484,47 @@ window.app = {
                         .slice(0, 8);
 
                     // --- CALCULATE FIELD DISCOVERY SCORE ---
-                    var overallOwned = fossils.filter(function(f) { return !f.isWishlist && !f.isSold && !f.isDream; });
+                    var overallOwned = fossils.filter(function(f) { return !f.isWishlist && !f.isSold && !f.isDream && !f.isTraded; });
                     var ownedCount = overallOwned.length;
                     var selfFoundCount = overallOwned.filter(function(f) { return !!f.isSelfFound; }).length;
                     var selfFoundPercent = ownedCount > 0 ? Math.round((selfFoundCount / ownedCount) * 100) : 0;
                     
                     var rankTitle = 'Curator';
                     var rankEmoji = '🏛️';
-                    if (selfFoundCount >= 25) {
-                        rankTitle = 'Veteran Prospector';
-                        rankEmoji = '🦖';
-                    } else if (selfFoundCount >= 10) {
-                        rankTitle = 'Field Paleontologist';
-                        rankEmoji = '🔨';
-                    } else if (selfFoundCount >= 3) {
-                        rankTitle = 'Fossil Hunter';
-                        rankEmoji = '🥾';
-                    } else if (selfFoundCount >= 1) {
-                        rankTitle = 'Novice Explorer';
-                        rankEmoji = '🧭';
+                    if (isOnlyMinerals) {
+                        if (selfFoundCount >= 25) {
+                            rankTitle = 'Master Prospector';
+                            rankEmoji = '💎';
+                        } else if (selfFoundCount >= 10) {
+                            rankTitle = 'Mineralogist';
+                            rankEmoji = '🔍';
+                        } else if (selfFoundCount >= 3) {
+                            rankTitle = 'Rockhound';
+                            rankEmoji = '🥾';
+                        } else if (selfFoundCount >= 1) {
+                            rankTitle = 'Gravelhound';
+                            rankEmoji = '🧭';
+                        } else {
+                            rankTitle = 'Mineral Collector';
+                            rankEmoji = '🏛️';
+                        }
                     } else {
-                        rankTitle = 'Museum Curator';
-                        rankEmoji = '🏛️';
+                        if (selfFoundCount >= 25) {
+                            rankTitle = 'Veteran Prospector';
+                            rankEmoji = '🦖';
+                        } else if (selfFoundCount >= 10) {
+                            rankTitle = 'Field Paleontologist';
+                            rankEmoji = '🔨';
+                        } else if (selfFoundCount >= 3) {
+                            rankTitle = 'Fossil Hunter';
+                            rankEmoji = '🥾';
+                        } else if (selfFoundCount >= 1) {
+                            rankTitle = 'Novice Explorer';
+                            rankEmoji = '🧭';
+                        } else {
+                            rankTitle = 'Museum Curator';
+                            rankEmoji = '🏛️';
+                        }
                     }
 
                     dataHtml = '<div class="data-insights-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.5rem; padding: 1rem 0;">' +
@@ -3141,22 +3542,29 @@ window.app = {
                                         '<div style="font-size: 2.25rem; font-weight: 800; color: var(--text-main); margin-top: 0.5rem;">' + avgSize + ' cm</div>' +
                                         '<div style="font-size: 0.8rem; opacity: 0.6; margin-top: 0.25rem;">Based on ' + sizeCount + ' measured specimens</div>' +
                                     '</div>' +
-                                    // Missing Periods Card
+                                    // Missing Periods/Mineral Groups Card
                                     '<div class="data-card" style="background: var(--bg-warm); padding: 1.5rem; border-radius: 1rem; border: 1px solid var(--border-color); text-align: left; box-shadow: var(--shadow-sm);">' +
                                         '<div style="color: var(--danger); margin-bottom: 0.5rem;"><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></div>' +
-                                        '<div style="font-size: 0.9rem; opacity: 0.7; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;">Lacking Fossils From</div>' +
+                                        '<div style="font-size: 0.9rem; opacity: 0.7; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;">' + (isOnlyMinerals ? 'Lacking Mineral Groups' : 'Lacking Fossils From') + '</div>' +
                                         '<div style="margin-top: 1rem; max-height: 120px; overflow-y: auto; padding-right: 0.5rem;">';
                                         
-                                        for (var era in missingByEra) {
-                                            dataHtml += '<div style="margin-bottom: 0.5rem;">' +
-                                                            '<div style="font-size: 0.7rem; font-weight: 800; color: var(--accent); text-transform: uppercase; margin-bottom: 0.25rem;">' + era + '</div>' +
-                                                            '<div style="font-size: 0.85rem; color: var(--text-primary); opacity: 0.9;">' + missingByEra[era].join(', ') + '</div>' +
-                                                        '</div>';
+                                        if (isOnlyMinerals) {
+                                            if (mineralGroupsMissing.length > 0) {
+                                                dataHtml += '<div style="font-size: 0.85rem; color: var(--text-primary); opacity: 0.9; line-height: 1.4;">' + mineralGroupsMissing.join(', ') + '</div>';
+                                            } else {
+                                                dataHtml += '<div style="font-size: 0.85rem; color: #439775; font-weight: 600;">Your mineral collection covers all major mineral groups!</div>';
+                                            }
+                                        } else {
+                                            for (var era in missingByEra) {
+                                                dataHtml += '<div style="margin-bottom: 0.5rem;">' +
+                                                                '<div style="font-size: 0.7rem; font-weight: 800; color: var(--accent); text-transform: uppercase; margin-bottom: 0.25rem;">' + era + '</div>' +
+                                                                '<div style="font-size: 0.85rem; color: var(--text-primary); opacity: 0.9;">' + missingByEra[era].join(', ') + '</div>' +
+                                                            '</div>';
+                                            }
+                                            if (totalMissing === 0) {
+                                                dataHtml += '<div style="font-size: 0.85rem; color: #439775; font-weight: 600;">Your collection is geologically complete!</div>';
+                                            }
                                         }
-                                        if (totalMissing === 0) {
-                                            dataHtml += '<div style="font-size: 0.85rem; color: #439775; font-weight: 600;">You collection is geologically complete!</div>';
-                                        }
-
                     dataHtml +=         '</div>' +
                                     '</div>' +
                                     // Top Tags Card
@@ -4016,7 +4424,7 @@ window.app = {
                 var est = parseFloat(f.estimatedValue) || parseFloat(f.price) || 0;
                 var estBase = window.app._convertCurrency(est, f.estimatedCurrency || f.currency || 'USD', activeBaseCurrency);
 
-                var statusBadge = f.isSold ? '<span class="status-pill sold">Sold</span>' : (f.isForSale ? '<span class="status-pill sale" style="background: rgba(229, 142, 38, 0.12); border: 1px solid var(--warning); color: var(--warning); padding: 0.1rem 0.4rem; border-radius: 4px; font-size: 0.72rem; font-weight: 700; text-transform: uppercase;">For Sale</span>' : '<span class="status-pill active">Curated</span>');
+                var statusBadge = f.isTraded ? '<span class="status-pill traded" style="background: rgba(49, 151, 149, 0.12); border: 1px solid #319795; color: #319795; padding: 0.1rem 0.4rem; border-radius: 4px; font-size: 0.72rem; font-weight: 700; text-transform: uppercase;">Traded</span>' : (f.isSold ? '<span class="status-pill sold">Sold</span>' : (f.isForSale ? '<span class="status-pill sale" style="background: rgba(229, 142, 38, 0.12); border: 1px solid var(--warning); color: var(--warning); padding: 0.1rem 0.4rem; border-radius: 4px; font-size: 0.72rem; font-weight: 700; text-transform: uppercase;">For Sale</span>' : '<span class="status-pill active">Curated</span>'));
                 
                 // Formatted scientific name
                 var rawName = f.specimen || 'Unnamed';
@@ -4071,7 +4479,7 @@ window.app = {
             return;
         }
 
-        var activeFossils = fossils.filter(function(f) { return !f.isWishlist && !f.isSold && !f.isCartItem && !f.isDream; });
+        var activeFossils = fossils.filter(function(f) { return !f.isWishlist && !f.isSold && !f.isCartItem && !f.isDream && !f.isTraded; });
         var totalCost = 0;
         var totalEst = 0;
         
@@ -4836,8 +5244,8 @@ window.app = {
         var container = document.getElementById('treemap-container');
         if (!container) return;
         
-        var ownedFossils = fossils.filter(function(f) { return !f.isWishlist && !f.isSold && !f.isCartItem && !f.isDream; });
-        var wishlistedFossils = fossils.filter(function(f) { return f.isWishlist && !f.isSold && !f.isCartItem; });
+        var ownedFossils = fossils.filter(function(f) { return !f.isWishlist && !f.isSold && !f.isCartItem && !f.isDream && !f.isTraded; });
+        var wishlistedFossils = fossils.filter(function(f) { return f.isWishlist && !f.isSold && !f.isCartItem && !f.isTraded; });
         
         var collectedList = [];
         var wishlistedList = [];
@@ -5083,7 +5491,7 @@ window.app = {
     openModal: function(id) {
         var modal = document.getElementById('fossil-modal');
         var form = document.getElementById('fossil-form');
-        document.getElementById('modal-title').innerText = id ? 'Edit Fossil' : 'Add New Fossil';
+        document.getElementById('modal-title').innerText = id ? 'Edit Specimen' : 'Add New Specimen';
         form.reset();
         currentImages = [];
         window.app.renderImagePreview();
@@ -5097,8 +5505,22 @@ window.app = {
         if (id) {
             var f = fossils.find(function(x) { return x.id === id; });
             if (f) {
-                document.getElementById('fossil-id').value = f.id;
                 document.getElementById('f-specimen').value = f.specimen || '';
+                
+                var typeSelect = document.getElementById('f-type-select');
+                if (typeSelect) {
+                    typeSelect.value = f.type || 'fossil';
+                }
+                document.getElementById('f-formula').value = f.formula || '';
+                document.getElementById('f-luster').value = f.luster || '';
+                document.getElementById('f-streak').value = f.streak || '';
+                document.getElementById('f-cleavage').value = f.cleavage || '';
+                document.getElementById('f-crystal-system').value = f.crystalSystem || '';
+                document.getElementById('f-hardness').value = f.hardness || '';
+                document.getElementById('f-color').value = f.color || '';
+                
+                window.app.handleSpecimenTypeChange();
+
                 document.getElementById('f-animal-size').value = f.animalSize || '';
                 document.getElementById('f-anatomy').value = f.anatomy || '';
                 document.getElementById('f-category').value = f.category || '';
@@ -5113,6 +5535,10 @@ window.app = {
                     document.getElementById('f-sale-currency').value = f.saleCurrency || 'USD';
                 } else if (f.isDream) {
                     document.getElementById('f-wishlist').value = 'dream';
+                    document.getElementById('f-sale-price').value = '';
+                    document.getElementById('f-sale-currency').value = 'USD';
+                } else if (f.isTraded) {
+                    document.getElementById('f-wishlist').value = 'traded';
                     document.getElementById('f-sale-price').value = '';
                     document.getElementById('f-sale-currency').value = 'USD';
                 } else {
@@ -5171,12 +5597,76 @@ window.app = {
                 document.getElementById('treat-cyano').checked = !!treat.cyano;
                 document.getElementById('treat-water').checked = !!treat.water;
 
+                // Storage Fields
+                document.getElementById('f-storage-room').value = f.storageRoom || '';
+                document.getElementById('f-storage-unit').value = f.storageUnit || '';
+                document.getElementById('f-storage-drawer').value = f.storageDrawer || '';
+                document.getElementById('f-storage-box').value = f.storageBox || '';
+
+                // Trade Fields
+                document.getElementById('f-traded-with').value = f.tradedWith || '';
+                document.getElementById('f-traded-for').value = f.tradedFor || '';
+                document.getElementById('f-trade-date').value = f.tradeDate || '';
+
+                // Prep Fields
+                document.getElementById('f-prep-status').value = f.prepStatus || 'Not Started';
+                document.getElementById('f-prep-hours').value = f.prepHours || '';
+                document.getElementById('f-prep-stabilizers').value = f.prepStabilizers || '';
+                document.getElementById('f-prep-notes').value = f.prepNotes || '';
+                
+                var tools = f.prepTools || [];
+                var toolChecks = document.getElementsByName('prep-tools');
+                for (var i = 0; i < toolChecks.length; i++) {
+                    toolChecks[i].checked = tools.indexOf(toolChecks[i].value) !== -1;
+                }
+                
+                currentMilestones = f.prepMilestones ? f.prepMilestones.slice() : [];
+                window.app.renderMilestonePreview();
+
+                // Museum Fields
+                document.getElementById('f-accession-code').value = f.accessionCode || '';
+                document.getElementById('f-donor-source').value = f.donorSource || '';
+                document.getElementById('f-exhibit-status').value = f.exhibitStatus || '';
+                document.getElementById('f-condition-report').value = f.conditionReport || '';
+
+                // Shop Fields
+                document.getElementById('f-cogs').value = f.cogs || '';
+                document.getElementById('f-cogs-currency').value = f.cogsCurrency || 'USD';
+                document.getElementById('f-sold-price').value = f.soldPrice || '';
+                document.getElementById('f-sold-currency').value = f.soldCurrency || 'USD';
+                if (window.app && typeof window.app.calculateMargin === 'function') {
+                    window.app.calculateMargin();
+                }
+
+                // Quick add checkbox state
+                var quickChk = document.getElementById('f-quick-add');
+                if (quickChk) {
+                    quickChk.checked = !!f.quickModeActive;
+                    if (window.app && typeof window.app.toggleQuickAddMode === 'function') {
+                        window.app.toggleQuickAddMode();
+                    }
+                }
+
                 if (f.images && Array.isArray(f.images)) {
                     currentImages = f.images.slice();
                     window.app.renderImagePreview();
                 }
             }
         } else {
+            var typeSelect = document.getElementById('f-type-select');
+            if (typeSelect) {
+                typeSelect.value = 'fossil';
+            }
+            document.getElementById('f-formula').value = '';
+            document.getElementById('f-luster').value = '';
+            document.getElementById('f-streak').value = '';
+            document.getElementById('f-cleavage').value = '';
+            document.getElementById('f-crystal-system').value = '';
+            document.getElementById('f-hardness').value = '';
+            document.getElementById('f-color').value = '';
+            
+            window.app.handleSpecimenTypeChange();
+
             document.getElementById('f-specimen').value = '';
             document.getElementById('f-animal-size').value = '';
             document.getElementById('fossil-id').value = '';
@@ -5230,6 +5720,57 @@ window.app = {
             
             window.app.updateEpochs(localStorage.getItem('last_epoch') || '');
             window.app.updateStratAges(localStorage.getItem('last_stratAge') || '');
+
+            // Reset storage location fields
+            document.getElementById('f-storage-room').value = '';
+            document.getElementById('f-storage-unit').value = '';
+            document.getElementById('f-storage-drawer').value = '';
+            document.getElementById('f-storage-box').value = '';
+
+            // Reset trade fields
+            document.getElementById('f-traded-with').value = '';
+            document.getElementById('f-traded-for').value = '';
+            document.getElementById('f-trade-date').value = '';
+
+            // Reset prep fields
+            document.getElementById('f-prep-status').value = 'Not Started';
+            document.getElementById('f-prep-hours').value = '';
+            document.getElementById('f-prep-stabilizers').value = '';
+            document.getElementById('f-prep-notes').value = '';
+            
+            var toolChecks = document.getElementsByName('prep-tools');
+            for (var i = 0; i < toolChecks.length; i++) {
+                toolChecks[i].checked = false;
+            }
+            
+            currentMilestones = [];
+            window.app.renderMilestonePreview();
+
+            // Reset museum archival fields
+            document.getElementById('f-accession-code').value = '';
+            document.getElementById('f-donor-source').value = '';
+            document.getElementById('f-exhibit-status').value = '';
+            document.getElementById('f-condition-report').value = '';
+
+            // Reset shop fields
+            document.getElementById('f-cogs').value = '';
+            document.getElementById('f-cogs-currency').value = 'USD';
+            document.getElementById('f-sold-price').value = '';
+            document.getElementById('f-sold-currency').value = 'USD';
+            if (document.getElementById('shop-margin-profit')) {
+                document.getElementById('shop-margin-profit').textContent = '$0.00';
+                document.getElementById('shop-margin-percent').textContent = '0.0%';
+            }
+
+            // Quick add checkbox state
+            var quickChk = document.getElementById('f-quick-add');
+            if (quickChk) {
+                var savedMode = localStorage.getItem('pref_editor_mode') || 'advanced';
+                quickChk.checked = (savedMode === 'simple');
+                if (window.app && typeof window.app.toggleQuickAddMode === 'function') {
+                    window.app.toggleQuickAddMode();
+                }
+            }
         }
 
         modal.showModal();
@@ -5845,6 +6386,166 @@ window.app = {
         }
     },
 
+    toggleDictation: function(targetId) {
+        var button = event ? event.currentTarget : null;
+        var targetInput = document.getElementById(targetId);
+        if (!targetInput) return;
+
+        var SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        if (!SpeechRecognition) {
+            window.app.showToast('Speech Recognition not supported in this browser.', 'error');
+            return;
+        }
+
+        if (!window.app._activeRecognitions) {
+            window.app._activeRecognitions = {};
+        }
+
+        var activeRec = window.app._activeRecognitions[targetId];
+
+        if (activeRec) {
+            activeRec.stop();
+            delete window.app._activeRecognitions[targetId];
+            if (button) {
+                button.classList.remove('recording');
+                button.innerHTML = '🎙️';
+            }
+            window.app.showToast('Voice dictation stopped.', 'info');
+        } else {
+            var recognition = new SpeechRecognition();
+            recognition.continuous = true;
+            recognition.interimResults = false;
+            recognition.lang = 'en-US';
+
+            recognition.onstart = function() {
+                if (button) {
+                    button.classList.add('recording');
+                    button.innerHTML = '🛑';
+                }
+                window.app.showToast('Listening... Speak now.', 'success');
+            };
+
+            recognition.onresult = function(e) {
+                var transcript = '';
+                for (var i = e.resultIndex; i < e.results.length; ++i) {
+                    if (e.results[i].isFinal) {
+                        transcript += e.results[i][0].transcript;
+                    }
+                }
+                if (transcript) {
+                    var val = targetInput.value;
+                    if (val && !val.endsWith(' ')) {
+                        targetInput.value = val + ' ' + transcript;
+                    } else {
+                        targetInput.value = val + transcript;
+                    }
+                    targetInput.dispatchEvent(new Event('input'));
+                }
+            };
+
+            recognition.onerror = function(e) {
+                console.error('Speech recognition error:', e);
+                window.app.showToast('Speech error: ' + e.error, 'error');
+                if (button) {
+                    button.classList.remove('recording');
+                    button.innerHTML = '🎙️';
+                }
+                delete window.app._activeRecognitions[targetId];
+            };
+
+            recognition.onend = function() {
+                if (button) {
+                    button.classList.remove('recording');
+                    button.innerHTML = '🎙️';
+                }
+                delete window.app._activeRecognitions[targetId];
+            };
+
+            recognition.start();
+            window.app._activeRecognitions[targetId] = recognition;
+        }
+    },
+
+    triggerMilestoneUpload: function() {
+        var fileInput = document.getElementById('f-prep-milestone-file');
+        if (fileInput) fileInput.click();
+    },
+
+    triggerMilestoneCamera: function() {
+        window.app.openCameraCapture('milestone');
+    },
+
+    handleMilestoneUpload: function(event) {
+        var files = event.target.files;
+        if (!files || files.length === 0) return;
+        var file = files[0];
+        
+        var reader = new FileReader();
+        reader.onload = function(e) {
+            if (e.target.result) {
+                downscaleImage(e.target.result, 1200, 0.85).then(function(optimized) {
+                    window.app.addMilestoneWithImage(optimized);
+                }).catch(function(err) {
+                    console.error('Image optimization failed', err);
+                    window.app.addMilestoneWithImage(e.target.result);
+                });
+            }
+        };
+        reader.readAsDataURL(file);
+        event.target.value = '';
+    },
+
+    addMilestoneWithImage: function(imgUrl) {
+        var labelInput = document.getElementById('f-prep-milestone-label');
+        var dateInput = document.getElementById('f-prep-milestone-date');
+        
+        var label = labelInput ? labelInput.value.trim() : '';
+        var dateVal = dateInput ? dateInput.value : '';
+        
+        if (!label) {
+            label = 'Milestone ' + (currentMilestones.length + 1);
+        }
+        if (!dateVal) {
+            var d = new Date();
+            dateVal = d.toISOString().split('T')[0];
+        }
+        
+        currentMilestones.push({
+            label: label,
+            date: dateVal,
+            image: imgUrl
+        });
+        
+        if (labelInput) labelInput.value = '';
+        if (dateInput) dateInput.value = '';
+        
+        window.app.renderMilestonePreview();
+    },
+
+    renderMilestonePreview: function() {
+        var container = document.getElementById('prep-milestones-preview');
+        if (!container) return;
+        
+        container.innerHTML = '';
+        currentMilestones.forEach(function(m, index) {
+            var item = document.createElement('div');
+            item.className = 'milestone-preview-item';
+            item.style.cssText = 'position: relative; width: 100px; height: 100px; border: 1px solid var(--border-color); border-radius: var(--radius-sm); overflow: hidden; background: #000;';
+            
+            item.innerHTML = 
+                '<img src="' + m.image + '" style="width: 100%; height: 100%; object-fit: cover;" />' +
+                '<div style="position: absolute; bottom: 0; left: 0; right: 0; background: rgba(0,0,0,0.6); color: #fff; font-size: 0.65rem; padding: 2px; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="' + escapeHtml(m.label) + '">' + escapeHtml(m.label) + '</div>' +
+                '<button type="button" onclick="app.removeMilestone(' + index + ')" style="position: absolute; top: 2px; right: 2px; background: rgba(229, 62, 62, 0.8); border: none; color: #fff; border-radius: 50%; width: 16px; height: 16px; font-size: 10px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; line-height: 1;">&times;</button>';
+            
+            container.appendChild(item);
+        });
+    },
+    
+    removeMilestone: function(index) {
+        currentMilestones.splice(index, 1);
+        window.app.renderMilestonePreview();
+    },
+
     handleImageUpload: async function(event) {
         var files = event.target.files;
         if (!files || files.length === 0) return;
@@ -6107,15 +6808,37 @@ window.app = {
 
             var fossil = {
                 id: isEditing ? idVal : generateCatalogId(document.getElementById('f-category').value, fossils),
+                type: document.getElementById('f-type-select').value || 'fossil',
                 specimen: document.getElementById('f-specimen').value,
                 animalSize: parseFloat(document.getElementById('f-animal-size').value) || null,
                 anatomy: document.getElementById('f-anatomy').value,
                 category: document.getElementById('f-category').value,
                 fossilType: document.getElementById('f-type').value || null,
+                formula: document.getElementById('f-formula').value || null,
+                luster: document.getElementById('f-luster').value || null,
+                streak: document.getElementById('f-streak').value || null,
+                cleavage: document.getElementById('f-cleavage').value || null,
+                crystalSystem: document.getElementById('f-crystal-system').value || null,
+                hardness: parseFloat(document.getElementById('f-hardness').value) || null,
+                color: document.getElementById('f-color').value || null,
                 isWishlist: document.getElementById('f-wishlist').value === 'true',
                 isSold: document.getElementById('f-wishlist').value === 'sold',
                 isForSale: document.getElementById('f-wishlist').value === 'sale',
                 isDream: document.getElementById('f-wishlist').value === 'dream',
+                isTraded: document.getElementById('f-wishlist').value === 'traded',
+                tradedWith: document.getElementById('f-wishlist').value === 'traded' ? document.getElementById('f-traded-with').value : '',
+                tradedFor: document.getElementById('f-wishlist').value === 'traded' ? document.getElementById('f-traded-for').value : '',
+                tradeDate: document.getElementById('f-wishlist').value === 'traded' ? document.getElementById('f-trade-date').value : '',
+                
+                // Prep fields
+                prepStatus: document.getElementById('f-prep-status').value,
+                prepHours: parseFloat(document.getElementById('f-prep-hours').value) || null,
+                prepStabilizers: document.getElementById('f-prep-stabilizers').value,
+                prepNotes: document.getElementById('f-prep-notes').value,
+                prepTools: Array.prototype.slice.call(document.getElementsByName('prep-tools'))
+                                .filter(function(chk) { return chk.checked; })
+                                .map(function(chk) { return chk.value; }),
+                prepMilestones: currentMilestones,
                 salePrice: (document.getElementById('f-wishlist').value === 'sold' || document.getElementById('f-wishlist').value === 'sale') ? parseFloat(document.getElementById('f-sale-price').value) || null : null,
                 saleCurrency: (document.getElementById('f-wishlist').value === 'sold' || document.getElementById('f-wishlist').value === 'sale') ? document.getElementById('f-sale-currency').value : 'USD',
                 isSelfFound: document.getElementById('f-self-found').checked,
@@ -6146,6 +6869,26 @@ window.app = {
                 conditionTier: document.getElementById('f-condition-tier').value || null,
                 tags: (document.getElementById('f-tags').value || '').split(/[,\s]+/).map(function(t) { return t.trim().toLowerCase().replace(/^#/, ''); }).filter(function(t) { return t.length > 0; }),
                 images: currentImages,
+                // Storage Fields
+                storageRoom: document.getElementById('f-storage-room').value || '',
+                storageUnit: document.getElementById('f-storage-unit').value || '',
+                storageDrawer: document.getElementById('f-storage-drawer').value || '',
+                storageBox: document.getElementById('f-storage-box').value || '',
+
+                // Museum Fields
+                accessionCode: document.getElementById('f-accession-code').value || '',
+                donorSource: document.getElementById('f-donor-source').value || '',
+                exhibitStatus: document.getElementById('f-exhibit-status').value || '',
+                conditionReport: document.getElementById('f-condition-report').value || '',
+
+                // Shop Fields
+                cogs: parseFloat(document.getElementById('f-cogs').value) || null,
+                cogsCurrency: document.getElementById('f-cogs-currency').value || 'USD',
+                soldPrice: parseFloat(document.getElementById('f-sold-price').value) || null,
+                soldCurrency: document.getElementById('f-sold-currency').value || 'USD',
+
+                // Quick Mode Flag
+                quickModeActive: document.getElementById('f-quick-add').checked,
                 condition: {
                     stable: document.getElementById('cond-stable').checked,
                     cracking: document.getElementById('cond-cracking').checked,
@@ -6158,7 +6901,8 @@ window.app = {
                     cyano: document.getElementById('treat-cyano').checked,
                     water: document.getElementById('treat-water').checked
                 },
-                createdAt: createdAtVal
+                createdAt: createdAtVal,
+                updatedAt: Date.now()
             };
 
             // Safeguard: Strip undefined values to prevent DataCloneError in IndexedDB
@@ -6176,8 +6920,72 @@ window.app = {
                         newlyAddedFossilId = null;
                     }, 4000);
                 }
-                window.app.closeModal();
-                window.app.renderFossils();
+
+                var isQuickAdd = !isEditing && document.getElementById('f-quick-add') && document.getElementById('f-quick-add').checked;
+
+                if (isQuickAdd) {
+                    // Quick add mode: keep modal open, preserve batch values (geography, geology, storage)
+                    // Clear individual fields:
+                    document.getElementById('f-specimen').value = '';
+                    document.getElementById('f-animal-size').value = '';
+                    document.getElementById('f-anatomy').value = '';
+                    document.getElementById('f-formula').value = '';
+                    document.getElementById('f-luster').value = '';
+                    document.getElementById('f-streak').value = '';
+                    document.getElementById('f-cleavage').value = '';
+                    document.getElementById('f-crystal-system').value = '';
+                    document.getElementById('f-hardness').value = '';
+                    document.getElementById('f-color').value = '';
+                    document.getElementById('f-size').value = '';
+                    document.getElementById('f-width').value = '';
+                    document.getElementById('f-thickness').value = '';
+                    document.getElementById('f-weight').value = '';
+                    document.getElementById('f-price').value = '';
+                    document.getElementById('f-est-value').value = '';
+                    document.getElementById('f-link').value = '';
+                    document.getElementById('f-notes').value = '';
+                    document.getElementById('f-etymology').value = '';
+                    document.getElementById('f-restoration').value = '';
+                    document.getElementById('f-authority').value = '';
+                    document.getElementById('f-description').value = '';
+                    document.getElementById('f-condition-tier').value = '';
+                    document.getElementById('f-tags').value = '';
+
+                    // Clear accession code, COGS, Sold price
+                    document.getElementById('f-accession-code').value = '';
+                    document.getElementById('f-cogs').value = '';
+                    document.getElementById('f-sold-price').value = '';
+                    if (document.getElementById('shop-margin-profit')) {
+                        document.getElementById('shop-margin-profit').textContent = '$0.00';
+                        document.getElementById('shop-margin-percent').textContent = '0.0%';
+                    }
+
+                    // Clear checkboxes
+                    document.getElementById('cond-stable').checked = true;
+                    document.getElementById('cond-cracking').checked = false;
+                    document.getElementById('cond-efflorescence').checked = false;
+                    document.getElementById('cond-pyrite').checked = false;
+
+                    document.getElementById('treat-paraloid').checked = false;
+                    document.getElementById('treat-scribe').checked = false;
+                    document.getElementById('treat-cyano').checked = false;
+                    document.getElementById('treat-water').checked = false;
+
+                    // Reset current images array & UI preview list
+                    currentImages = [];
+                    var prevList = document.getElementById('image-preview-list');
+                    if (prevList) prevList.innerHTML = '';
+
+                    // Display success toast and keep modal open, focus specimen name
+                    window.app.showToast('✨ Specimen added! (Batch logging active)', 'success');
+                    window.app.renderFossils();
+
+                    var specInput = document.getElementById('f-specimen');
+                    if (specInput) specInput.focus();
+                } else {
+                    window.app.closeModal();
+                    window.app.renderFossils();
+                }
             }).catch(function(err) {
                 console.error('Failed to write fossil record:', err);
                 var errDetail = err && err.message ? err.message : String(err);
@@ -7196,52 +8004,216 @@ window.app = {
         var geoLine = [period, epoch, stratAge].filter(Boolean).join(' · ');
         var locLine = [location, country].filter(Boolean).join(', ');
         if (formation) locLine += locLine ? ' (' + formation + ')' : formation;
-        var detailParts = [category, anatomy].filter(Boolean).join(' — ');
+
+        var formattedName = escapeHtml(specimen);
+        var words = specimen.split(/\s+/);
+        if (f.type !== 'mineral') {
+            if (words.length >= 2 && /^[A-Z][a-z]+$/.test(words[0]) && /^[a-z]+$/.test(words[1])) {
+                var genus = words[0];
+                var species = words[1];
+                var rest = words.slice(2).join(' ');
+                formattedName = '<em>' + escapeHtml(genus) + ' ' + escapeHtml(species) + '</em>' + (rest ? ' ' + escapeHtml(rest) : '');
+            } else if (words.length >= 1 && /^[A-Z][a-z]+$/.test(words[0])) {
+                formattedName = '<em>' + escapeHtml(words[0]) + '</em>' + (words.length > 1 ? ' ' + escapeHtml(words.slice(1).join(' ')) : '');
+            }
+        }
+
+        // FlagsCDN helper
+        var flagHtml = '';
+        if (country) {
+            var cleanCountry = country.toLowerCase().trim();
+            var code = COUNTRY_TO_ISO[cleanCountry];
+            if (!code) {
+                if (cleanCountry.indexOf('united states') !== -1 || cleanCountry === 'usa') code = 'us';
+                else if (cleanCountry.indexOf('united kingdom') !== -1 || cleanCountry === 'uk') code = 'gb';
+                else if (cleanCountry.indexOf('morocco') !== -1) code = 'ma';
+                else if (cleanCountry.indexOf('netherlands') !== -1) code = 'nl';
+                else if (cleanCountry.indexOf('germany') !== -1) code = 'de';
+                else if (cleanCountry.indexOf('france') !== -1) code = 'fr';
+            }
+            if (!code && cleanCountry.length === 2) code = cleanCountry;
+            if (code) {
+                flagHtml = '<img class="flag-icon" src="https://flagcdn.com/w20/' + code.toLowerCase() + '.png" alt="' + escapeHtml(country) + '" />';
+            }
+        }
+
+        var detailPartsHtml = '';
+        var labelRowsHtml = '';
+        var borderGradient = f.type === 'mineral' ? 'linear-gradient(90deg, #6b46c1, #b794f4, #6b46c1)' : 'linear-gradient(90deg, #8b6914, #b8942e, #8b6914)';
+        var catalogColor = f.type === 'mineral' ? '#6b46c1' : '#8b6914';
+        var printBtnBackground = f.type === 'mineral' ? '#6b46c1' : '#8b6914';
+        var printBtnHover = f.type === 'mineral' ? '#b794f4' : '#b8942e';
+
+        if (f.type === 'mineral') {
+            var parts = [];
+            if (category) parts.push(escapeHtml(category));
+            if (f.formula) parts.push(formatChemicalFormula(f.formula));
+            detailPartsHtml = parts.join(' — ');
+
+            var systemAndHardness = [
+                f.crystalSystem,
+                (f.hardness || f.mohsHardness) ? 'Hardness: ' + (f.hardness || f.mohsHardness) : ''
+            ].filter(Boolean).join(' · ');
+
+            if (systemAndHardness) {
+                labelRowsHtml += '<div class="label-row"><span class="label-key">System</span><span class="label-val">' + escapeHtml(systemAndHardness) + '</span></div>';
+            }
+
+            var mineralProperties = [];
+            var lusterVal = f.luster || f.lustre;
+            if (lusterVal) mineralProperties.push('Luster: ' + lusterVal);
+            if (f.streak) mineralProperties.push('Streak: ' + f.streak);
+            if (f.cleavage) mineralProperties.push('Cleavage: ' + f.cleavage);
+            if (f.fracture) mineralProperties.push('Fracture: ' + f.fracture);
+
+            var mineralPropsLine = mineralProperties.join(' · ');
+            if (mineralPropsLine) {
+                labelRowsHtml += '<div class="label-row"><span class="label-key">Props</span><span class="label-val">' + escapeHtml(mineralPropsLine) + '</span></div>';
+            }
+
+            if (locLine) {
+                labelRowsHtml += '<div class="label-row"><span class="label-key">Locality</span><span class="label-val">' + flagHtml + escapeHtml(locLine) + '</span></div>';
+            }
+        } else {
+            var parts = [];
+            if (category) parts.push(escapeHtml(category));
+            if (anatomy) parts.push(escapeHtml(anatomy));
+            detailPartsHtml = parts.join(' — ');
+
+            if (geoLine) {
+                labelRowsHtml += '<div class="label-row"><span class="label-key">Age</span><span class="label-val">' + escapeHtml(geoLine) + (ageMa ? ' · ' + ageMa : '') + '</span></div>';
+            }
+            if (locLine) {
+                labelRowsHtml += '<div class="label-row"><span class="label-key">Locality</span><span class="label-val">' + flagHtml + escapeHtml(locLine) + '</span></div>';
+            }
+        }
+
+        // QR routing URL back to the specimen record in application
+        var appUrl = window.location.origin + window.location.pathname + '?specimen=' + encodeURIComponent(f.id);
+        var qrUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=' + encodeURIComponent(appUrl);
 
         var labelHtml = '<!DOCTYPE html><html><head><title>Specimen Label — ' + specimen + '</title>' +
             '<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">' +
+            '<style id="print-page-styles">' +
+            '  @media print { @page { size: 3in 2in; margin: 0; } }' +
+            '</style>' +
             '<style>' +
             '*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }' +
-            'body { display: flex; align-items: center; justify-content: center; min-height: 100vh; background: #f0ece4; font-family: "Inter", sans-serif; }' +
-            '.label-card { width: 3in; height: 2in; border: 1.5pt solid #2c2418; border-radius: 4px; padding: 0.18in 0.22in; display: flex; flex-direction: column; justify-content: space-between; background: #fff; position: relative; overflow: hidden; }' +
-            '.label-card::before { content: ""; position: absolute; top: 0; left: 0; right: 0; height: 3px; background: linear-gradient(90deg, #8b6914, #b8942e, #8b6914); }' +
+            ':root {' +
+            '  --name-font-size: 11pt;' +
+            '  --detail-font-size: 6pt;' +
+            '  --val-font-size: 6.5pt;' +
+            '  --key-font-size: 5pt;' +
+            '  --id-font-size: 6.5pt;' +
+            '}' +
+            'body { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; background: #f0ece4; font-family: "Inter", sans-serif; padding-top: 50px; }' +
+            '.label-card { width: 3in; height: 2in; border: 1.5pt solid #2c2418; border-radius: 4px; padding: 0.16in 0.18in; display: flex; flex-direction: column; justify-content: space-between; background: #fff; position: relative; overflow: hidden; transition: all 0.15s; }' +
+            '.label-card::before { content: ""; position: absolute; top: 0; left: 0; right: 0; height: 3px; background: ' + borderGradient + '; }' +
+            '.label-card.no-borders { border: none !important; outline: none !important; }' +
+            '.label-card.no-borders::before { display: none !important; }' +
+            '.label-card.size-mini { width: 2in; height: 1in; padding: 0.06in 0.08in; border-width: 1pt; }' +
+            '.label-card.size-mini::before { height: 2px; }' +
             '.label-top { display: flex; flex-direction: column; gap: 2px; }' +
-            '.specimen-name { font-family: "Playfair Display", Georgia, serif; font-size: 13pt; font-weight: 700; color: #2c2418; line-height: 1.15; letter-spacing: -0.01em; }' +
-            '.specimen-detail { font-size: 7pt; color: #7a6e5d; font-weight: 500; text-transform: uppercase; letter-spacing: 0.06em; margin-top: 1px; }' +
+            '.specimen-name { font-family: "Playfair Display", Georgia, serif; font-size: var(--name-font-size); font-weight: 700; color: #2c2418; line-height: 1.15; letter-spacing: -0.01em; }' +
+            '.specimen-name em { font-style: italic; }' +
+            '.specimen-detail { font-size: var(--detail-font-size); color: #7a6e5d; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; margin-top: 1px; }' +
             '.label-mid { display: flex; flex-direction: column; gap: 2px; border-top: 0.5pt solid #e0d8cc; padding-top: 4px; }' +
             '.label-row { display: flex; align-items: baseline; gap: 4px; }' +
-            '.label-key { font-size: 5.5pt; font-weight: 600; color: #7a6e5d; text-transform: uppercase; letter-spacing: 0.08em; min-width: 42px; flex-shrink: 0; }' +
-            '.label-val { font-size: 7.5pt; color: #2c2418; font-weight: 500; }' +
+            '.label-key { font-size: var(--key-font-size); font-weight: 700; color: #7a6e5d; text-transform: uppercase; letter-spacing: 0.08em; min-width: 38px; flex-shrink: 0; }' +
+            '.label-card.size-mini .label-key { min-width: 25px; }' +
+            '.label-val { font-size: var(--val-font-size); color: #2c2418; font-weight: 600; display: flex; align-items: center; gap: 3px; }' +
+            '.flag-icon { width: 11px; height: auto; border-radius: 1px; border: 0.2pt solid rgba(0,0,0,0.1); }' +
             '.label-bottom { display: flex; justify-content: space-between; align-items: flex-end; border-top: 0.5pt solid #e0d8cc; padding-top: 3px; }' +
-            '.catalog-id { font-size: 7pt; font-weight: 700; color: #8b6914; letter-spacing: 0.1em; text-transform: uppercase; }' +
-            '.label-archive { font-size: 5pt; color: #b0a898; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; }' +
-            '.no-print { text-align: center; margin-top: 1rem; }' +
-            '.no-print button { font-family: "Inter", sans-serif; padding: 0.5rem 1.5rem; background: #8b6914; color: #fff; border: none; border-radius: 6px; font-size: 0.875rem; font-weight: 600; cursor: pointer; transition: background 0.2s; }' +
-            '.no-print button:hover { background: #b8942e; }' +
+            '.label-bottom-left { display: flex; flex-direction: column; gap: 1px; }' +
+            '.catalog-id { font-size: var(--id-font-size); font-weight: 800; color: ' + catalogColor + '; letter-spacing: 0.05em; text-transform: uppercase; }' +
+            '.label-archive { font-size: 4.5pt; color: #b0a898; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; }' +
+            '.label-bottom-right { width: 0.35in; height: 0.35in; display: flex; align-items: center; justify-content: center; }' +
+            '.label-card.size-mini .label-bottom-right { width: 0.22in; height: 0.22in; }' +
+            '.label-qr { width: 100%; height: 100%; object-fit: contain; }' +
             '@media print {' +
-            '  body { background: #fff; min-height: auto; }' +
-            '  .no-print { display: none !important; }' +
+            '  body { background: #fff; min-height: auto; padding: 0; }' +
+            '  .no-print-header { display: none !important; }' +
             '  .label-card { border: 1.5pt solid #000; border-radius: 0; page-break-inside: avoid; }' +
-            '  @page { size: 3in 2in; margin: 0; }' +
+            '  .label-card.no-borders { border: none !important; outline: none !important; }' +
             '}' +
             '</style></head><body>' +
+            '<div class="no-print-header" style="position: fixed; top: 0; left: 0; right: 0; height: 50px; background: #fff; border-bottom: 1px solid #e0d8cc; display: flex; align-items: center; justify-content: space-between; padding: 0 20px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); z-index: 1000; font-family: sans-serif; font-size: 12px; color: #2c2418;">' +
+            '  <div style="font-weight: 700; font-size: 14px;">Label Customizer</div>' +
+            '  <div style="display: flex; gap: 15px; align-items: center;">' +
+            '    <label style="cursor: pointer; display: flex; align-items: center; gap: 4px;"><input type="checkbox" id="toggle-qr" checked onchange="updateStyles()"> QR Code</label>' +
+            '    <label style="cursor: pointer; display: flex; align-items: center; gap: 4px;"><input type="checkbox" id="toggle-borders" checked onchange="updateStyles()"> Border</label>' +
+            '    <label style="display: flex; align-items: center; gap: 4px;">Size: ' +
+            '      <select id="label-size" onchange="updateStyles()" style="padding: 2px 6px; border-radius: 4px; border: 1px solid #c7bfae; font-size: 12px;">' +
+            '        <option value="standard">Standard (3"x2")</option>' +
+            '        <option value="mini">Mini (2"x1")</option>' +
+            '      </select>' +
+            '    </label>' +
+            '    <label style="display: flex; align-items: center; gap: 4px;">Text Size: ' +
+            '      <input type="range" id="text-size" min="6" max="16" value="11" oninput="updateStyles()" style="width: 80px; cursor: pointer;">' +
+            '    </label>' +
+            '  </div>' +
+            '  <button onclick="window.print()" style="background: ' + printBtnBackground + '; color: #fff; border: none; padding: 6px 16px; border-radius: 9999px; font-weight: 700; cursor: pointer; font-size: 12px;">Print Label</button>' +
+            '</div>' +
             '<div>' +
-            '<div class="label-card">' +
+            '<div class="label-card size-standard">' +
                 '<div class="label-top">' +
-                    '<div class="specimen-name">' + escapeHtml(specimen) + '</div>' +
-                    (detailParts ? '<div class="specimen-detail">' + escapeHtml(detailParts) + '</div>' : '') +
+                    '<div class="specimen-name">' + formattedName + '</div>' +
+                    (detailPartsHtml ? '<div class="specimen-detail">' + detailPartsHtml + '</div>' : '') +
                 '</div>' +
                 '<div class="label-mid">' +
-                    (geoLine ? '<div class="label-row"><span class="label-key">Age</span><span class="label-val">' + escapeHtml(geoLine) + (ageMa ? ' · ' + ageMa : '') + '</span></div>' : '') +
-                    (locLine ? '<div class="label-row"><span class="label-key">Locality</span><span class="label-val">' + escapeHtml(locLine) + '</span></div>' : '') +
+                    labelRowsHtml +
                 '</div>' +
                 '<div class="label-bottom">' +
-                    '<span class="catalog-id">' + escapeHtml(catalogId) + '</span>' +
-                    '<span class="label-archive">Specimenry</span>' +
+                    '<div class="label-bottom-left">' +
+                        '<span class="catalog-id">' + escapeHtml(catalogId) + '</span>' +
+                        '<span class="label-archive">Specimenry</span>' +
+                    '</div>' +
+                    '<div class="label-bottom-right">' +
+                        '<img class="label-qr" src="' + qrUrl + '" alt="QR code" />' +
+                    '</div>' +
                 '</div>' +
             '</div>' +
-            '<div class="no-print"><button onclick="window.print()">Print Label</button></div>' +
             '</div>' +
+            '<script>' +
+            '  function updateStyles() {' +
+            '      var showQr = document.getElementById("toggle-qr").checked;' +
+            '      var showBorders = document.getElementById("toggle-borders").checked;' +
+            '      var size = document.getElementById("label-size").value;' +
+            '      var baseSize = parseFloat(document.getElementById("text-size").value);' +
+            '      var qrElements = document.querySelectorAll(".label-bottom-right");' +
+            '      qrElements.forEach(function(el) { el.style.display = showQr ? "flex" : "none"; });' +
+            '      var cards = document.querySelectorAll(".label-card");' +
+            '      cards.forEach(function(card) {' +
+            '          if (showBorders) {' +
+            '              card.classList.remove("no-borders");' +
+            '          } else {' +
+            '              card.classList.add("no-borders");' +
+            '          }' +
+            '          if (size === "mini") {' +
+            '              card.classList.add("size-mini");' +
+            '              card.classList.remove("size-standard");' +
+            '          } else {' +
+            '              card.classList.add("size-standard");' +
+            '              card.classList.remove("size-mini");' +
+            '          }' +
+            '      });' +
+            '      var nameScale = baseSize / 11;' +
+            '      document.documentElement.style.setProperty("--name-font-size", baseSize + "pt");' +
+            '      document.documentElement.style.setProperty("--detail-font-size", (6 * nameScale) + "pt");' +
+            '      document.documentElement.style.setProperty("--val-font-size", (6.5 * nameScale) + "pt");' +
+            '      document.documentElement.style.setProperty("--key-font-size", (5 * nameScale) + "pt");' +
+            '      document.documentElement.style.setProperty("--id-font-size", (6.5 * nameScale) + "pt");' +
+            '      var styleSheet = document.getElementById("print-page-styles");' +
+            '      if (styleSheet) {' +
+            '          if (size === "mini") {' +
+            '              styleSheet.innerText = "@media print { @page { size: 2in 1in; margin: 0; } }";' +
+            '          } else {' +
+            '              styleSheet.innerText = "@media print { @page { size: 3in 2in; margin: 0; } }";' +
+            '          }' +
+            '      }' +
+            '  }' +
+            '  window.updateStyles = updateStyles;' +
+            '</script>' +
             '</body></html>';
 
         var labelWindow = window.open('', '_blank', 'width=420,height=380,menubar=no,toolbar=no,location=no,status=no');
@@ -7272,20 +8244,22 @@ window.app = {
             // Format Scientific Name: wrap first two words in <em> tags if they look like a species binomial name
             var formattedName = escapeHtml(specimen);
             var words = specimen.split(/\s+/);
-            if (words.length >= 2 && /^[A-Z][a-z]+$/.test(words[0]) && /^[a-z]+$/.test(words[1])) {
-                var genus = words[0];
-                var species = words[1];
-                var rest = words.slice(2).join(' ');
-                formattedName = '<em>' + escapeHtml(genus) + ' ' + escapeHtml(species) + '</em>' + (rest ? ' ' + escapeHtml(rest) : '');
-            } else if (words.length >= 1 && /^[A-Z][a-z]+$/.test(words[0])) {
-                formattedName = '<em>' + escapeHtml(words[0]) + '</em>' + (words.length > 1 ? ' ' + escapeHtml(words.slice(1).join(' ')) : '');
+            if (f.type !== 'mineral') {
+                if (words.length >= 2 && /^[A-Z][a-z]+$/.test(words[0]) && /^[a-z]+$/.test(words[1])) {
+                    var genus = words[0];
+                    var species = words[1];
+                    var rest = words.slice(2).join(' ');
+                    formattedName = '<em>' + escapeHtml(genus) + ' ' + escapeHtml(species) + '</em>' + (rest ? ' ' + escapeHtml(rest) : '');
+                } else if (words.length >= 1 && /^[A-Z][a-z]+$/.test(words[0])) {
+                    formattedName = '<em>' + escapeHtml(words[0]) + '</em>' + (words.length > 1 ? ' ' + escapeHtml(words.slice(1).join(' ')) : '');
+                }
             }
 
             // Custom Museum-style Registration ID
             var fossilYear = f.createdAt ? new Date(f.createdAt).getFullYear() : 2026;
             var fossilIdx = fossils.indexOf(f) + 1;
             var paddedIdx = String(fossilIdx).padStart(4, '0');
-            var customCatalogId = 'FA-' + fossilYear + '-' + paddedIdx;
+            var customCatalogId = f.id || ((f.type === 'mineral' ? 'MIN-' : 'FA-') + fossilYear + '-' + paddedIdx);
 
             var category = f.category || '';
             var anatomy = f.anatomy || '';
@@ -7308,7 +8282,8 @@ window.app = {
                     }
                 }
             }
-            var eraColor = eraColors[fossilEra] || '#718096';
+            var eraColor = f.type === 'mineral' ? '#805ad5' : (eraColors[fossilEra] || '#718096');
+            var fossilEraLabel = f.type === 'mineral' ? 'Mineral' : fossilEra + ' Era';
 
             // FlagsCDN helper
             var flagHtml = '';
@@ -7332,20 +8307,63 @@ window.app = {
             var geoLine = [period, epoch, stratAge].filter(Boolean).join(' · ');
             var locLine = [location, country].filter(Boolean).join(', ');
             if (formation) locLine += locLine ? ' (' + formation + ')' : formation;
-            var detailParts = [category, anatomy].filter(Boolean).join(' — ');
 
-            // Wikipedia QR URL
-            var qrGenus = words[0] || 'Fossil';
-            var qrUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=' + encodeURIComponent('https://en.wikipedia.org/wiki/' + qrGenus);
+            var detailPartsHtml = '';
+            var labelRowsHtml = '';
+            if (f.type === 'mineral') {
+                var parts = [];
+                if (category) parts.push(escapeHtml(category));
+                if (f.formula) parts.push(formatChemicalFormula(f.formula));
+                detailPartsHtml = parts.join(' — ');
 
-            labelCardsHtml += '<div class="label-card">' +
+                var systemAndHardness = [
+                    f.crystalSystem,
+                    (f.hardness || f.mohsHardness) ? 'Hardness: ' + (f.hardness || f.mohsHardness) : ''
+                ].filter(Boolean).join(' · ');
+
+                if (systemAndHardness) {
+                    labelRowsHtml += '<div class="label-row"><span class="label-key">System</span><span class="label-val">' + escapeHtml(systemAndHardness) + '</span></div>';
+                }
+
+                var mineralProperties = [];
+                var lusterVal = f.luster || f.lustre;
+                if (lusterVal) mineralProperties.push('Luster: ' + lusterVal);
+                if (f.streak) mineralProperties.push('Streak: ' + f.streak);
+                if (f.cleavage) mineralProperties.push('Cleavage: ' + f.cleavage);
+                if (f.fracture) mineralProperties.push('Fracture: ' + f.fracture);
+
+                var mineralPropsLine = mineralProperties.join(' · ');
+                if (mineralPropsLine) {
+                    labelRowsHtml += '<div class="label-row"><span class="label-key">Props</span><span class="label-val">' + escapeHtml(mineralPropsLine) + '</span></div>';
+                }
+                if (locLine) {
+                    labelRowsHtml += '<div class="label-row"><span class="label-key">Locality</span><span class="label-val">' + flagHtml + escapeHtml(locLine) + '</span></div>';
+                }
+            } else {
+                var parts = [];
+                if (category) parts.push(escapeHtml(category));
+                if (anatomy) parts.push(escapeHtml(anatomy));
+                detailPartsHtml = parts.join(' — ');
+
+                if (geoLine) {
+                    labelRowsHtml += '<div class="label-row"><span class="label-key">Age</span><span class="label-val">' + escapeHtml(geoLine) + (ageMa ? ' · ' + ageMa : '') + '</span></div>';
+                }
+                if (locLine) {
+                    labelRowsHtml += '<div class="label-row"><span class="label-key">Locality</span><span class="label-val">' + flagHtml + escapeHtml(locLine) + '</span></div>';
+                }
+            }
+
+            // QR routing URL back to the specimen record in application
+            var appUrl = window.location.origin + window.location.pathname + '?specimen=' + encodeURIComponent(f.id);
+            var qrUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=' + encodeURIComponent(appUrl);
+
+            labelCardsHtml += '<div class="label-card size-standard">' +
                 '<div class="label-top">' +
                     '<div class="specimen-name">' + formattedName + '</div>' +
-                    (detailParts ? '<div class="specimen-detail">' + escapeHtml(detailParts) + '</div>' : '') +
+                    (detailPartsHtml ? '<div class="specimen-detail">' + detailPartsHtml + '</div>' : '') +
                 '</div>' +
                 '<div class="label-mid">' +
-                    (geoLine ? '<div class="label-row"><span class="label-key">Age</span><span class="label-val">' + escapeHtml(geoLine) + (ageMa ? ' · ' + ageMa : '') + '</span></div>' : '') +
-                    (locLine ? '<div class="label-row"><span class="label-key">Locality</span><span class="label-val">' + flagHtml + escapeHtml(locLine) + '</span></div>' : '') +
+                    labelRowsHtml +
                 '</div>' +
                 '<div class="label-bottom">' +
                     '<div class="label-bottom-left">' +
@@ -7356,56 +8374,126 @@ window.app = {
                         '<img class="label-qr" src="' + qrUrl + '" alt="QR code" />' +
                     '</div>' +
                 '</div>' +
-                '<div class="era-indicator" style="background: ' + eraColor + ';" title="' + fossilEra + ' Era"></div>' +
+                '<div class="era-indicator" style="background: ' + eraColor + ';" title="' + fossilEraLabel + '"></div>' +
             '</div>';
         });
 
         var printHtml = '<!DOCTYPE html><html><head><title>Batch Specimen Labels — Specimenry</title>' +
             '<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,600;0,700;1,600;1,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">' +
+            '<style id="batch-print-page-styles">' +
+            '  @media print { @page { size: portrait; margin: 0.5in; } .labels-grid { gap: 0.3in 0.4in; grid-template-columns: repeat(2, 3in); margin: 0.5in auto; } }' +
+            '</style>' +
             '<style>' +
             '*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }' +
-            'body { background: #f4f1ea; font-family: "Inter", sans-serif; padding: 2rem; display: flex; flex-direction: column; align-items: center; min-height: 100vh; }' +
-            '.no-print-header { width: 100%; max-width: 6.8in; background: #fff; border-radius: 12px; padding: 1.25rem 1.75rem; display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.05), 0 8px 10px -6px rgba(0,0,0,0.05); border: 1px solid #e2dddb; }' +
-            '.no-print-header h1 { font-family: "Playfair Display", serif; font-size: 1.4rem; color: #1a1510; font-weight: 700; }' +
-            '.no-print-header p { font-size: 0.8rem; color: #736b63; margin-top: 0.25rem; font-weight: 500; }' +
-            '.no-print-header button { font-family: "Inter", sans-serif; padding: 0.65rem 1.75rem; background: #1a1510; color: #fff; border: none; border-radius: 9999px; font-size: 0.875rem; font-weight: 700; cursor: pointer; transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1); box-shadow: 0 4px 12px rgba(0,0,0,0.15); }' +
-            '.no-print-header button:hover { background: var(--accent, #4ca1a3); transform: translateY(-1px); }' +
-            '.labels-grid { display: grid; grid-template-columns: repeat(2, 3in); gap: 0.4in; justify-content: center; }' +
-            '.label-card { width: 3in; height: 2in; border: 1pt solid #1a1510; outline: 0.5pt solid rgba(0,0,0,0.15); outline-offset: -3pt; padding: 0.16in 0.18in; display: flex; flex-direction: column; justify-content: space-between; background: #fff; position: relative; overflow: hidden; page-break-inside: avoid; }' +
+            ':root {' +
+            '  --name-font-size: 11pt;' +
+            '  --detail-font-size: 6pt;' +
+            '  --val-font-size: 6.5pt;' +
+            '  --key-font-size: 5pt;' +
+            '  --id-font-size: 6.5pt;' +
+            '}' +
+            'body { background: #f4f1ea; font-family: "Inter", sans-serif; padding-top: 60px; display: flex; flex-direction: column; align-items: center; min-height: 100vh; }' +
+            '.no-print-header { position: fixed; top: 0; left: 0; right: 0; height: 50px; background: #fff; border-bottom: 1px solid #e0d8cc; display: flex; align-items: center; justify-content: space-between; padding: 0 20px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); z-index: 1000; font-family: sans-serif; font-size: 12px; color: #2c2418; width: 100%; }' +
+            '.labels-grid { display: grid; grid-template-columns: repeat(2, 3in); gap: 0.4in; justify-content: center; margin: 2rem auto; }' +
+            '.labels-grid.size-mini { grid-template-columns: repeat(3, 2in); gap: 0.15in 0.2in; }' +
+            '.label-card { width: 3in; height: 2in; border: 1pt solid #1a1510; outline: 0.5pt solid rgba(0,0,0,0.15); outline-offset: -3pt; padding: 0.16in 0.18in; display: flex; flex-direction: column; justify-content: space-between; background: #fff; position: relative; overflow: hidden; page-break-inside: avoid; transition: all 0.15s; }' +
+            '.label-card.no-borders { border: none !important; outline: none !important; }' +
+            '.label-card.no-borders .era-indicator { display: none !important; }' +
+            '.label-card.size-mini { width: 2in; height: 1in; padding: 0.06in 0.08in; border-width: 1pt; outline-offset: -2pt; }' +
             '.era-indicator { position: absolute; top: 0; left: 0; right: 0; height: 4px; }' +
+            '.label-card.size-mini .era-indicator { height: 2px; }' +
             '.label-top { display: flex; flex-direction: column; gap: 1px; }' +
-            '.specimen-name { font-family: "Playfair Display", Georgia, serif; font-size: 11pt; font-weight: 700; color: #1a1510; line-height: 1.15; letter-spacing: -0.01em; }' +
+            '.specimen-name { font-family: "Playfair Display", Georgia, serif; font-size: var(--name-font-size); font-weight: 700; color: #1a1510; line-height: 1.15; letter-spacing: -0.01em; }' +
             '.specimen-name em { font-style: italic; }' +
-            '.specimen-detail { font-size: 6pt; color: #736b63; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; margin-top: 1px; }' +
+            '.specimen-detail { font-size: var(--detail-font-size); color: #736b63; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; margin-top: 1px; }' +
             '.label-mid { display: flex; flex-direction: column; gap: 2px; border-top: 0.5pt solid #eae5e3; padding-top: 4px; margin-top: 2px; }' +
             '.label-row { display: flex; align-items: baseline; gap: 4px; }' +
-            '.label-key { font-size: 5pt; font-weight: 700; color: #8c837b; text-transform: uppercase; letter-spacing: 0.08em; min-width: 38px; flex-shrink: 0; }' +
-            '.label-val { font-size: 6.5pt; color: #1a1510; font-weight: 600; display: flex; align-items: center; gap: 3px; }' +
+            '.label-key { font-size: var(--key-font-size); font-weight: 700; color: #8c837b; text-transform: uppercase; letter-spacing: 0.08em; min-width: 38px; flex-shrink: 0; }' +
+            '.label-card.size-mini .label-key { min-width: 25px; }' +
+            '.label-val { font-size: var(--val-font-size); color: #1a1510; font-weight: 600; display: flex; align-items: center; gap: 3px; }' +
             '.flag-icon { width: 11px; height: auto; border-radius: 1px; border: 0.2pt solid rgba(0,0,0,0.1); }' +
             '.label-bottom { display: flex; justify-content: space-between; align-items: flex-end; border-top: 0.5pt solid #eae5e3; padding-top: 3px; }' +
             '.label-bottom-left { display: flex; flex-direction: column; gap: 1px; }' +
-            '.catalog-id { font-size: 6.5pt; font-weight: 800; color: #1a1510; letter-spacing: 0.05em; text-transform: uppercase; }' +
+            '.catalog-id { font-size: var(--id-font-size); font-weight: 800; color: #1a1510; letter-spacing: 0.05em; text-transform: uppercase; }' +
             '.label-archive { font-size: 4.5pt; color: #a69e97; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; }' +
             '.label-bottom-right { width: 0.35in; height: 0.35in; display: flex; align-items: center; justify-content: center; }' +
+            '.label-card.size-mini .label-bottom-right { width: 0.22in; height: 0.22in; }' +
             '.label-qr { width: 100%; height: 100%; object-fit: contain; }' +
             '@media print {' +
             '  body { background: #fff; padding: 0; }' +
             '  .no-print-header { display: none !important; }' +
-            '  .labels-grid { gap: 0.3in 0.4in; grid-template-columns: repeat(2, 3in); margin: 0.5in auto; }' +
             '  .label-card { border: 1.2pt solid #000; border-radius: 0; box-shadow: none; outline: 0.5pt solid #000; outline-offset: -3pt; }' +
-            '  @page { size: portrait; margin: 0.5in; }' +
+            '  .label-card.no-borders { border: none !important; outline: none !important; }' +
             '}' +
             '</style></head><body>' +
             '<div class="no-print-header">' +
-            '<div>' +
-            '<h1>Museum Exhibition Labels</h1>' +
-            '<p>Selected samlingsobjekt: <strong>' + ids.length + '</strong>. Utskriftsstorlek: 3&times;2 tum (passar i monterfack).</p>' +
-            '</div>' +
-            '<button onclick="window.print()">Skriv ut etikettark</button>' +
+            '  <div style="font-weight: 700; font-size: 14px;">Label Customizer (Batch: ' + ids.length + ')</div>' +
+            '  <div style="display: flex; gap: 15px; align-items: center;">' +
+            '    <label style="cursor: pointer; display: flex; align-items: center; gap: 4px;"><input type="checkbox" id="toggle-qr" checked onchange="updateStyles()"> QR Code</label>' +
+            '    <label style="cursor: pointer; display: flex; align-items: center; gap: 4px;"><input type="checkbox" id="toggle-borders" checked onchange="updateStyles()"> Border</label>' +
+            '    <label style="display: flex; align-items: center; gap: 4px;">Size: ' +
+            '      <select id="label-size" onchange="updateStyles()" style="padding: 2px 6px; border-radius: 4px; border: 1px solid #c7bfae; font-size: 12px;">' +
+            '        <option value="standard">Standard (3"x2")</option>' +
+            '        <option value="mini">Mini (2"x1")</option>' +
+            '      </select>' +
+            '    </label>' +
+            '    <label style="display: flex; align-items: center; gap: 4px;">Text Size: ' +
+            '      <input type="range" id="text-size" min="6" max="16" value="11" oninput="updateStyles()" style="width: 80px; cursor: pointer;">' +
+            '    </label>' +
+            '  </div>' +
+            '  <button onclick="window.print()" style="background: #1a1510; color: #fff; border: none; padding: 6px 16px; border-radius: 9999px; font-weight: 700; cursor: pointer; font-size: 12px;">Print Labels</button>' +
             '</div>' +
             '<div class="labels-grid">' +
             labelCardsHtml +
             '</div>' +
+            '<script>' +
+            '  function updateStyles() {' +
+            '      var showQr = document.getElementById("toggle-qr").checked;' +
+            '      var showBorders = document.getElementById("toggle-borders").checked;' +
+            '      var size = document.getElementById("label-size").value;' +
+            '      var baseSize = parseFloat(document.getElementById("text-size").value);' +
+            '      var qrElements = document.querySelectorAll(".label-bottom-right");' +
+            '      qrElements.forEach(function(el) { el.style.display = showQr ? "flex" : "none"; });' +
+            '      var cards = document.querySelectorAll(".label-card");' +
+            '      cards.forEach(function(card) {' +
+            '          if (showBorders) {' +
+            '              card.classList.remove("no-borders");' +
+            '          } else {' +
+            '              card.classList.add("no-borders");' +
+            '          }' +
+            '          if (size === "mini") {' +
+            '              card.classList.add("size-mini");' +
+            '              card.classList.remove("size-standard");' +
+            '          } else {' +
+            '              card.classList.add("size-standard");' +
+            '              card.classList.remove("size-mini");' +
+            '          }' +
+            '      });' +
+            '      var grid = document.querySelector(".labels-grid");' +
+            '      if (grid) {' +
+            '          if (size === "mini") {' +
+            '              grid.classList.add("size-mini");' +
+            '          } else {' +
+            '              grid.classList.remove("size-mini");' +
+            '          }' +
+            '      }' +
+            '      var nameScale = baseSize / 11;' +
+            '      document.documentElement.style.setProperty("--name-font-size", baseSize + "pt");' +
+            '      document.documentElement.style.setProperty("--detail-font-size", (6 * nameScale) + "pt");' +
+            '      document.documentElement.style.setProperty("--val-font-size", (6.5 * nameScale) + "pt");' +
+            '      document.documentElement.style.setProperty("--key-font-size", (5 * nameScale) + "pt");' +
+            '      document.documentElement.style.setProperty("--id-font-size", (6.5 * nameScale) + "pt");' +
+            '      var batchStyleSheet = document.getElementById("batch-print-page-styles");' +
+            '      if (batchStyleSheet) {' +
+            '          if (size === "mini") {' +
+            '              batchStyleSheet.innerText = "@media print { @page { size: portrait; margin: 0.5in; } .labels-grid { grid-template-columns: repeat(3, 2in) !important; gap: 0.15in 0.2in !important; } }";' +
+            '          } else {' +
+            '              batchStyleSheet.innerText = "@media print { @page { size: portrait; margin: 0.5in; } .labels-grid { grid-template-columns: repeat(2, 3in) !important; gap: 0.3in 0.4in !important; } }";' +
+            '          }' +
+            '      }' +
+            '  }' +
+            '  window.updateStyles = updateStyles;' +
+            '</script>' +
             '</body></html>';
 
         var printWindow = window.open('', '_blank', 'width=850,height=650,menubar=no,toolbar=no,location=no,status=no');
@@ -7441,63 +8529,162 @@ window.app = {
             }
             
             // --- UPDATE DROPDOWN OPTIONS WITH COUNTS ---
+            var specTypeSelect = document.getElementById('filter-specimen-type');
+            var specTypeVal = specTypeSelect ? specTypeSelect.value : '';
+            var isMineralFilter = (specTypeVal === 'mineral');
+
+            // Dynamically show/hide irrelevant tabs for minerals in stats control
+            var btnTreemap = document.getElementById('btn-toggle-treemap');
+            var btnEarthHistory = document.getElementById('btn-toggle-earth-history');
+            var btnChronoChart = document.getElementById('btn-toggle-chrono-chart');
+            var btnMap = document.getElementById('btn-toggle-map');
+
+            if (isMineralFilter) {
+                if (btnTreemap) btnTreemap.style.display = 'none';
+                if (btnEarthHistory) btnEarthHistory.style.display = 'none';
+                if (btnChronoChart) btnChronoChart.style.display = 'none';
+                if (btnMap) {
+                    btnMap.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"/><line x1="8" y1="2" x2="8" y2="18"/><line x1="16" y1="6" x2="16" y2="22"/></svg> Specimen Map';
+                }
+                
+                // If one of the hidden tabs is currently active, reset to charts dashboard
+                if (isTreemapOpen || isEarthHistoryOpen || isChronoChartOpen) {
+                    isTreemapOpen = false;
+                    isEarthHistoryOpen = false;
+                    isChronoChartOpen = false;
+                    
+                    var chartsBtn = document.getElementById('btn-toggle-charts');
+                    if (chartsBtn) {
+                        var sibs = chartsBtn.parentElement.querySelectorAll('button');
+                        sibs.forEach(function(btn) { btn.classList.remove('active'); });
+                        chartsBtn.classList.add('active');
+                    }
+                    
+                    var treemapCont = document.getElementById('treemap-container');
+                    if (treemapCont) treemapCont.style.display = 'none';
+                    var earthCont = document.getElementById('earth-history-container');
+                    if (earthCont) earthCont.style.display = 'none';
+                    var chronoCont = document.getElementById('chrono-chart-container');
+                    if (chronoCont) chronoCont.style.display = 'none';
+                    
+                    var chartsCont = document.getElementById('stats-charts-container');
+                    if (chartsCont) chartsCont.style.display = 'flex';
+                }
+            } else {
+                if (btnTreemap) btnTreemap.style.display = '';
+                if (btnEarthHistory) btnEarthHistory.style.display = '';
+                if (btnChronoChart) btnChronoChart.style.display = '';
+                if (btnMap) {
+                    btnMap.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"/><line x1="8" y1="2" x2="8" y2="18"/><line x1="16" y1="6" x2="16" y2="22"/></svg> Fossil Map';
+                }
+            }
+
+            var lblCategory = document.getElementById('lbl-filter-category');
+            if (lblCategory) {
+                lblCategory.textContent = isMineralFilter ? 'Mineral Group' : 'Category';
+            }
+
+            var lblPeriod = document.getElementById('lbl-filter-period');
+            if (lblPeriod) {
+                lblPeriod.textContent = isMineralFilter ? 'Crystal System' : 'Period';
+            }
+
+            var filterTypeGrp = document.getElementById('filter-type-group');
+            if (filterTypeGrp) {
+                filterTypeGrp.style.display = isMineralFilter ? 'none' : '';
+            }
+
             // Tally all specimens in active collection view (owned, sold, or wishlist)
             var activeCollectionFossils = fossils.filter(function(f) { 
                 if (f.isCartItem) return false;
+                
+                // Specimen Type filter
+                if (specTypeVal) {
+                    if (specTypeVal === 'fossil') {
+                        if (f.type && f.type !== 'fossil') return false;
+                    } else if (specTypeVal === 'mineral') {
+                        if (!f.type || f.type !== 'mineral') return false;
+                    }
+                }
+
                 if (currentView === 'sold') return !!f.isSold;
-                if (currentView === 'true') return !!f.isWishlist && !f.isSold && !f.isDream;
-                if (currentView === 'sale') return !f.isWishlist && !f.isSold && !!f.isForSale && !f.isDream;
+                if (currentView === 'true') return !!f.isWishlist && !f.isSold && !f.isDream && !f.isTraded;
+                if (currentView === 'sale') return !f.isWishlist && !f.isSold && !!f.isForSale && !f.isDream && !f.isTraded;
                 if (currentView === 'dream') return !!f.isDream;
-                return !f.isWishlist && !f.isSold && !f.isDream;
+                return !f.isWishlist && !f.isSold && !f.isDream && !f.isTraded;
             });
             
             var catTallies = {};
             var typeTallies = {};
             var periodTallies = {};
+            var systemTallies = {};
             activeCollectionFossils.forEach(function(f) {
                 if (f.category) catTallies[f.category] = (catTallies[f.category] || 0) + 1;
                 if (f.fossilType) typeTallies[f.fossilType] = (typeTallies[f.fossilType] || 0) + 1;
                 if (f.geologicalPeriod) periodTallies[f.geologicalPeriod] = (periodTallies[f.geologicalPeriod] || 0) + 1;
+                if (f.crystalSystem) systemTallies[f.crystalSystem] = (systemTallies[f.crystalSystem] || 0) + 1;
             });
             
             // Category filter dropdown options update
             var catSelect = document.getElementById('filter-category');
             if (catSelect) {
                 var selectedVal = catSelect.value;
-                var html = '<option value="">All Categories (' + activeCollectionFossils.length + ')</option>';
-                CATEGORIES.forEach(function(cat) {
-                    var count = catTallies[cat] || 0;
-                    html += '<option value="' + escapeHtml(cat) + '"' + (cat === selectedVal ? ' selected' : '') + '>' + escapeHtml(cat) + ' (' + count + ')</option>';
-                });
+                var html = '';
+                if (isMineralFilter) {
+                    html = '<option value="">All Groups (' + activeCollectionFossils.length + ')</option>';
+                    MINERAL_GROUPS.forEach(function(cat) {
+                        var count = catTallies[cat] || 0;
+                        html += '<option value="' + escapeHtml(cat) + '"' + (cat === selectedVal ? ' selected' : '') + '>' + escapeHtml(cat) + ' (' + count + ')</option>';
+                    });
+                } else {
+                    html = '<option value="">All Categories (' + activeCollectionFossils.length + ')</option>';
+                    CATEGORIES.forEach(function(cat) {
+                        var count = catTallies[cat] || 0;
+                        html += '<option value="' + escapeHtml(cat) + '"' + (cat === selectedVal ? ' selected' : '') + '>' + escapeHtml(cat) + ' (' + count + ')</option>';
+                    });
+                }
                 catSelect.innerHTML = html;
             }
 
             // Fossil Type filter dropdown options update
             var typeSelect = document.getElementById('filter-type');
             if (typeSelect) {
-                var selectedVal = typeSelect.value;
-                var html = '<option value="">All Types (' + activeCollectionFossils.length + ')</option>';
-                FOSSIL_TYPES.forEach(function(type) {
-                    var count = typeTallies[type] || 0;
-                    html += '<option value="' + escapeHtml(type) + '"' + (type === selectedVal ? ' selected' : '') + '>' + escapeHtml(type) + ' (' + count + ')</option>';
-                });
-                typeSelect.innerHTML = html;
+                if (isMineralFilter) {
+                    typeSelect.innerHTML = '<option value="">All Types (0)</option>';
+                } else {
+                    var selectedVal = typeSelect.value;
+                    var html = '<option value="">All Types (' + activeCollectionFossils.length + ')</option>';
+                    FOSSIL_TYPES.forEach(function(type) {
+                        var count = typeTallies[type] || 0;
+                        html += '<option value="' + escapeHtml(type) + '"' + (type === selectedVal ? ' selected' : '') + '>' + escapeHtml(type) + ' (' + count + ')</option>';
+                    });
+                    typeSelect.innerHTML = html;
+                }
             }
             
             // Period filter dropdown options update
             var periodSelect = document.getElementById('filter-period');
             if (periodSelect) {
                 var selectedVal = periodSelect.value;
-                var html = '<option value="">All Periods (' + activeCollectionFossils.length + ')</option>';
-                var groups = getPeriodsGrouped();
-                groups.forEach(function(group) {
-                    html += '<optgroup label="' + escapeHtml(group.era) + '">';
-                    group.periods.forEach(function(per) {
-                        var count = periodTallies[per] || 0;
-                        html += '<option value="' + escapeHtml(per) + '"' + (per === selectedVal ? ' selected' : '') + '>' + escapeHtml(per) + ' (' + count + ')</option>';
+                var html = '';
+                if (isMineralFilter) {
+                    html = '<option value="">All Systems (' + activeCollectionFossils.length + ')</option>';
+                    CRYSTAL_SYSTEMS.forEach(function(sys) {
+                        var count = systemTallies[sys] || 0;
+                        html += '<option value="' + escapeHtml(sys) + '"' + (sys === selectedVal ? ' selected' : '') + '>' + escapeHtml(sys) + ' (' + count + ')</option>';
                     });
-                    html += '</optgroup>';
-                });
+                } else {
+                    html = '<option value="">All Periods (' + activeCollectionFossils.length + ')</option>';
+                    var groups = getPeriodsGrouped();
+                    groups.forEach(function(group) {
+                        html += '<optgroup label="' + escapeHtml(group.era) + '">';
+                        group.periods.forEach(function(per) {
+                            var count = periodTallies[per] || 0;
+                            html += '<option value="' + escapeHtml(per) + '"' + (per === selectedVal ? ' selected' : '') + '>' + escapeHtml(per) + ' (' + count + ')</option>';
+                        });
+                        html += '</optgroup>';
+                    });
+                }
                 periodSelect.innerHTML = html;
             }
             
@@ -7526,6 +8713,20 @@ window.app = {
                 var tg = (f.tags || []).join(' ').toLowerCase();
                 var foundText = f.isSelfFound ? 'self found found collected' : '';
 
+                // Mineral specific text search properties
+                var formula = f.formula ? f.formula.toLowerCase() : '';
+                var crystal = f.crystalSystem ? f.crystalSystem.toLowerCase() : '';
+                var luster = f.luster ? f.luster.toLowerCase() : '';
+                var streak = f.streak ? f.streak.toLowerCase() : '';
+                var cleavage = f.cleavage ? f.cleavage.toLowerCase() : '';
+                var color = f.color ? f.color.toLowerCase() : '';
+
+                // Storage location search properties
+                var sRoom = f.storageRoom ? f.storageRoom.toLowerCase() : '';
+                var sUnit = f.storageUnit ? f.storageUnit.toLowerCase() : '';
+                var sDrawer = f.storageDrawer ? f.storageDrawer.toLowerCase() : '';
+                var sBox = f.storageBox ? f.storageBox.toLowerCase() : '';
+
                 var matchSearch = false;
                 if (!searchQ) {
                     matchSearch = true;
@@ -7534,12 +8735,21 @@ window.app = {
                     var tagQ = searchQ.substring(1).trim();
                     matchSearch = (f.tags || []).some(function(t) { return t.toLowerCase().indexOf(tagQ) !== -1; });
                 } else {
-                    // "Smart" Search: check against a virtual index for this fossil
-                    // This index includes specimen name, anatomy, notes, location, and the 'Self Found' status keywords
+                    // "Smart" Search: check against a virtual index for this fossil / mineral
                     if (s.indexOf(searchQ) !== -1 || a.indexOf(searchQ) !== -1 || 
                         n.indexOf(searchQ) !== -1 || c.indexOf(searchQ) !== -1 || 
                         fm.indexOf(searchQ) !== -1 || tg.indexOf(searchQ) !== -1 ||
-                        foundText.indexOf(searchQ) !== -1) {
+                        foundText.indexOf(searchQ) !== -1 ||
+                        formula.indexOf(searchQ) !== -1 ||
+                        crystal.indexOf(searchQ) !== -1 ||
+                        luster.indexOf(searchQ) !== -1 ||
+                        streak.indexOf(searchQ) !== -1 ||
+                        cleavage.indexOf(searchQ) !== -1 ||
+                        color.indexOf(searchQ) !== -1 ||
+                        sRoom.indexOf(searchQ) !== -1 ||
+                        sUnit.indexOf(searchQ) !== -1 ||
+                        sDrawer.indexOf(searchQ) !== -1 ||
+                        sBox.indexOf(searchQ) !== -1) {
                         matchSearch = true;
                     } else {
                         // 2. Fallback to Precision Fuzzy (handles "Megladon", "Shrak", etc.)
@@ -7550,8 +8760,6 @@ window.app = {
                             var distLocation = Math.min(getLevenshteinDistance(c, searchQ), getLevenshteinDistance(fm, searchQ));
                             
                             // We allow up to 2 typos for specimen names (longer words = more room for error)
-                            // This prevents "Allosaurus" matching "Spinosaurus" (dist ~4) while
-                            // still catching "Megladon" (dist 1) or "Shrak" (dist 2).
                             matchSearch = (distSpecimen <= 2) || 
                                           (distAnatomy <= 1) || 
                                           (distLocation <= 1);
@@ -7561,22 +8769,41 @@ window.app = {
                     }
                 }
 
+                // Specimen Type match
+                var matchSpecType = true;
+                if (specTypeVal) {
+                    if (specTypeVal === 'fossil') {
+                        matchSpecType = (!f.type || f.type === 'fossil');
+                    } else if (specTypeVal === 'mineral') {
+                        matchSpecType = (f.type === 'mineral');
+                    }
+                }
+
                 var matchCat      = !catQ    || f.category === catQ;
                 var matchType     = !typeQ   || f.fossilType === typeQ;
-                var matchPeriod   = !periodQ || f.geologicalPeriod === periodQ;
+                
+                var matchPeriod   = true;
+                if (periodQ) {
+                    if (f.type === 'mineral') {
+                        matchPeriod = (f.crystalSystem === periodQ);
+                    } else {
+                        matchPeriod = (f.geologicalPeriod === periodQ);
+                    }
+                }
+
                 var matchView = false;
                 if (currentView === 'sold') {
                     matchView = !!f.isSold;
                 } else if (currentView === 'true') {
-                    matchView = !!f.isWishlist && !f.isSold && !f.isDream;
+                    matchView = !!f.isWishlist && !f.isSold && !f.isDream && !f.isTraded;
                 } else if (currentView === 'sale') {
-                    matchView = !f.isWishlist && !f.isSold && !!f.isForSale && !f.isDream;
+                    matchView = !f.isWishlist && !f.isSold && !!f.isForSale && !f.isDream && !f.isTraded;
                 } else if (currentView === 'dream') {
                     matchView = !!f.isDream;
                 } else {
-                    matchView = !f.isWishlist && !f.isSold && !f.isDream;
+                    matchView = !f.isWishlist && !f.isSold && !f.isDream && !f.isTraded;
                 }
-                return matchSearch && matchCat && matchType && matchPeriod && matchView;
+                return matchSearch && matchSpecType && matchCat && matchType && matchPeriod && matchView;
             });
 
             // --- UPDATE SEARCH COUNT ---
@@ -7598,7 +8825,7 @@ window.app = {
                     var count = 0;
                     
                     filtered.forEach(function(f) {
-                        if (currentView === 'sale' && !f.isWishlist && !f.isSold && !!f.isForSale && !f.isDream) {
+                        if (currentView === 'sale' && !f.isWishlist && !f.isSold && !!f.isForSale && !f.isDream && !f.isTraded) {
                             var priceVal = parseFloat(f.salePrice) || 0;
                             if (priceVal > 0) {
                                 var curr = (f.saleCurrency || 'USD').toUpperCase();
@@ -8024,6 +9251,27 @@ window.app = {
                         detailsHtml += '</div>';
                     }
 
+                    var metaHtmlStr = '';
+                    if (f.type === 'mineral') {
+                        var formulaHtml = formatChemicalFormula(f.formula);
+                        var minDetails = [];
+                        if (formulaHtml) minDetails.push('<span style="font-family: monospace; font-weight: 600;">' + formulaHtml + '</span>');
+                        if (f.category) minDetails.push(escapeHtml(f.category));
+                        if (f.crystalSystem) minDetails.push(escapeHtml(f.crystalSystem));
+                        
+                        var detailsLine2 = [];
+                        if (f.hardness) detailsLine2.push('Hardness: ' + escapeHtml(f.hardness));
+                        if (f.luster) detailsLine2.push(escapeHtml(f.luster));
+                        if (f.color) detailsLine2.push(escapeHtml(f.color));
+                        
+                        metaHtmlStr = '<p class="card-meta"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg> <span>' + minDetails.join(' &middot; ') + '</span></p>';
+                        if (detailsLine2.length > 0) {
+                            metaHtmlStr += '<p class="card-meta" style="margin-top: 0.2rem;"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> <span>' + detailsLine2.join(' &middot; ') + '</span></p>';
+                        }
+                    } else {
+                        metaHtmlStr = '<p class="card-meta"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg> <span>' + escapeHtml(f.category) + (f.fossilType ? ' &middot; ' + escapeHtml(f.fossilType) : '') + (f.anatomy ? ' &middot; <span style="font-weight:600; color:var(--accent);">' + escapeHtml(f.anatomy) + '</span>' : '') + '</span></p>';
+                    }
+
                     cardInnerHtml =
                         '<div class="checkbox-container">' +
                             '<input type="checkbox" aria-label="Select ' + escapeHtml(f.specimen) + '" onchange="app.toggleSelectFossil(event, \'' + f.id + '\')" ' + (selectedFossils.has(f.id) ? 'checked' : '') + '>' +
@@ -8042,17 +9290,17 @@ window.app = {
                             '</div>' +
                             '<h3 class="card-title">' + annotateSpecimenName(f.specimen, f) + '</h3>' +
                             (f.description ? '<p class="card-description-snippet" style="font-size: 0.8rem; font-style: italic; color: var(--text-secondary); margin-top: 0.15rem; margin-bottom: 0.4rem; line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;" title="' + escapeHtml(f.description) + '">' + escapeHtml(f.description) + '</p>' : '') +
-                            '<p class="card-meta"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg> <span>' + escapeHtml(f.category) + (f.fossilType ? ' &middot; ' + escapeHtml(f.fossilType) : '') + (f.anatomy ? ' &middot; <span style="font-weight:600; color:var(--accent);">' + escapeHtml(f.anatomy) + '</span>' : '') + '</span></p>' +
+                            metaHtmlStr +
                             '<p class="card-meta" style="margin-top: 0.35rem;"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg> <span style="word-break: break-word;">' + locationHtmlStr + '</span></p>' +
                             detailsHtml +
                             ((f.tags && f.tags.length > 0) ? '<div class="card-tags">' + f.tags.map(function(t) { return '<span class="tag-pill" onclick="event.stopPropagation(); document.getElementById(\'search\').value = \'#' + t + '\'; app.renderFossils();">#' + t + '</span>'; }).join('') + '</div>' : '') +
                             '<div class="card-footer">' +
                                 '<div style="display: flex; gap: 0.5rem; align-items: center;">' +
-                                    (f.isDream ? '<span class="badge badge-dream" style="background: rgba(168, 120, 208, 0.15); border: 1px solid #a878d0; color: #a878d0; font-weight: 700; padding: 0.15rem 0.5rem; border-radius: 4px; font-size: 0.7rem; text-transform: uppercase;">Dream</span>' : (f.isSold ? '<span class="badge badge-sold">Sold</span>' : (f.isForSale ? '<span class="badge badge-for-sale" style="background: rgba(229, 142, 38, 0.12); border: 1px solid var(--warning); color: var(--warning); font-weight: 700; padding: 0.15rem 0.5rem; border-radius: 4px; font-size: 0.7rem; text-transform: uppercase;">For Sale</span>' : '<span class="badge badge-owned">Owned</span>'))) +
+                                    (f.isTraded ? '<span class="badge badge-traded" style="background: rgba(49, 151, 149, 0.15); border: 1px solid #319795; color: #319795; font-weight: 700; padding: 0.15rem 0.5rem; border-radius: 4px; font-size: 0.7rem; text-transform: uppercase;">Traded</span>' : (f.isDream ? '<span class="badge badge-dream" style="background: rgba(168, 120, 208, 0.15); border: 1px solid #a878d0; color: #a878d0; font-weight: 700; padding: 0.15rem 0.5rem; border-radius: 4px; font-size: 0.7rem; text-transform: uppercase;">Dream</span>' : (f.isSold ? '<span class="badge badge-sold">Sold</span>' : (f.isForSale ? '<span class="badge badge-for-sale" style="background: rgba(229, 142, 38, 0.12); border: 1px solid var(--warning); color: var(--warning); font-weight: 700; padding: 0.15rem 0.5rem; border-radius: 4px; font-size: 0.7rem; text-transform: uppercase;">For Sale</span>' : '<span class="badge badge-owned">Owned</span>')))) +
                                     (f.isSelfFound ? '<span class="badge badge-self-found" style="display: flex; align-items: center; gap: 4px;"><svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg> Found</span>' : '') +
                                 '</div>' +
                                 '<div class="card-actions">' +
-                                    '<button class="btn-taxonomy ' + (expandedTaxonomyIds.has(f.id) ? 'active' : '') + '" title="Biological Taxonomy" onclick="app.toggleTaxonomy(\'' + f.id + '\')"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5"/><path d="M5 12h14"/><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></svg></button>' +
+                                    (f.type !== 'mineral' ? '<button class="btn-taxonomy ' + (expandedTaxonomyIds.has(f.id) ? 'active' : '') + '" title="Biological Taxonomy" onclick="app.toggleTaxonomy(\'' + f.id + '\')"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5"/><path d="M5 12h14"/><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></svg></button>' : '') +
                                     (f.isDream ? 
                                         '<button title="Edit" onclick="app.openDreamItemModal(\'' + f.id + '\')"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>' :
                                         '<button title="Edit" onclick="app.openModal(\'' + f.id + '\')"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>'
@@ -8064,7 +9312,10 @@ window.app = {
                                             '<svg class="chevron-indicator" xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="opacity: 0.85; margin-left: 1px;"><path d="m6 9 6 6 6-6"/></svg>' +
                                         '</button>' +
                                         '<div class="card-dropdown-list" id="dropdown-' + f.id + '">' +
-                                            '<button class="dropdown-item" onclick="event.stopPropagation(); app.openDeepDive(\'' + f.id + '\'); app.closeAllCardMenus()"><span class="icon">🦕</span> Paleo Deep Dive</button>' +
+                                            (f.type === 'mineral' ? 
+                                                '<button class="dropdown-item" onclick="event.stopPropagation(); app.openDeepDive(\'' + f.id + '\'); app.closeAllCardMenus()"><span class="icon">💎</span> Mineral Deep Dive</button>' : 
+                                                '<button class="dropdown-item" onclick="event.stopPropagation(); app.openDeepDive(\'' + f.id + '\'); app.closeAllCardMenus()"><span class="icon">🦕</span> Paleo Deep Dive</button>'
+                                            ) +
                                             (speciesFirstWord ? '<button class="dropdown-item" onclick="event.stopPropagation(); window.open(\'https://en.wikipedia.org/wiki/Special:Search?search=\' + \'' + wikiQuery + '\', \'_blank\'); app.closeAllCardMenus()"><span class="icon">📖</span> Wikipedia Search</button>' : '') +
                                             '<button class="dropdown-item" onclick="event.stopPropagation(); app.copyListingDescription(\'' + f.id + '\'); app.closeAllCardMenus()"><span class="icon">📋</span> Copy Sales Info</button>' +
                                             '<button class="dropdown-item" onclick="event.stopPropagation(); app.printLabel(\'' + f.id + '\'); app.closeAllCardMenus()"><span class="icon">🖨️</span> Print Label</button>' +
@@ -8524,18 +9775,33 @@ window.app = {
     // --- Draft Carts & Comparison Support ---
     getCarts: function() {
         var data = localStorage.getItem('fossil_carts');
+        var defaultCarts = [{ id: 'cart_default', name: 'Main Comparison Cart', updatedAt: 0 }];
+        var carts;
         if (!data) {
-            var defaultCarts = [{ id: 'cart_default', name: 'Main Comparison Cart' }];
             localStorage.setItem('fossil_carts', JSON.stringify(defaultCarts));
             return defaultCarts;
         }
         try {
-            return JSON.parse(data);
+            carts = JSON.parse(data);
         } catch (e) {
-            var defaultCarts = [{ id: 'cart_default', name: 'Main Comparison Cart' }];
             localStorage.setItem('fossil_carts', JSON.stringify(defaultCarts));
             return defaultCarts;
         }
+        if (!Array.isArray(carts)) {
+            localStorage.setItem('fossil_carts', JSON.stringify(defaultCarts));
+            return defaultCarts;
+        }
+        var updated = false;
+        carts.forEach(function(c) {
+            if (typeof c.updatedAt !== 'number') {
+                c.updatedAt = 0;
+                updated = true;
+            }
+        });
+        if (updated) {
+            localStorage.setItem('fossil_carts', JSON.stringify(carts));
+        }
+        return carts;
     },
 
     getActiveCartId: function() {
@@ -8557,10 +9823,14 @@ window.app = {
 
         var carts = this.getCarts();
         var id = 'cart_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-        carts.push({ id: id, name: name });
+        carts.push({ id: id, name: name, updatedAt: Date.now() });
         localStorage.setItem('fossil_carts', JSON.stringify(carts));
         localStorage.setItem('fossil_active_cart_id', id);
         
+        if (window.app && typeof window.app.autoPushCloud === 'function') {
+            window.app.autoPushCloud();
+        }
+
         this.showToast('Cart "' + name + '" created.', 'success');
         this.renderFossils();
     },
@@ -8577,7 +9847,13 @@ window.app = {
         if (name.length === 0) return;
 
         cart.name = name;
+        cart.updatedAt = Date.now();
         localStorage.setItem('fossil_carts', JSON.stringify(carts));
+
+        if (window.app && typeof window.app.autoPushCloud === 'function') {
+            window.app.autoPushCloud();
+        }
+
         this.showToast('Cart renamed to "' + name + '".', 'success');
         this.renderFossils();
     },
@@ -8607,6 +9883,19 @@ window.app = {
             var newCarts = carts.filter(function(c) { return c.id !== activeId; });
             localStorage.setItem('fossil_carts', JSON.stringify(newCarts));
             localStorage.setItem('fossil_active_cart_id', newCarts[0].id);
+
+            var deletedIds = [];
+            try {
+                deletedIds = JSON.parse(localStorage.getItem('fossil_deleted_ids') || '[]');
+            } catch(e) {}
+            if (deletedIds.indexOf(activeId) === -1) {
+                deletedIds.push(activeId);
+                localStorage.setItem('fossil_deleted_ids', JSON.stringify(deletedIds));
+            }
+
+            if (window.app && typeof window.app.autoPushCloud === 'function') {
+                window.app.autoPushCloud();
+            }
 
             self.showToast('Cart "' + cart.name + '" and its items deleted.', 'success');
             self.renderFossils();
@@ -8900,6 +10189,7 @@ window.app = {
                 item.sourceUrl = sourceUrl;
                 item.notes = notes;
                 item.images = images;
+                item.updatedAt = Date.now();
                 
                 updateFossil(item).then(function() {
                     fossilsCacheLoaded = false;
@@ -8924,7 +10214,8 @@ window.app = {
                 images: images,
                 isCartItem: true,
                 cartId: activeId,
-                createdAt: Date.now()
+                createdAt: Date.now(),
+                updatedAt: Date.now()
             };
             
             addFossil(newItem).then(function() {
@@ -9012,6 +10303,7 @@ window.app = {
                 item.sourceUrl = sourceUrl;
                 item.notes = notes;
                 item.images = images;
+                item.updatedAt = Date.now();
                 
                 updateFossil(item).then(function() {
                     fossilsCacheLoaded = false;
@@ -9052,7 +10344,8 @@ window.app = {
                 isWishlist: false,
                 isSold: false,
                 isCartItem: false,
-                createdAt: Date.now()
+                createdAt: Date.now(),
+                updatedAt: Date.now()
             };
             
             addFossil(newItem).then(function() {
@@ -9778,7 +11071,7 @@ window.app = {
                 data.forEach(function(fossil) {
                     chain = chain.then(function() {
                         // "put" handles both insert (if id is brand new) and update
-                        return updateFossil(fossil).then(function() {
+                        return updateFossil(fossil, { keepTimestamps: true }).then(function() {
                             successCount++;
                         });
                     });
@@ -10016,16 +11309,16 @@ window.app = {
     },
 
     downloadCSVTemplate: function() {
-        var csvContent = "Specimen Name,Category,Geological Period,Epoch,Stage,Size,Size Unit,Weight,Price,Currency,Notes,Is Wishlist,Is Sold,Is Dream\n" +
-                         "Tyrannosaurus Rex Tooth,Vertebrate,Cretaceous,Late Cretaceous,Maastrichtian,8.5,cm,,1200,USD,Beautiful serrated theropod tooth with minimal restoration.,false,false,false\n" +
-                         "Phacops Rana Trilobite,Invertebrate,Devonian,Middle Devonian,,5.2,cm,,150,USD,Complete rolled specimen showing outstanding facet eyes.,true,false,false";
+        var csvContent = "Specimen Name,Type,Category,Geological Period,Epoch,Stage,Formula,Crystal System,Hardness,Luster,Streak,Cleavage,Color,Size,Size Unit,Weight,Price,Currency,Notes,Is Wishlist,Is Sold,Is Dream\n" +
+                         "Tyrannosaurus Rex Tooth,fossil,Vertebrate,Cretaceous,Late Cretaceous,Maastrichtian,,,,,color,8.5,cm,,1200,USD,Beautiful serrated theropod tooth with minimal restoration.,false,false,false\n" +
+                         "Amethyst Crystal,mineral,Quartz,Silicates,,,,Trigonal,7,Vitreous,White,None,Purple,12.4,cm,,95,USD,Stunning deep purple amethyst cluster from Artigas.,false,false,false";
         
         try {
             var blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
             var link = document.createElement("a");
             var url = URL.createObjectURL(blob);
             link.setAttribute("href", url);
-            link.setAttribute("download", "fossil_import_template.csv");
+            link.setAttribute("download", "specimen_import_template.csv");
             link.style.visibility = 'hidden';
             document.body.appendChild(link);
             link.click();
@@ -10056,6 +11349,7 @@ window.app = {
                             return addFossil({
                                 id: generateId(),
                                 specimen: m.specimen.trim(),
+                                type: m.type || 'fossil',
                                 category: m.category || '',
                                 isWishlist: m.isWishlist,
                                 geologicalPeriod: m.geologicalPeriod,
@@ -10064,6 +11358,13 @@ window.app = {
                                 country: m.country,
                                 location: m.location,
                                 formation: m.formation,
+                                formula: m.formula,
+                                crystalSystem: m.crystalSystem,
+                                hardness: m.hardness,
+                                luster: m.luster,
+                                streak: m.streak,
+                                cleavage: m.cleavage,
+                                color: m.color,
                                 size: m.size,
                                 weight: m.weight,
                                 price: m.price,
@@ -10222,27 +11523,8 @@ window.app = {
                 var num = parseFloat(f.ageMa);
                 return isNaN(num) ? 0 : num;
             });
-            var weights = selectedList.map(function(f) {
-                var num = parseFloat(f.weight);
-                return isNaN(num) ? 0 : num;
-            });
-            
-            var maxSizeIdx = -1;
-            var maxAgeIdx = -1;
-            var maxWeightIdx = -1;
-
-            if (sizes.some(function(s) { return s > 0; })) {
-                maxSizeIdx = sizes.indexOf(Math.max.apply(null, sizes));
-            }
-            if (ages.some(function(a) { return a > 0; })) {
-                maxAgeIdx = ages.indexOf(Math.max.apply(null, ages));
-            }
-            if (weights.some(function(w) { return w > 0; })) {
-                maxWeightIdx = weights.indexOf(Math.max.apply(null, weights));
-            }
-            
-            selectedList.forEach(function(f, idx) {
-                var color = getEraColor(f.geologicalPeriod);
+               selectedList.forEach(function(f, idx) {
+                var color = f.type === 'mineral' ? '#a878d0' : getEraColor(f.geologicalPeriod);
                 
                 var highlightsHtml = '<div class="compare-highlights">';
                 
@@ -10299,7 +11581,9 @@ window.app = {
                         imgHtml = '<img id="compare-img-' + f.id + '" src="' + f.images[0] + '" class="compare-img" onclick="window.app.openZoomOverlay(this.src)">';
                     }
                     if (f.images.length > 1) {
-                        imgHtml += '<button type="button" class="compare-img-toggle-btn" onclick="window.app.toggleCompareImage(\'' + f.id + '\')" title="Toggle Fossil vs Life Reconstruction">🦴 Fossil View</button>';
+                        var toggleTitle = f.type === 'mineral' ? 'Toggle Mineral Views' : 'Toggle Fossil vs Life Reconstruction';
+                        var toggleText = f.type === 'mineral' ? '💎 Mineral View' : '🦴 Fossil View';
+                        imgHtml += '<button type="button" class="compare-img-toggle-btn" onclick="window.app.toggleCompareImage(\'' + f.id + '\')" title="' + toggleTitle + '">' + toggleText + '</button>';
                     }
                 } else {
                     imgHtml = '<div class="compare-img-placeholder" style="display:flex;align-items:center;justify-content:center;height:100%;background:rgba(255,255,255,0.02);color:rgba(255,255,255,0.2);">' +
@@ -10307,11 +11591,77 @@ window.app = {
                               '</div>';
                 }
                 
-                var epochStage = [];
-                if (f.epoch) epochStage.push(f.epoch);
-                if (f.stratAge) epochStage.push(f.stratAge);
-                var epochStageText = epochStage.length > 0 ? epochStage.join(' · ') : 'N/A';
-
+                var subtitle = f.type === 'mineral' ? (f.formula || 'Mineral Specimen') : (f.anatomy || 'Specimen');
+                var classSectionHtml = '';
+                
+                if (f.type === 'mineral') {
+                    classSectionHtml = '<div class="compare-spec-section">' +
+                                           '<h5>🧬 Classification & Crystallography</h5>' +
+                                           '<div class="compare-spec-row"><span class="compare-spec-label">Catalog ID</span><span class="compare-spec-value">' + escapeHtml(f.id || 'N/A') + '</span></div>' +
+                                           '<div class="compare-spec-row"><span class="compare-spec-label">Mineral Group</span><span class="compare-spec-value">' + escapeHtml(f.category || 'N/A') + '</span></div>' +
+                                           '<div class="compare-spec-row"><span class="compare-spec-label">Crystal System</span><span class="compare-spec-value">' + escapeHtml(f.crystalSystem || 'N/A') + '</span></div>' +
+                                           '<div class="compare-spec-row"><span class="compare-spec-label">Mohs Hardness</span><span class="compare-spec-value">' + escapeHtml(f.hardness || 'N/A') + '</span></div>' +
+                                           '<div class="compare-spec-row"><span class="compare-spec-label">Luster</span><span class="compare-spec-value">' + escapeHtml(f.luster || 'N/A') + '</span></div>' +
+                                           '<div class="compare-spec-row"><span class="compare-spec-label">Streak</span><span class="compare-spec-value">' + escapeHtml(f.streak || 'N/A') + '</span></div>' +
+                                       '</div>' +
+                                       '<div class="compare-spec-section">' +
+                                           '<h5>📍 Chemical Origin & Color</h5>' +
+                                           '<div class="compare-spec-row"><span class="compare-spec-label">Formula</span><span class="compare-spec-value">' + (f.formula ? formatChemicalFormula(f.formula) : 'N/A') + '</span></div>' +
+                                           '<div class="compare-spec-row"><span class="compare-spec-label">Specimen Color</span><span class="compare-spec-value">' + escapeHtml(f.color || 'N/A') + '</span></div>' +
+                                           '<div class="compare-spec-row"><span class="compare-spec-label">Cleavage</span><span class="compare-spec-value">' + escapeHtml(f.cleavage || 'N/A') + '</span></div>' +
+                                           '<div class="compare-spec-row"><span class="compare-spec-label">Location / Site</span><span class="compare-spec-value">' + escapeHtml(f.location || 'N/A') + '</span></div>' +
+                                           '<div class="compare-spec-row"><span class="compare-spec-label">Country</span><span class="compare-spec-value">' + escapeHtml(f.country || 'N/A') + '</span></div>' +
+                                       '</div>';
+                } else {
+                    var epochStage = [];
+                    if (f.epoch) epochStage.push(f.epoch);
+                    if (f.stratAge) epochStage.push(f.stratAge);
+                    var epochStageText = epochStage.length > 0 ? epochStage.join(' · ') : 'N/A';
+                    
+                    classSectionHtml = '<div class="compare-spec-section">' +
+                                           '<h5>🧬 Classification & Timeline</h5>' +
+                                           '<div class="compare-spec-row"><span class="compare-spec-label">Catalog ID</span><span class="compare-spec-value">' + escapeHtml(f.id || 'N/A') + '</span></div>' +
+                                           '<div class="compare-spec-row"><span class="compare-spec-label">Category</span><span class="compare-spec-value">' + escapeHtml(f.category || 'N/A') + '</span></div>' +
+                                           '<div class="compare-spec-row"><span class="compare-spec-label">Fossil Type</span><span class="compare-spec-value">' + escapeHtml(f.fossilType || 'N/A') + '</span></div>' +
+                                           '<div class="compare-spec-row"><span class="compare-spec-label">Timeline</span><span class="compare-spec-value">' + escapeHtml(f.geologicalPeriod || 'N/A') + '</span></div>' +
+                                           '<div class="compare-spec-row"><span class="compare-spec-label">Epoch / Stage</span><span class="compare-spec-value">' + escapeHtml(epochStageText) + '</span></div>' +
+                                           '<div class="compare-spec-row"><span class="compare-spec-label">Est. Age</span><span class="compare-spec-value">' + (f.ageMa ? f.ageMa + ' Ma' : 'N/A') + '</span></div>' +
+                                       '</div>' +
+                                       '<div class="compare-spec-section">' +
+                                           '<h5>📍 Geological Origin</h5>' +
+                                           '<div class="compare-spec-row"><span class="compare-spec-label">Formation</span><span class="compare-spec-value">' + escapeHtml(f.formation || 'N/A') + '</span></div>' +
+                                           '<div class="compare-spec-row"><span class="compare-spec-label">Location / Site</span><span class="compare-spec-value">' + escapeHtml(f.location || 'N/A') + '</span></div>' +
+                                           '<div class="compare-spec-row"><span class="compare-spec-label">Country</span><span class="compare-spec-value">' + escapeHtml(f.country || 'N/A') + '</span></div>' +
+                                       '</div>';
+                }
+                
+                var sizingSectionHtml = '<div class="compare-spec-section">' +
+                                            '<h5>📐 Sizing & Curation</h5>' +
+                                            '<div class="compare-spec-row"><span class="compare-spec-label">Specimen Size</span><span class="compare-spec-value">' + (f.size ? formatSpecimenDimensions(f) : 'N/A') + '</span></div>' +
+                                            '<div class="compare-spec-row"><span class="compare-spec-label">Weight</span><span class="compare-spec-value">' + (f.weight ? formatSpecimenWeight(f.weight) : 'N/A') + '</span></div>' +
+                                            (f.type !== 'mineral' ? '<div class="compare-spec-row"><span class="compare-spec-label">Est. Animal Size</span><span class="compare-spec-value">' + (f.animalSize ? f.animalSize + ' m' : 'N/A') + '</span></div>' : '') +
+                                            '<div class="compare-spec-row"><span class="compare-spec-label">Value</span><span class="compare-spec-value">' + (f.price ? f.price + ' ' + (f.currency || 'USD') : 'N/A') + '</span></div>' +
+                                            (f.sourceUrl ? '<div class="compare-spec-row"><span class="compare-spec-label">Listing Link</span><span class="compare-spec-value"><a href="' + escapeHtml(f.sourceUrl) + '" target="_blank" style="color: #3b82f6; text-decoration: underline; font-weight: 600;">Open Listing ↗</a></span></div>' : '') +
+                                        '</div>';
+                
+                var descSectionHtml = '';
+                if (f.type === 'mineral') {
+                    if (f.description) {
+                        descSectionHtml = '<div class="compare-spec-section">' +
+                                              '<h5>💎 Mineralogical Description</h5>' +
+                                              '<div class="compare-notes-box" style="font-style: italic; line-height: 1.35; max-height: 80px; overflow-y: auto;">' + escapeHtml(f.description) + '</div>' +
+                                          '</div>';
+                    }
+                } else {
+                    if (f.authority || f.description) {
+                        descSectionHtml = '<div class="compare-spec-section">' +
+                                              '<h5>🦕 Prehistoric Biology</h5>' +
+                                              (f.authority ? '<div class="compare-spec-row"><span class="compare-spec-label">Named By / Authority</span><span class="compare-spec-value">' + escapeHtml(f.authority) + '</span></div>' : '') +
+                                              (f.description ? '<div class="compare-notes-box" style="font-style: italic; line-height: 1.35; max-height: 80px; overflow-y: auto;">' + escapeHtml(f.description) + '</div>' : '') +
+                                          '</div>';
+                    }
+                }
+                
                 html += '<div class="compare-column-card">' +
                             '<div class="compare-img-box" style="border-bottom-color: ' + color + ';">' +
                                 imgHtml +
@@ -10319,38 +11669,12 @@ window.app = {
                             '<div class="compare-card-body">' +
                                 '<div class="compare-card-header">' +
                                     '<h4 class="compare-card-title">' + escapeHtml(f.specimen || 'Unnamed') + '</h4>' +
-                                    '<p class="compare-card-subtitle">' + escapeHtml(f.anatomy || 'Specimen') + '</p>' +
+                                    '<p class="compare-card-subtitle">' + escapeHtml(subtitle) + '</p>' +
                                 '</div>' +
                                 highlightsHtml +
-                                '<div class="compare-spec-section">' +
-                                    '<h5>🧬 Classification & Timeline</h5>' +
-                                    '<div class="compare-spec-row"><span class="compare-spec-label">Catalog ID</span><span class="compare-spec-value">' + escapeHtml(f.id || 'N/A') + '</span></div>' +
-                                    '<div class="compare-spec-row"><span class="compare-spec-label">Category</span><span class="compare-spec-value">' + escapeHtml(f.category || 'N/A') + '</span></div>' +
-                                    '<div class="compare-spec-row"><span class="compare-spec-label">Fossil Type</span><span class="compare-spec-value">' + escapeHtml(f.fossilType || 'N/A') + '</span></div>' +
-                                    '<div class="compare-spec-row"><span class="compare-spec-label">Timeline</span><span class="compare-spec-value">' + escapeHtml(f.geologicalPeriod || 'N/A') + '</span></div>' +
-                                    '<div class="compare-spec-row"><span class="compare-spec-label">Epoch / Stage</span><span class="compare-spec-value">' + escapeHtml(epochStageText) + '</span></div>' +
-                                    '<div class="compare-spec-row"><span class="compare-spec-label">Est. Age</span><span class="compare-spec-value">' + (f.ageMa ? f.ageMa + ' Ma' : 'N/A') + '</span></div>' +
-                                '</div>' +
-                                '<div class="compare-spec-section">' +
-                                    '<h5>📍 Geological Origin</h5>' +
-                                    '<div class="compare-spec-row"><span class="compare-spec-label">Formation</span><span class="compare-spec-value">' + escapeHtml(f.formation || 'N/A') + '</span></div>' +
-                                    '<div class="compare-spec-row"><span class="compare-spec-label">Location / Site</span><span class="compare-spec-value">' + escapeHtml(f.location || 'N/A') + '</span></div>' +
-                                    '<div class="compare-spec-row"><span class="compare-spec-label">Country</span><span class="compare-spec-value">' + escapeHtml(f.country || 'N/A') + '</span></div>' +
-                                '</div>' +
-                                '<div class="compare-spec-section">' +
-                                    '<h5>📐 Sizing & Curation</h5>' +
-                                    '<div class="compare-spec-row"><span class="compare-spec-label">Specimen Size</span><span class="compare-spec-value">' + (f.size ? formatSpecimenDimensions(f) : 'N/A') + '</span></div>' +
-                                    '<div class="compare-spec-row"><span class="compare-spec-label">Weight</span><span class="compare-spec-value">' + (f.weight ? formatSpecimenWeight(f.weight) : 'N/A') + '</span></div>' +
-                                    '<div class="compare-spec-row"><span class="compare-spec-label">Est. Animal Size</span><span class="compare-spec-value">' + (f.animalSize ? f.animalSize + ' m' : 'N/A') + '</span></div>' +
-                                    '<div class="compare-spec-row"><span class="compare-spec-label">Value</span><span class="compare-spec-value">' + (f.price ? f.price + ' ' + (f.currency || 'USD') : 'N/A') + '</span></div>' +
-                                    (f.sourceUrl ? '<div class="compare-spec-row"><span class="compare-spec-label">Listing Link</span><span class="compare-spec-value"><a href="' + escapeHtml(f.sourceUrl) + '" target="_blank" style="color: #3b82f6; text-decoration: underline; font-weight: 600;">Open Listing ↗</a></span></div>' : '') +
-                                '</div>' +
-                                (f.authority || f.description ? 
-                                '<div class="compare-spec-section">' +
-                                    '<h5>🦕 Prehistoric Biology</h5>' +
-                                    (f.authority ? '<div class="compare-spec-row"><span class="compare-spec-label">Named By / Authority</span><span class="compare-spec-value">' + escapeHtml(f.authority) + '</span></div>' : '') +
-                                    (f.description ? '<div class="compare-notes-box" style="font-style: italic; line-height: 1.35; max-height: 80px; overflow-y: auto;">' + escapeHtml(f.description) + '</div>' : '') +
-                                '</div>' : '') +
+                                classSectionHtml +
+                                sizingSectionHtml +
+                                descSectionHtml +
                                 '<div class="compare-spec-section">' +
                                     '<h5>🩺 Curation & Preservation</h5>' +
                                     '<div class="compare-spec-row"><span class="compare-spec-label">Condition</span><span class="compare-spec-value">' + escapeHtml(condLabels.join(', ')) + (f.conditionTier ? getConditionTierBadgeHtml(f.conditionTier) : '') + '</span></div>' +
@@ -10815,7 +12139,10 @@ window.app = {
         var era = 'mesozoic'; // default fallback
         var eraLabel = 'Mesozoic Era';
         
-        if (nameEra !== null) {
+        if (f.type === 'mineral') {
+            era = 'mineral';
+            eraLabel = 'Mineral Specimen';
+        } else if (nameEra !== null) {
             era = nameEra;
             eraLabel = nameEraLabel;
             period = namePeriod.toLowerCase();
@@ -10851,13 +12178,19 @@ window.app = {
         if (specimenName) specimenName.textContent = f.specimen || 'Unnamed Specimen';
         if (specimenSub) {
             var subParts = [];
-            if (nameEra !== null) {
-                subParts.push(namePeriod);
-            } else if (f.geologicalPeriod) {
-                subParts.push(f.geologicalPeriod);
+            if (f.type === 'mineral') {
+                if (f.formula) subParts.push(f.formula);
+                if (f.crystalSystem) subParts.push(f.crystalSystem + ' Crystal System');
+                if (f.hardness) subParts.push('Hardness: ' + f.hardness);
+            } else {
+                if (nameEra !== null) {
+                    subParts.push(namePeriod);
+                } else if (f.geologicalPeriod) {
+                    subParts.push(f.geologicalPeriod);
+                }
+                if (f.epoch) subParts.push(f.epoch);
+                if (f.ageMa) subParts.push('~' + f.ageMa + ' Ma');
             }
-            if (f.epoch) subParts.push(f.epoch);
-            if (f.ageMa) subParts.push('~' + f.ageMa + ' Ma');
             specimenSub.textContent = subParts.join(' · ');
         }
         
@@ -10870,8 +12203,8 @@ window.app = {
                     photoCircle.innerHTML = '<img src="' + f.images[0] + '" alt="' + escapeHtml(f.specimen) + ' fossil specimen" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%; border: 3px solid rgba(255,255,255,0.15); cursor: zoom-in;" onclick="window.app.openZoomOverlay(this.src)">';
                 }
             } else {
-                var catEmoji = '🦴';
-                if (f.category) {
+                var catEmoji = f.type === 'mineral' ? '💎' : '🦴';
+                if (f.type !== 'mineral' && f.category) {
                     var cat = f.category.toLowerCase();
                     if (cat.indexOf('vertebrate') !== -1 && cat.indexOf('invertebrate') === -1) catEmoji = '🦖';
                     else if (cat.indexOf('invertebrate') !== -1) catEmoji = '🐚';
@@ -10894,13 +12227,18 @@ window.app = {
                 }
             } else {
                 var nameClean = (f.specimen || '').trim();
-                var genus = nameClean.split(' ')[0];
-                genus = genus.replace(/\([^)]*\)/g, '').replace(/\b(?:cf\.|sp\.|\?)\b/g, '').replace(/[^a-zA-Z]/g, '');
-                if (genus) {
-                    window.app.fetchWikipediaLifeImage(genus, f);
+                var keyword = '';
+                if (f.type === 'mineral') {
+                    keyword = nameClean.replace(/\([^)]*\)/g, '').replace(/[^a-zA-Z\s]/g, '').trim();
                 } else {
-                    var catEmoji = '🦖';
-                    if (f.category) {
+                    keyword = nameClean.split(' ')[0].replace(/\([^)]*\)/g, '').replace(/\b(?:cf\.|sp\.|\?)\b/g, '').replace(/[^a-zA-Z]/g, '');
+                }
+                
+                if (keyword) {
+                    window.app.fetchWikipediaLifeImage(keyword, f);
+                } else {
+                    var catEmoji = f.type === 'mineral' ? '💎' : '🦖';
+                    if (f.type !== 'mineral' && f.category) {
                         var cat = f.category.toLowerCase();
                         if (cat.indexOf('vertebrate') !== -1 && cat.indexOf('invertebrate') === -1) catEmoji = '🦖';
                         else if (cat.indexOf('invertebrate') !== -1) catEmoji = '🐚';
@@ -11029,18 +12367,6 @@ window.app = {
             coexisting = coexList.join(', ');
         }
         
-        var climElem = document.getElementById('deep-dive-dossier-climate');
-        var tempElem = document.getElementById('deep-dive-dossier-temp');
-        var oxyElem = document.getElementById('deep-dive-dossier-oxygen');
-        var coexElem = document.getElementById('deep-dive-dossier-coexisting');
-        var ecoNotesElem = document.getElementById('deep-dive-dossier-ecology');
-        
-        if (climElem) climElem.textContent = climate;
-        if (tempElem) tempElem.textContent = temp;
-        if (oxyElem) oxyElem.textContent = oxygen;
-        if (coexElem) coexElem.textContent = coexisting;
-        if (ecoNotesElem) ecoNotesElem.textContent = ecology;
-        
         // Anatomy Analyzer
         var part = f.anatomy || "Partial Fossilized Structure";
         var desc = "Preserves original calcium carbonate or silicate skeletal matrix, offering clear scientific insights into prehistoric growth rates and biomineralization.";
@@ -11059,14 +12385,194 @@ window.app = {
         } else if (catL.indexOf('invertebrate') !== -1) {
             desc = "Dense biomineralized structural components highlighting early developmental bilateral or radial symmetry and advanced defensive attributes.";
         }
+
+        // CONDITIONAL LABELS & TITLES INJECTOR FOR MINERALS VS FOSSILS
+        var isMineral = (f.type === 'mineral');
+        
+        var lblClimate = document.getElementById('deep-dive-label-climate');
+        var lblTemp = document.getElementById('deep-dive-label-temp');
+        var lblOxygen = document.getElementById('deep-dive-label-oxygen');
+        var lblCoexisting = document.getElementById('deep-dive-label-coexisting');
+        var lblEcology = document.getElementById('deep-dive-label-ecology');
+        
+        var titleDossier = document.getElementById('deep-dive-dossier-title');
+        var titleAnatomy = document.getElementById('deep-dive-anatomy-title');
+        var titleSimulator = document.getElementById('deep-dive-simulator-title');
+        var descSimulator = document.getElementById('deep-dive-simulator-desc');
+        
+        var btnHunt = document.getElementById('deep-dive-sim-btn-hunt');
+        var btnDefend = document.getElementById('deep-dive-sim-btn-defend');
+        var btnRest = document.getElementById('deep-dive-sim-btn-rest');
+        
+        if (isMineral) {
+            if (titleDossier) titleDossier.innerHTML = '<span class="dossier-icon">🌍</span> Mineral Origin & Crystallography';
+            if (titleAnatomy) titleAnatomy.innerHTML = '<span class="dossier-icon">📐</span> Chemical Composition & Form';
+            if (titleSimulator) titleSimulator.innerHTML = '💎 Mineralogical Lab Simulator';
+            if (descSimulator) descSimulator.textContent = 'Run interactive tests on the specimen\'s physical properties to analyze its structure.';
+            
+            if (lblClimate) lblClimate.textContent = 'Mineral Group';
+            if (lblTemp) lblTemp.textContent = 'Crystal System';
+            if (lblOxygen) lblOxygen.textContent = 'Mohs Hardness';
+            if (lblCoexisting) lblCoexisting.textContent = 'Luster & Streak';
+            if (lblEcology) lblEcology.textContent = 'Cleavage & Color';
+            
+            if (btnHunt) btnHunt.innerHTML = '<span class="sim-icon">🔍</span> Crystallize';
+            if (btnDefend) btnDefend.innerHTML = '<span class="sim-icon">🛡️</span> Scratch Test';
+            if (btnRest) btnRest.innerHTML = '<span class="sim-icon">⏳</span> Optical Luster';
+            
+            climate = escapeHtml(f.category || 'Unknown Group');
+            temp = escapeHtml(f.crystalSystem || 'Unknown Crystal System');
+            oxygen = escapeHtml(f.hardness ? f.hardness + ' (Mohs Scale)' : 'Unknown Hardness');
+            
+            var lusterStreak = [];
+            if (f.luster) lusterStreak.push(f.luster);
+            if (f.streak) lusterStreak.push('Streak: ' + f.streak);
+            coexisting = lusterStreak.length > 0 ? escapeHtml(lusterStreak.join(' · ')) : 'Unknown Luster/Streak';
+            
+            var cleavageColor = [];
+            if (f.cleavage) cleavageColor.push('Cleavage: ' + f.cleavage);
+            if (f.color) cleavageColor.push('Color: ' + f.color);
+            ecology = cleavageColor.length > 0 ? escapeHtml(cleavageColor.join(' · ')) : 'No Cleavage/Color details';
+            
+            part = "Chemical Composition";
+            var formulaHtml = formatChemicalFormula(f.formula);
+            desc = "Chemical Formula: " + (formulaHtml || 'Not Specified') + (f.category ? ' (Group: ' + f.category + ')' : '');
+        } else {
+            if (titleDossier) titleDossier.innerHTML = '<span class="dossier-icon">🌍</span> Paleo-Environment & Ecosystem';
+            if (titleAnatomy) titleAnatomy.innerHTML = '<span class="dossier-icon">📐</span> Preserved Anatomy & Adaptation';
+            if (titleSimulator) titleSimulator.innerHTML = '🦖 "Day in the Life" Prehistoric Simulator';
+            if (descSimulator) descSimulator.textContent = 'Run interactive, educational behavior simulations to see how this specimen survived in its ancient habitat.';
+            
+            if (lblClimate) lblClimate.textContent = 'Ancient Climate';
+            if (lblTemp) lblTemp.textContent = 'Average Temperature';
+            if (lblOxygen) lblOxygen.textContent = 'Atmospheric Oxygen Level';
+            if (lblCoexisting) lblCoexisting.textContent = 'Co-Existing Life';
+            if (lblEcology) lblEcology.textContent = 'Ecology & Feeding Niche';
+            
+            if (btnHunt) btnHunt.innerHTML = '<span class="sim-icon">🔍</span> ' + ((f.category || '').toLowerCase().indexOf('plant') !== -1 ? 'Photosynthesize' : 'Forage & Hunt');
+            if (btnDefend) btnDefend.innerHTML = '<span class="sim-icon">🛡️</span> Defend Territory';
+            if (btnRest) btnRest.innerHTML = '<span class="sim-icon">⏳</span> Rest & Conserve';
+        }
+
+        var climElem = document.getElementById('deep-dive-dossier-climate');
+        var tempElem = document.getElementById('deep-dive-dossier-temp');
+        var oxyElem = document.getElementById('deep-dive-dossier-oxygen');
+        var coexElem = document.getElementById('deep-dive-dossier-coexisting');
+        var ecoNotesElem = document.getElementById('deep-dive-dossier-ecology');
+        
+        if (climElem) climElem.textContent = climate;
+        if (tempElem) tempElem.textContent = temp;
+        if (oxyElem) oxyElem.textContent = oxygen;
+        if (coexElem) coexElem.textContent = coexisting;
+        if (ecoNotesElem) ecoNotesElem.textContent = ecology;
         
         var partElem = document.getElementById('deep-dive-anatomy-part');
         var descElem = document.getElementById('deep-dive-anatomy-desc');
-        if (partElem) partElem.innerHTML = 'Preserved Part: <strong style="color: var(--accent);">' + escapeHtml(part) + '</strong>';
+        if (partElem) {
+            if (isMineral) {
+                var formulaHtml = formatChemicalFormula(f.formula);
+                partElem.innerHTML = 'Composition: <strong style="color: var(--accent); font-family: monospace;">' + (formulaHtml || 'Not Specified') + '</strong>';
+            } else {
+                partElem.innerHTML = 'Preserved Part: <strong style="color: var(--accent);">' + escapeHtml(part) + '</strong>';
+            }
+        }
         if (descElem) descElem.textContent = desc;
         
         // Fetch Wikipedia extract
         window.app.fetchWikipediaPaleoExtract(f);
+        
+        // Render preparation log details in Deep-Dive
+        var prepCard = document.getElementById('deep-dive-prep-card');
+        if (prepCard) {
+            if (f.type === 'mineral') {
+                prepCard.style.display = 'none';
+            } else {
+                prepCard.style.display = '';
+                
+                var statusSpan = document.getElementById('dd-prep-status');
+                var hoursSpan = document.getElementById('dd-prep-hours');
+                var toolsSpan = document.getElementById('dd-prep-tools');
+                var stabilizersSpan = document.getElementById('dd-prep-stabilizers');
+                var visualContainer = document.getElementById('dd-prep-visual-container');
+
+                if (statusSpan) statusSpan.textContent = f.prepStatus || 'Not Started';
+                if (hoursSpan) hoursSpan.textContent = (f.prepHours !== undefined && f.prepHours !== null) ? f.prepHours + ' hrs' : '0 hrs';
+                
+                var tools = f.prepTools || [];
+                if (toolsSpan) toolsSpan.textContent = tools.length > 0 ? tools.join(', ') : 'None Specified';
+                if (stabilizersSpan) stabilizersSpan.textContent = f.prepStabilizers || 'None Applied';
+                
+                if (f.prepNotes) {
+                    var notesBox = document.getElementById('dd-prep-notes-box');
+                    if (notesBox) {
+                        notesBox.style.display = 'block';
+                        var notesP = document.getElementById('dd-prep-notes-content');
+                        if (notesP) notesP.textContent = f.prepNotes;
+                    }
+                } else {
+                    var notesBox = document.getElementById('dd-prep-notes-box');
+                    if (notesBox) notesBox.style.display = 'none';
+                }
+
+                if (visualContainer) {
+                    visualContainer.innerHTML = '';
+                    var milestones = f.prepMilestones || [];
+                    if (milestones.length === 0) {
+                        visualContainer.innerHTML = '<p style="font-size: 0.75rem; color: var(--text-secondary); font-style: italic; text-align: center; margin-top: 0.5rem;">No preparation photos logged yet.</p>';
+                    } else if (milestones.length === 1) {
+                        visualContainer.innerHTML = '<div style="display: flex; flex-direction: column; gap: 4px; align-items: center;">' +
+                            '<img src="' + milestones[0].image + '" style="max-height: 180px; border-radius: var(--radius-sm); border: 1px solid var(--border-color); object-fit: contain; width: 100%; background: #000;" />' +
+                            '<span style="font-size: 0.72rem; font-weight: 600; color: var(--accent);">' + escapeHtml(milestones[0].label) + ' (' + milestones[0].date + ')</span>' +
+                            '</div>';
+                    } else if (milestones.length === 2) {
+                        var beforeImg = milestones[0].image;
+                        var afterImg = milestones[1].image;
+                        
+                        visualContainer.innerHTML = 
+                            '<div style="text-align: center; font-size: 0.72rem; font-weight: 600; margin-bottom: 4px; color: var(--text-secondary);">' +
+                                'Drag slider to compare: <span style="color: var(--text-primary);">' + escapeHtml(milestones[0].label) + '</span> vs <span style="color: var(--accent);">' + escapeHtml(milestones[1].label) + '</span>' +
+                            '</div>' +
+                            '<div class="before-after-slider" style="position: relative; width: 100%; height: 220px; overflow: hidden; border-radius: var(--radius-sm); border: 1px solid var(--border-color); background: #000;">' +
+                            '  <div style="width: 100%; height: 100%; pointer-events: none;">' +
+                            '    <img src="' + beforeImg + '" style="width: 100%; height: 100%; object-fit: contain;" />' +
+                            '  </div>' +
+                            '  <div class="after-pane" style="position: absolute; top: 0; left: 0; bottom: 0; width: 50%; overflow: hidden; border-right: 2px solid var(--accent); pointer-events: none;">' +
+                            '    <img src="' + afterImg + '" style="position: absolute; top: 0; left: 0; height: 100%; object-fit: contain;" />' +
+                            '  </div>' +
+                            '  <div class="slider-handle-line" style="position: absolute; top: 0; bottom: 0; left: 50%; width: 2px; background: var(--accent); pointer-events: none; transform: translateX(-50%);">' +
+                            '      <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 24px; height: 24px; background: var(--accent); border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-size: 10px; font-weight: 700; box-shadow: 0 2px 6px rgba(0,0,0,0.3);">↔</div>' +
+                            '  </div>' +
+                            '  <input type="range" min="0" max="100" value="50" class="ba-slider-range" oninput="var p=this.parentElement; var pane=p.querySelector(\'.after-pane\'); pane.style.width=this.value+\'%\'; var handle=p.querySelector(\'.slider-handle-line\'); handle.style.left=this.value+\'%\'; var img=pane.querySelector(\'img\'); img.style.width=p.offsetWidth+\'px\';" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; opacity: 0; cursor: ew-resize; z-index: 10; margin:0;" />' +
+                            '</div>';
+                        setTimeout(function() {
+                            var p = visualContainer.querySelector('.before-after-slider');
+                            if (p) {
+                                var pane = p.querySelector('.after-pane');
+                                var img = pane.querySelector('img');
+                                img.style.width = p.offsetWidth + 'px';
+                            }
+                        }, 100);
+                    } else {
+                        var timelineHtml = '<div style="display: flex; flex-direction: column; gap: 0.5rem;">' +
+                            '  <div class="timeline-display" style="text-align: center;">' +
+                            '    <img id="dd-timeline-img" src="' + milestones[milestones.length - 1].image + '" style="max-height: 180px; border-radius: var(--radius-sm); border: 1px solid var(--border-color); object-fit: contain; width: 100%; background: #000;" />' +
+                            '    <div id="dd-timeline-caption" style="font-size: 0.75rem; font-weight: 600; color: var(--accent); margin-top: 4px;">' + escapeHtml(milestones[milestones.length - 1].label) + ' (' + milestones[milestones.length - 1].date + ')</div>' +
+                            '  </div>' +
+                            '  <div style="display: flex; gap: 0.35rem; overflow-x: auto; padding-bottom: 4px; scrollbar-width: thin;">';
+                        
+                        milestones.forEach(function(m, idx) {
+                            var isActive = (idx === milestones.length - 1);
+                            timelineHtml += '<div onclick="var img=document.getElementById(\'dd-timeline-img\'); var cap=document.getElementById(\'dd-timeline-caption\'); img.src=\'' + m.image + '\'; cap.textContent=\'' + escapeHtml(m.label).replace(/'/g, "\\'") + ' (' + m.date + ')\'; var sibs=this.parentElement.children; for(var j=0; j<sibs.length; j++){sibs[j].style.borderColor=\'var(--border-color)\';} this.style.borderColor=\'var(--accent)\';" style="flex-shrink: 0; width: 44px; height: 44px; border: 2px solid ' + (isActive ? 'var(--accent)' : 'var(--border-color)') + '; border-radius: 4px; overflow: hidden; cursor: pointer; transition: border-color 0.15s;">' +
+                                '<img src="' + m.image + '" style="width: 100%; height: 100%; object-fit: cover;" />' +
+                                '</div>';
+                        });
+                        timelineHtml += '  </div>' +
+                            '</div>';
+                        visualContainer.innerHTML = timelineHtml;
+                    }
+                }
+            }
+        }
     },
 
     simulatePrehistoricBehavior: function(behavior) {
@@ -11082,72 +12588,108 @@ window.app = {
         var specimenName = f.specimen || 'Specimen';
         var timeStr = new Date().toLocaleTimeString();
         
-        var steps = [
-            '[' + timeStr + '] INIT: Calibrating habitat neural matrix for ' + specimenName + '...',
-            '[' + timeStr + '] SYSTEM: Category detected: ' + (f.category || 'Extinct Organism') + ' | Period: ' + (f.geologicalPeriod || 'Unknown'),
-            '[' + timeStr + '] ACTION: Deploying behavior protocol: "' + behavior.toUpperCase() + '"...'
-        ];
-        
-        // Narrative outcomes
-        var success = Math.random() > 0.4;
+        var steps = [];
         var outcomeText = "";
         var scoreAdjust = 0;
         
-        if (behavior === 'hunt') {
-            if (category.indexOf('vertebrate') !== -1 && category.indexOf('invertebrate') === -1) {
+        if (f.type === 'mineral') {
+            steps = [
+                '[' + timeStr + '] INIT: Initializing Mineralogical Analyzer for ' + specimenName + '...',
+                '[' + timeStr + '] SYSTEM: Crystal System: ' + (f.crystalSystem || 'Amorphous') + ' | Hardness: ' + (f.hardness || 'Unknown'),
+                '[' + timeStr + '] ACTION: Executing property test: "' + behavior.toUpperCase() + '"...'
+            ];
+            
+            var success = Math.random() > 0.3;
+            
+            if (behavior === 'hunt') { // Crystallize
                 if (success) {
-                    outcomeText = "Success! The predator tracks movement through high-frequency vibrations in the damp coastal soil. Tensing its massive hind limbs, it launches an explosive sprint through ancient ferns, securing its prey! +30 Gold Curatorial Score.";
+                    outcomeText = "Success! Simulated hydrothermal crystal growth over 5,000 years under 2.5 kbar pressure. Beautiful macro-crystals of " + specimenName + " with perfect face terminations have formed! +30 Gold Curatorial Score.";
                     scoreAdjust = 30;
                 } else {
-                    outcomeText = "Failure. A sudden scent shift alerts a nearby herd of ceratopsians. They form an impenetrable wall of horned shields, forcing a quick retreat to conserve energy. +10 Curatorial Score.";
+                    outcomeText = "Failure. Sudden thermal shock in the pegmatite fluid caused rapid cooling, resulting in microcrystalline druzy aggregates instead of large singular crystals. +10 Curatorial Score.";
                     scoreAdjust = 10;
                 }
-            } else if (category.indexOf('invertebrate') !== -1) {
-                if (success) {
-                    outcomeText = "Success! Crawling quietly beneath ancient marine seaweed, it uses its sensitive antennae to detect a soft-bodied trilobite shedding its shell. It strikes quickly, securing an abundant meal! +25 Gold Curatorial Score.";
-                    scoreAdjust = 25;
-                } else {
-                    outcomeText = "Failure. A sweeping undercurrent carries the creature's scent away. The target burrows deep into oceanic silt, leaving empty claws. +5 Curatorial Score.";
-                    scoreAdjust = 5;
-                }
-            } else if (category.indexOf('plant') !== -1) {
-                outcomeText = "Success! Unfolding its fronds to capture the abundant Mesozoic sunlight, it maximizes carbon fixation. Stomatal pores open wide, processing atmospheric CO2 into structural lignin. +25 Gold Curatorial Score.";
-                scoreAdjust = 25;
-            } else {
-                outcomeText = "Success! Navigating microscopic water films or sediment layers, it filters suspended organic detritus, securing vital carbon compounds. +20 Gold Curatorial Score.";
-                scoreAdjust = 20;
-            }
-        } else if (behavior === 'defend') {
-            if (category.indexOf('vertebrate') !== -1 && category.indexOf('invertebrate') === -1) {
-                if (success) {
-                    outcomeText = "Success! An intruder enters the nesting grounds. Displaying its massive skull structures and issuing a low-frequency infrasonic growl, the rival is successfully intimidated and flees. +35 Gold Curatorial Score.";
+            } else if (behavior === 'defend') { // Scratch test
+                var hardnessVal = parseFloat(f.hardness) || 5.0;
+                if (hardnessVal >= 7.0) {
+                    outcomeText = "Success! The specimen (Hardness: " + hardnessVal + ") easily scratched the laboratory glass reference plate (Hardness: 5.5) and orthoclase (Hardness: 6) without leaving any streak or fracturing. +35 Gold Curatorial Score.";
                     scoreAdjust = 35;
-                } else {
-                    outcomeText = "Failure. A larger rival theropod challenges the territory. After a brief exchange of snapping jaws and tail-swipes, it retreats slightly to high ground to nurse minor abrasions. +15 Curatorial Score.";
-                    scoreAdjust = 15;
-                }
-            } else if (category.indexOf('invertebrate') !== -1) {
-                if (success) {
-                    outcomeText = "Success! Retracting into its dense coiled, calcified shell, it withstands the crushing bites of an early cephalopod predator, completely unscathed. +25 Gold Curatorial Score.";
+                } else if (hardnessVal >= 3.0) {
+                    outcomeText = "Success! The specimen (Hardness: " + hardnessVal + ") scratched calcite (Hardness: 3) but was scratched by the pocket knife steel blade (Hardness: 5.5). Confirmed mohs range. +25 Gold Curatorial Score.";
                     scoreAdjust = 25;
                 } else {
-                    outcomeText = "Failure. A massive storm surge rolls it out of its protective rocky crevice, forcing it to consume precious energy to re-anchor in the shifting seabed. +10 Curatorial Score.";
-                    scoreAdjust = 10;
+                    outcomeText = "Result: The soft specimen (Hardness: " + hardnessVal + ") was easily scratched by a fingernail (Hardness: 2.5). Cleavage plains remained stable under low friction. +20 Gold Curatorial Score.";
+                    scoreAdjust = 20;
                 }
-            } else if (category.indexOf('plant') !== -1) {
-                outcomeText = "Success! Synthesizing high concentrations of tannin and sticky resin in its cellular walls, it successfully deters hungry insects and herbivorous larvae. +25 Gold Curatorial Score.";
+            } else { // Optical / Luster refraction test
+                outcomeText = "Success! Directed a polarized light beam at the specimen. Light refracts through the crystal lattice, displaying a gorgeous " + (f.luster || 'vitreous') + " luster and revealing " + (f.color || 'specimen') + " internal reflections. +25 Gold Curatorial Score.";
                 scoreAdjust = 25;
-            } else {
-                outcomeText = "Success! Secretion of defensive biopolymers or thick gelatinous matrices shields the colony from shifting chemical toxicities in ancient tidal pools. +20 Gold Curatorial Score.";
-                scoreAdjust = 20;
             }
-        } else { // rest
-            if (success) {
-                outcomeText = "Success! Entering a state of low-metabolic torpor beneath a towering cycad tree. Body temperature drops to match the humid ambient night, conserving crucial oxygen and calories. +20 Gold Curatorial Score.";
-                scoreAdjust = 20;
-            } else {
-                outcomeText = "Success! Basking on a sunny limestone ledge, absorbing geothermal radiation. Cellular recovery is maximized under clear prebiotic skies. +20 Gold Curatorial Score.";
-                scoreAdjust = 20;
+        } else {
+            steps = [
+                '[' + timeStr + '] INIT: Calibrating habitat neural matrix for ' + specimenName + '...',
+                '[' + timeStr + '] SYSTEM: Category detected: ' + (f.category || 'Extinct Organism') + ' | Period: ' + (f.geologicalPeriod || 'Unknown'),
+                '[' + timeStr + '] ACTION: Deploying behavior protocol: "' + behavior.toUpperCase() + '"...'
+            ];
+            
+            var success = Math.random() > 0.4;
+            
+            if (behavior === 'hunt') {
+                if (category.indexOf('vertebrate') !== -1 && category.indexOf('invertebrate') === -1) {
+                    if (success) {
+                        outcomeText = "Success! The predator tracks movement through high-frequency vibrations in the damp coastal soil. Tensing its massive hind limbs, it launches an explosive sprint through ancient ferns, securing its prey! +30 Gold Curatorial Score.";
+                        scoreAdjust = 30;
+                    } else {
+                        outcomeText = "Failure. A sudden scent shift alerts a nearby herd of ceratopsians. They form an impenetrable wall of horned shields, forcing a quick retreat to conserve energy. +10 Curatorial Score.";
+                        scoreAdjust = 10;
+                    }
+                } else if (category.indexOf('invertebrate') !== -1) {
+                    if (success) {
+                        outcomeText = "Success! Crawling quietly beneath ancient marine seaweed, it uses its sensitive antennae to detect a soft-bodied trilobite shedding its shell. It strikes quickly, securing an abundant meal! +25 Gold Curatorial Score.";
+                        scoreAdjust = 25;
+                    } else {
+                        outcomeText = "Failure. A sweeping undercurrent carries the creature's scent away. The target burrows deep into oceanic silt, leaving empty claws. +5 Curatorial Score.";
+                        scoreAdjust = 5;
+                    }
+                } else if (category.indexOf('plant') !== -1) {
+                    outcomeText = "Success! Unfolding its fronds to capture the abundant Mesozoic sunlight, it maximizes carbon fixation. Stomatal pores open wide, processing atmospheric CO2 into structural lignin. +25 Gold Curatorial Score.";
+                    scoreAdjust = 25;
+                } else {
+                    outcomeText = "Success! Navigating microscopic water films or sediment layers, it filters suspended organic detritus, securing vital carbon compounds. +20 Gold Curatorial Score.";
+                    scoreAdjust = 20;
+                }
+            } else if (behavior === 'defend') {
+                if (category.indexOf('vertebrate') !== -1 && category.indexOf('invertebrate') === -1) {
+                    if (success) {
+                        outcomeText = "Success! An intruder enters the nesting grounds. Displaying its massive skull structures and issuing a low-frequency infrasonic growl, the rival is successfully intimidated and flees. +35 Gold Curatorial Score.";
+                        scoreAdjust = 35;
+                    } else {
+                        outcomeText = "Failure. A larger rival theropod challenges the territory. After a brief exchange of snapping jaws and tail-swipes, it retreats slightly to high ground to nurse minor abrasions. +15 Curatorial Score.";
+                        scoreAdjust = 15;
+                    }
+                } else if (category.indexOf('invertebrate') !== -1) {
+                    if (success) {
+                        outcomeText = "Success! Retracting into its dense coiled, calcified shell, it withstands the crushing bites of an early cephalopod predator, completely unscathed. +25 Gold Curatorial Score.";
+                        scoreAdjust = 25;
+                    } else {
+                        outcomeText = "Failure. A massive storm surge rolls it out of its protective rocky crevice, forcing it to consume precious energy to re-anchor in the shifting seabed. +10 Curatorial Score.";
+                        scoreAdjust = 10;
+                    }
+                } else if (category.indexOf('plant') !== -1) {
+                    outcomeText = "Success! Synthesizing high concentrations of tannin and sticky resin in its cellular walls, it successfully deters hungry insects and herbivorous larvae. +25 Gold Curatorial Score.";
+                    scoreAdjust = 25;
+                } else {
+                    outcomeText = "Success! Secretion of defensive biopolymers or thick gelatinous matrices shields the colony from shifting chemical toxicities in ancient tidal pools. +20 Gold Curatorial Score.";
+                    scoreAdjust = 20;
+                }
+            } else { // rest
+                if (success) {
+                    outcomeText = "Success! Entering a state of low-metabolic torpor beneath a towering cycad tree. Body temperature drops to match the humid ambient night, conserving crucial oxygen and calories. +20 Gold Curatorial Score.";
+                    scoreAdjust = 20;
+                } else {
+                    outcomeText = "Success! Basking on a sunny limestone ledge, absorbing geothermal radiation. Cellular recovery is maximized under clear prebiotic skies. +20 Gold Curatorial Score.";
+                    scoreAdjust = 20;
+                }
             }
         }
         
@@ -11182,6 +12724,117 @@ window.app = {
         printNextLine();
     },
 
+    enrichMineralDataFromText: function(f, text) {
+        if (!text || f.type !== 'mineral') return false;
+        var updated = false;
+        var textLower = text.toLowerCase();
+
+        // 1. Crystal System
+        if (!f.crystalSystem) {
+            for (var i = 0; i < CRYSTAL_SYSTEMS.length; i++) {
+                var sys = CRYSTAL_SYSTEMS[i];
+                if (textLower.indexOf(sys.toLowerCase()) !== -1) {
+                    f.crystalSystem = sys;
+                    updated = true;
+                    break;
+                }
+            }
+        }
+
+        // 2. Mohs Hardness
+        if (!f.hardness) {
+            var hardnessRegex = /(?:mohs\s+hardness|hardness\s+on\s+the\s+mohs\s+scale|mohs\s+scale\s+hardness|hardness)\s*(?:of|is|ranking|rating)?\s*(\d+(?:\.\d+)?)(?:\s*[-–]\s*(\d+(?:\.\d+)?))?/i;
+            var match = text.match(hardnessRegex);
+            if (match) {
+                var val1 = parseFloat(match[1]);
+                var val2 = match[2] ? parseFloat(match[2]) : val1;
+                f.hardness = Math.round(((val1 + val2) / 2) * 10) / 10;
+                updated = true;
+            }
+        }
+
+        // 3. Chemical Formula
+        if (!f.formula) {
+            var formulaRegex = /(?:chemical\s+formula|formula)\s*(?:of [a-zA-Z\s]+)?\s*(?:is|:)?\s*\b([A-Z][A-Za-z0-9()·•,\-\s+]{1,30})\b/i;
+            var match = text.match(formulaRegex);
+            if (match) {
+                var rawFormula = match[1].trim();
+                rawFormula = rawFormula.replace(/[.,;]$/, '').trim();
+                if (/^[A-Z][A-Za-z0-9()·•]*$/.test(rawFormula) && rawFormula.length <= 20) {
+                    f.formula = rawFormula;
+                    updated = true;
+                }
+            }
+            
+            if (!f.formula) {
+                var commonFormulas = {
+                    'quartz': 'SiO2',
+                    'amethyst': 'SiO2',
+                    'pyrite': 'FeS2',
+                    'halite': 'NaCl',
+                    'calcite': 'CaCO3',
+                    'fluorite': 'CaF2',
+                    'hematite': 'Fe2O3',
+                    'magnetite': 'Fe3O4',
+                    'emerald': 'Be3Al2(SiO3)6',
+                    'beryl': 'Be3Al2(SiO3)6',
+                    'malachite': 'Cu2CO3(OH)2',
+                    'gypsum': 'CaSO4·2H2O',
+                    'galena': 'PbS'
+                };
+                var nameLower = (f.specimen || '').toLowerCase();
+                for (var key in commonFormulas) {
+                    if (nameLower.indexOf(key) !== -1) {
+                        f.formula = commonFormulas[key];
+                        updated = true;
+                        break;
+                    }
+                }
+            }
+        }
+
+        // 4. Luster
+        if (!f.luster) {
+            var lusters = ["vitreous", "metallic", "pearly", "silky", "adamantine", "greasy", "waxy", "resinous", "dull"];
+            for (var i = 0; i < lusters.length; i++) {
+                var l = lusters[i];
+                if (textLower.indexOf(l) !== -1) {
+                    f.luster = l.charAt(0).toUpperCase() + l.slice(1);
+                    updated = true;
+                    break;
+                }
+            }
+        }
+
+        // 5. Streak
+        if (!f.streak) {
+            var colors = ["white", "black", "red", "brown", "yellow", "grey", "green", "blue", "streakless"];
+            for (var i = 0; i < colors.length; i++) {
+                var c = colors[i];
+                if (textLower.indexOf(c + " streak") !== -1) {
+                    f.streak = c.charAt(0).toUpperCase() + c.slice(1);
+                    updated = true;
+                    break;
+                }
+            }
+        }
+
+        // 6. Cleavage
+        if (!f.cleavage) {
+            var cleavages = ["perfect", "good", "poor", "distinct", "indistinct", "imperfect", "none"];
+            for (var i = 0; i < cleavages.length; i++) {
+                var cl = cleavages[i];
+                if (textLower.indexOf(cl + " cleavage") !== -1) {
+                    f.cleavage = cl.charAt(0).toUpperCase() + cl.slice(1);
+                    updated = true;
+                    break;
+                }
+            }
+        }
+
+        return updated;
+    },
+
     fetchWikipediaPaleoExtract: function(f) {
         var name = (f.specimen || '').trim();
         var genus = name.split(' ')[0];
@@ -11189,12 +12842,13 @@ window.app = {
         
         var wikiContent = document.getElementById('deep-dive-wiki-content');
         if (wikiContent) {
-            wikiContent.innerHTML = '<div class="wiki-loader-spinner"><div class="spinner"></div><span>Retrieving paleobiological records for ' + escapeHtml(genus) + '...</span></div>';
+            var typeWord = f.type === 'mineral' ? 'mineralogical' : 'paleobiological';
+            wikiContent.innerHTML = '<div class="wiki-loader-spinner"><div class="spinner"></div><span>Retrieving ' + typeWord + ' records for ' + escapeHtml(genus) + '...</span></div>';
         }
         
         if (!genus) {
             if (wikiContent) {
-                wikiContent.innerHTML = '<div style="padding: 1rem; color: #edf2f7; text-align: center;">No genus specified. Showing specimen description:</div>' +
+                wikiContent.innerHTML = '<div style="padding: 1rem; color: #edf2f7; text-align: center;">No genus/mineral name specified. Showing specimen description:</div>' +
                                        '<div style="font-size: 0.85rem; padding: 0.5rem; background: rgba(255,255,255,0.02); border-radius: 4px; line-height: 1.5; color: #f7fafc;">' + escapeHtml(f.notes || f.description || 'No curation details available.') + '</div>';
             }
             return;
@@ -11217,7 +12871,8 @@ window.app = {
                     renderExtract(pages[pageId].extract, wikiTitle);
                 } else {
                     // Tier 2: Fallback to fuzzy search query
-                    var searchUrl = 'https://en.wikipedia.org/w/api.php?action=query&list=search&format=json&origin=*&srsearch=' + encodeURIComponent(genus + ' (fossil OR paleobiology OR dinosaur OR extinct)');
+                    var queryTerm = f.type === 'mineral' ? (genus + ' (mineral OR mineralogy OR gemstone OR crystal)') : (genus + ' (fossil OR paleobiology OR dinosaur OR extinct)');
+                    var searchUrl = 'https://en.wikipedia.org/w/api.php?action=query&list=search&format=json&origin=*&srsearch=' + encodeURIComponent(queryTerm);
                     fetch(searchUrl, { headers: wikiHeaders })
                         .then(function(res) { return res.json(); })
                         .then(function(sData) {
@@ -11260,6 +12915,49 @@ window.app = {
                                        '<span>Source: English Wikipedia</span> · <a href="https://en.wikipedia.org/wiki/' + encodeURIComponent(title) + '" target="_blank" style="color: #4fd1c5; text-decoration: underline; font-weight: 700;">Read Full Article</a>' +
                                        '</div>';
             }
+
+            // Auto-enrich mineral properties
+            if (f.type === 'mineral') {
+                var enriched = window.app.enrichMineralDataFromText(f, extract);
+                if (enriched) {
+                    updateFossil(f).then(function() {
+                        // Refresh cache and deep dive subparts, and update card details
+                        getAllFossils().then(function(allFossils) {
+                            fossils = allFossils;
+                            var specimenSub = document.getElementById('deep-dive-specimen-sub');
+                            if (specimenSub) {
+                                var subParts = [];
+                                if (f.formula) subParts.push(f.formula);
+                                if (f.crystalSystem) subParts.push(f.crystalSystem + ' Crystal System');
+                                if (f.hardness) subParts.push('Hardness: ' + f.hardness);
+                                specimenSub.textContent = subParts.join(' · ');
+                            }
+                            
+                            var lblClimateVal = document.getElementById('deep-dive-dossier-climate');
+                            var lblTempVal = document.getElementById('deep-dive-dossier-temp');
+                            var lblOxyVal = document.getElementById('deep-dive-dossier-oxygen');
+                            var lblCoexVal = document.getElementById('deep-dive-dossier-coexisting');
+                            var lblEcoVal = document.getElementById('deep-dive-dossier-ecology');
+                            
+                            if (lblClimateVal) lblClimateVal.textContent = f.category || 'Unknown Group';
+                            if (lblTempVal) lblTempVal.textContent = f.crystalSystem || 'Unknown Crystal System';
+                            if (lblOxyVal) lblOxyVal.textContent = f.hardness ? f.hardness + ' (Mohs Scale)' : 'Unknown Hardness';
+                            
+                            var lusterStreak = [];
+                            if (f.luster) lusterStreak.push(f.luster);
+                            if (f.streak) lusterStreak.push('Streak: ' + f.streak);
+                            if (lblCoexVal) lblCoexVal.textContent = lusterStreak.join(' · ');
+                            
+                            var cleavageColor = [];
+                            if (f.cleavage) cleavageColor.push('Cleavage: ' + f.cleavage);
+                            if (f.color) cleavageColor.push('Color: ' + f.color);
+                            if (lblEcoVal) lblEcoVal.textContent = cleavageColor.join(' · ');
+                            
+                            window.app.renderFossils();
+                        });
+                    });
+                }
+            }
         }
         
         function renderFallbackDescription() {
@@ -11279,10 +12977,10 @@ window.app = {
                                '<div class="spinner" style="width: 20px; height: 20px; border: 2px solid rgba(255,255,255,0.1); border-top-color: #4fd1c5; border-radius: 50%; animation: spin 1s linear infinite; margin-bottom: 0.3rem;"></div>' +
                                '<span>Loading...</span></div>';
 
-        var wikiTitle = genus.charAt(0).toUpperCase() + genus.slice(1).toLowerCase();
+        var wikiTitle = genus.charAt(0).toUpperCase() + genus.slice(1);
         var wikiHeaders = { 'Api-User-Agent': 'FossilArchiveApp/1.0 (contact@fossilarchive.app) MediaWiki/1.3' };
 
-        // Tier 1: Try exact Genus page first for the PageImage
+        // Tier 1: Try exact page first for the PageImage
         var exactUrl = 'https://en.wikipedia.org/w/api.php?action=query&prop=pageimages&format=json&piprop=thumbnail&pithumbsize=400&origin=*&titles=' + encodeURIComponent(wikiTitle);
 
         fetch(exactUrl, { headers: wikiHeaders })
@@ -11294,7 +12992,8 @@ window.app = {
                     renderImage(pages[pageId].thumbnail.source);
                 } else {
                     // Tier 2: Search fallback
-                    var searchUrl = 'https://en.wikipedia.org/w/api.php?action=query&list=search&format=json&origin=*&srsearch=' + encodeURIComponent(genus + ' (fossil OR paleobiology OR dinosaur OR extinct)');
+                    var fallbackQuery = (f && f.type === 'mineral') ? (genus + ' (mineral OR mineralogy OR gemstone)') : (genus + ' (fossil OR paleobiology OR dinosaur OR extinct)');
+                    var searchUrl = 'https://en.wikipedia.org/w/api.php?action=query&list=search&format=json&origin=*&srsearch=' + encodeURIComponent(fallbackQuery);
                     fetch(searchUrl, { headers: wikiHeaders })
                         .then(function(res) { return res.json(); })
                         .then(function(sData) {
@@ -11523,20 +13222,33 @@ window.app = {
             arrow.style.display = 'none';
         }
 
-        var isMobile = window.innerWidth <= 500;
+        var isMobile = window.innerWidth <= 768;
 
         if (isMobile) {
-            // Mobile format: cleanly anchor the tour card at the bottom of the viewport
-            card.style.position = 'fixed';
-            card.style.top = 'auto';
-            card.style.bottom = '20px';
-            card.style.left = '50%';
-            card.style.transform = 'translateX(-50%)';
-            card.style.width = 'calc(100% - 32px)';
-            
             if (targetEl && targetEl.offsetWidth > 0 && targetEl.offsetHeight > 0) {
+                // Mobile layout with target highlight: anchor card at the bottom using auto-margins (bypassing transform scale overrides)
+                card.style.position = 'fixed';
+                card.style.top = 'auto';
+                card.style.bottom = '20px';
+                card.style.left = '16px';
+                card.style.right = '16px';
+                card.style.margin = '0 auto';
+                card.style.width = 'auto';
+                card.style.maxWidth = '320px';
+                
                 targetEl.classList.add('tour-highlighted');
                 targetEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            } else {
+                // Mobile layout without target (or target is hidden on mobile): center card vertically and horizontally
+                card.style.position = 'fixed';
+                card.style.top = '0px';
+                card.style.bottom = '0px';
+                card.style.left = '0px';
+                card.style.right = '0px';
+                card.style.margin = 'auto';
+                card.style.width = 'calc(100% - 32px)';
+                card.style.maxWidth = '320px';
+                card.style.height = 'fit-content';
             }
         } else {
             // Desktop format
@@ -11712,6 +13424,1759 @@ window.app = {
                 }, 130);
             }, 30);
         }, 120);
+    },
+
+    openCameraCapture: function(target) {
+        window.app.cameraTarget = target || 'standard';
+        
+        var modal = document.getElementById('camera-modal');
+        var video = document.getElementById('camera-video');
+        var canvas = document.getElementById('camera-canvas');
+        var loader = document.getElementById('camera-loading');
+        
+        if (!modal || !video || !canvas) return;
+        
+        // Reset states
+        video.style.display = 'block';
+        canvas.style.display = 'none';
+        if (loader) loader.style.display = 'flex';
+        
+        var btnCapture = document.getElementById('btn-camera-capture');
+        var btnRetake = document.getElementById('btn-camera-retake');
+        var btnSave = document.getElementById('btn-camera-save');
+        
+        if (btnCapture) btnCapture.style.display = 'flex';
+        if (btnRetake) btnRetake.style.display = 'none';
+        if (btnSave) {
+            btnSave.style.display = 'none';
+            btnSave.disabled = false;
+            btnSave.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Use Photo';
+        }
+        
+        modal.showModal();
+        
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+            if (loader) loader.style.display = 'none';
+            window.app.showToast('Camera access is not supported on this browser or connection type (requires HTTPS or localhost).', 'error');
+            modal.close();
+            return;
+        }
+        
+        var constraints = {
+            video: {
+                facingMode: 'environment',
+                width: { ideal: 1920 },
+                height: { ideal: 1080 }
+            }
+        };
+        
+        navigator.mediaDevices.getUserMedia(constraints)
+            .then(function(stream) {
+                if (loader) loader.style.display = 'none';
+                window.app.cameraStream = stream;
+                video.srcObject = stream;
+                
+                return navigator.mediaDevices.enumerateDevices();
+            })
+            .then(function(devices) {
+                var videoDevices = devices.filter(function(d) { return d.kind === 'videoinput'; });
+                var selectGroup = document.getElementById('camera-device-group');
+                var select = document.getElementById('camera-device-select');
+                
+                if (videoDevices.length > 1 && select && selectGroup) {
+                    select.innerHTML = '';
+                    videoDevices.forEach(function(device, idx) {
+                        var opt = document.createElement('option');
+                        opt.value = device.deviceId;
+                        opt.textContent = device.label || ('Camera ' + (idx + 1));
+                        
+                        if (window.app.cameraStream) {
+                            var activeTrack = window.app.cameraStream.getVideoTracks()[0];
+                            if (activeTrack && activeTrack.label === device.label) {
+                                opt.selected = true;
+                            }
+                        }
+                        select.appendChild(opt);
+                    });
+                    selectGroup.style.display = 'block';
+                } else if (selectGroup) {
+                    selectGroup.style.display = 'none';
+                }
+            })
+            .catch(function(err) {
+                console.error('Camera initialization failed:', err);
+                if (loader) loader.style.display = 'none';
+                window.app.showToast('Could not access camera. Please check permissions.', 'error');
+                modal.close();
+            });
+    },
+
+    closeCameraCapture: function() {
+        if (window.app.cameraStream) {
+            window.app.cameraStream.getTracks().forEach(function(track) {
+                track.stop();
+            });
+            window.app.cameraStream = null;
+        }
+        var video = document.getElementById('camera-video');
+        if (video) video.srcObject = null;
+        
+        var modal = document.getElementById('camera-modal');
+        if (modal) modal.close();
+    },
+
+    changeCameraDevice: function(deviceId) {
+        if (!deviceId) return;
+        
+        if (window.app.cameraStream) {
+            window.app.cameraStream.getTracks().forEach(function(track) {
+                track.stop();
+            });
+            window.app.cameraStream = null;
+        }
+        
+        var video = document.getElementById('camera-video');
+        var loader = document.getElementById('camera-loading');
+        if (loader) loader.style.display = 'flex';
+        
+        var constraints = {
+            video: {
+                deviceId: { exact: deviceId },
+                width: { ideal: 1920 },
+                height: { ideal: 1080 }
+            }
+        };
+        
+        navigator.mediaDevices.getUserMedia(constraints)
+            .then(function(stream) {
+                if (loader) loader.style.display = 'none';
+                window.app.cameraStream = stream;
+                if (video) video.srcObject = stream;
+            })
+            .catch(function(err) {
+                console.error('Switching camera failed:', err);
+                if (loader) loader.style.display = 'none';
+                window.app.showToast('Failed to switch to selected camera.', 'error');
+            });
+    },
+
+    captureCameraSnapshot: function() {
+        var video = document.getElementById('camera-video');
+        var canvas = document.getElementById('camera-canvas');
+        if (!video || !canvas) return;
+        
+        var ctx = canvas.getContext('2d');
+        if (!ctx) return;
+        
+        var width = video.videoWidth || 640;
+        var height = video.videoHeight || 480;
+        
+        canvas.width = width;
+        canvas.height = height;
+        
+        ctx.drawImage(video, 0, 0, width, height);
+        
+        video.style.display = 'none';
+        canvas.style.display = 'block';
+        
+        var btnCapture = document.getElementById('btn-camera-capture');
+        var btnRetake = document.getElementById('btn-camera-retake');
+        var btnSave = document.getElementById('btn-camera-save');
+        
+        if (btnCapture) btnCapture.style.display = 'none';
+        if (btnRetake) btnRetake.style.display = 'flex';
+        if (btnSave) btnSave.style.display = 'flex';
+        
+        if (window.app.cameraStream) {
+            window.app.cameraStream.getVideoTracks().forEach(function(track) {
+                track.enabled = false;
+            });
+        }
+    },
+
+    retakeCameraSnapshot: function() {
+        var video = document.getElementById('camera-video');
+        var canvas = document.getElementById('camera-canvas');
+        if (!video || !canvas) return;
+        
+        video.style.display = 'block';
+        canvas.style.display = 'none';
+        
+        var btnCapture = document.getElementById('btn-camera-capture');
+        var btnRetake = document.getElementById('btn-camera-retake');
+        var btnSave = document.getElementById('btn-camera-save');
+        
+        if (btnCapture) btnCapture.style.display = 'flex';
+        if (btnRetake) btnRetake.style.display = 'none';
+        if (btnSave) btnSave.style.display = 'none';
+        
+        if (window.app.cameraStream) {
+            window.app.cameraStream.getVideoTracks().forEach(function(track) {
+                track.enabled = true;
+            });
+        } else {
+            var select = document.getElementById('camera-device-select');
+            var activeDevice = select ? select.value : null;
+            if (activeDevice) {
+                window.app.changeCameraDevice(activeDevice);
+            } else {
+                window.app.openCameraCapture(window.app.cameraTarget);
+            }
+        }
+    },
+
+    saveCameraSnapshot: function() {
+        var canvas = document.getElementById('camera-canvas');
+        if (!canvas) return;
+        
+        var dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+        
+        var saveBtn = document.getElementById('btn-camera-save');
+        if (saveBtn) {
+            saveBtn.disabled = true;
+            saveBtn.innerHTML = '<span class="loading-spinner" style="width:12px; height:12px; border-width:1.5px; border-top-color:#fff; animation:spin 1s linear infinite; margin-right:3px;"></span> Saving...';
+        }
+        
+        downscaleImage(dataUrl, 1200, 0.85).then(function(optimized) {
+            var target = window.app.cameraTarget || 'standard';
+            if (target === 'dream') {
+                if (!window.dreamCurrentImages) window.dreamCurrentImages = [];
+                window.dreamCurrentImages.push(optimized);
+                window.app.renderDreamImagePreview();
+            } else if (target === 'cart') {
+                if (!window.cartCurrentImages) window.cartCurrentImages = [];
+                window.cartCurrentImages.push(optimized);
+                window.app.renderCartImagePreview();
+            } else if (target === 'milestone') {
+                window.app.addMilestoneWithImage(optimized);
+            } else {
+                currentImages.push(optimized);
+                window.app.renderImagePreview();
+            }
+            window.app.closeCameraCapture();
+        }).catch(function(err) {
+            console.error('Snapshot optimization failed', err);
+            var target = window.app.cameraTarget || 'standard';
+            if (target === 'dream') {
+                if (!window.dreamCurrentImages) window.dreamCurrentImages = [];
+                window.dreamCurrentImages.push(dataUrl);
+                window.app.renderDreamImagePreview();
+            } else if (target === 'cart') {
+                if (!window.cartCurrentImages) window.cartCurrentImages = [];
+                window.cartCurrentImages.push(dataUrl);
+                window.app.renderCartImagePreview();
+            } else if (target === 'milestone') {
+                window.app.addMilestoneWithImage(dataUrl);
+            } else {
+                currentImages.push(dataUrl);
+                window.app.renderImagePreview();
+            }
+            window.app.closeCameraCapture();
+        });
+    },
+
+    toggleCloudSyncModal: function() {
+        var modal = document.getElementById('cloud-sync-modal');
+        if (!modal) return;
+        
+        if (modal.open) {
+            modal.close();
+        } else {
+            var clientIdInput = document.getElementById('gdrive-client-id');
+            if (clientIdInput) {
+                clientIdInput.value = localStorage.getItem('fossil_gdrive_client_id') || '';
+            }
+            
+            var isConnected = localStorage.getItem('fossil_gdrive_connected') === 'true';
+            this.updateCloudStatus(isConnected ? 'connected' : 'disconnected');
+            
+            modal.showModal();
+        }
+    },
+
+    updateCloudStatus: function(state, text) {
+        var statusCard = document.getElementById('sync-status-card');
+        var statusDot = document.getElementById('sync-status-dot');
+        var statusText = document.getElementById('sync-status-text');
+        var statusDetails = document.getElementById('sync-status-details');
+        var activeActions = document.getElementById('sync-active-actions');
+        var btnConnect = document.getElementById('btn-sync-connect');
+        
+        if (!statusCard) return;
+        
+        if (state === 'connected') {
+            statusDot.style.background = '#22c55e';
+            statusText.textContent = text || 'Connected';
+            statusDetails.textContent = 'Last synced: ' + new Date().toLocaleTimeString();
+            if (activeActions) activeActions.style.display = 'flex';
+            if (btnConnect) btnConnect.style.display = 'none';
+        } else if (state === 'syncing') {
+            statusDot.style.background = '#3b82f6';
+            statusText.textContent = text || 'Syncing...';
+            statusDetails.textContent = 'Talking to Google Drive API';
+        } else {
+            statusDot.style.background = '#94a3b8';
+            statusText.textContent = text || 'Not Connected';
+            statusDetails.textContent = 'Connect to begin backup.';
+            if (activeActions) activeActions.style.display = 'none';
+            if (btnConnect) btnConnect.style.display = 'flex';
+        }
+    },
+
+    getGoogleAccessToken: function(silent) {
+        return new Promise(function(resolve, reject) {
+            if (window.app.gdriveAccessToken && window.app.gdriveTokenExpiry && Date.now() < window.app.gdriveTokenExpiry - 60000) {
+                resolve(window.app.gdriveAccessToken);
+                return;
+            }
+
+            var clientId = localStorage.getItem('fossil_gdrive_client_id');
+            if (!clientId) {
+                reject(new Error("No Google Client ID configured."));
+                return;
+            }
+
+            if (typeof google === 'undefined' || !google.accounts || !google.accounts.oauth2) {
+                reject(new Error("Google Identity Services SDK not loaded yet."));
+                return;
+            }
+
+            var tokenClient = google.accounts.oauth2.initTokenClient({
+                client_id: clientId,
+                scope: 'https://www.googleapis.com/auth/drive.file',
+                callback: function(resp) {
+                    if (resp.error) {
+                        reject(new Error(resp.error_description || resp.error));
+                    } else if (resp.access_token) {
+                        window.app.gdriveAccessToken = resp.access_token;
+                        window.app.gdriveTokenExpiry = Date.now() + (resp.expires_in || 3600) * 1000;
+                        localStorage.setItem('fossil_gdrive_connected', 'true');
+                        resolve(resp.access_token);
+                    } else {
+                        reject(new Error("Failed to obtain access token."));
+                    }
+                }
+            });
+            tokenClient.requestAccessToken({ prompt: silent ? '' : 'consent' });
+        });
+    },
+
+    connectGoogleDrive: function() {
+        var self = this;
+        var clientIdInput = document.getElementById('gdrive-client-id');
+        if (!clientIdInput) return;
+        
+        var clientId = clientIdInput.value.trim();
+        if (!clientId) {
+            self.showToast('Please enter a Google OAuth Client ID first.', 'warning');
+            return;
+        }
+        
+        localStorage.setItem('fossil_gdrive_client_id', clientId);
+        self.updateCloudStatus('syncing', 'Connecting to Google Account...');
+        
+        self.getGoogleAccessToken(false).then(function() {
+            self.updateCloudStatus('connected', 'Connected');
+            self.showToast('Successfully connected to Google Drive!', 'success');
+            self.syncWithGoogleDrive('sync');
+        }).catch(function(err) {
+            console.error(err);
+            self.updateCloudStatus('disconnected', 'Not Connected');
+            self.showToast('Connection failed: ' + (err.message || err), 'danger');
+        });
+    },
+
+    disconnectGoogleDrive: function() {
+        var self = this;
+        if (confirm('Disconnect from Google Drive? Your local data will remain intact, but cloud synchronization will be disabled.')) {
+            localStorage.removeItem('fossil_gdrive_connected');
+            window.app.gdriveAccessToken = null;
+            window.app.gdriveTokenExpiry = null;
+            
+            self.updateCloudStatus('disconnected', 'Not Connected');
+            self.showToast('Disconnected from Google Drive.', 'success');
+        }
+    },
+
+    syncWithGoogleDrive: async function(mode) {
+        mode = mode || 'sync';
+        var self = this;
+        self.updateCloudStatus('syncing', 'Syncing (' + mode + ')...');
+        
+        try {
+            var token = await self.getGoogleAccessToken(true);
+            
+            var searchUrl = "https://www.googleapis.com/drive/v3/files?q=name='specimens_sync.json' and trashed=false&fields=files(id,name,mimeType)";
+            var searchResp = await fetch(searchUrl, {
+                headers: { 'Authorization': 'Bearer ' + token }
+            });
+            if (!searchResp.ok) {
+                throw new Error('Failed to search Google Drive: ' + searchResp.statusText);
+            }
+            var searchData = await searchResp.json();
+            var fileId = (searchData.files && searchData.files.length > 0) ? searchData.files[0].id : null;
+            
+            var remoteData = { specimens: [], carts: [], deletedIds: [] };
+            if (fileId) {
+                var downloadUrl = 'https://www.googleapis.com/drive/v3/files/' + fileId + '?alt=media';
+                var downloadResp = await fetch(downloadUrl, {
+                    headers: { 'Authorization': 'Bearer ' + token }
+                });
+                if (downloadResp.ok) {
+                    try {
+                        remoteData = await downloadResp.json();
+                    } catch(e) {
+                        console.warn('Failed to parse remote JSON, starting fresh:', e);
+                    }
+                } else {
+                    console.warn('Failed to download remote file, starting fresh.');
+                }
+            }
+            
+            var localSpecimens = await getAllFossils();
+            var localCarts = self.getCarts();
+            var localDeletedIds = [];
+            try {
+                localDeletedIds = JSON.parse(localStorage.getItem('fossil_deleted_ids') || '[]');
+            } catch(e) {}
+            
+            var finalSpecimens = [];
+            var finalCarts = [];
+            var finalDeletedIds = [];
+            
+            if (mode === 'push') {
+                finalSpecimens = localSpecimens;
+                finalCarts = localCarts;
+                finalDeletedIds = [];
+            } else if (mode === 'pull') {
+                finalSpecimens = remoteData.specimens || [];
+                finalCarts = remoteData.carts || [];
+                finalDeletedIds = remoteData.deletedIds || [];
+            } else {
+                var mergedDeletedIds = Array.from(new Set([].concat(localDeletedIds, remoteData.deletedIds || [])));
+                
+                var specMap = {};
+                localSpecimens.forEach(function(s) {
+                    if (mergedDeletedIds.indexOf(s.id) === -1) {
+                        specMap[s.id] = s;
+                    }
+                });
+                (remoteData.specimens || []).forEach(function(s) {
+                    if (mergedDeletedIds.indexOf(s.id) === -1) {
+                        if (!specMap[s.id]) {
+                            specMap[s.id] = s;
+                        } else {
+                            var localUpdate = specMap[s.id].updatedAt || 0;
+                            var remoteUpdate = s.updatedAt || 0;
+                            if (remoteUpdate > localUpdate) {
+                                specMap[s.id] = s;
+                            }
+                        }
+                    }
+                });
+                finalSpecimens = Object.values(specMap);
+                
+                var cartMap = {};
+                localCarts.forEach(function(c) {
+                    if (mergedDeletedIds.indexOf(c.id) === -1) {
+                        cartMap[c.id] = c;
+                    }
+                });
+                (remoteData.carts || []).forEach(function(c) {
+                    if (mergedDeletedIds.indexOf(c.id) === -1) {
+                        if (!cartMap[c.id]) {
+                            cartMap[c.id] = c;
+                        } else {
+                            var localUpdate = cartMap[c.id].updatedAt || 0;
+                            var remoteUpdate = c.updatedAt || 0;
+                            if (remoteUpdate > localUpdate) {
+                                cartMap[c.id] = c;
+                            }
+                        }
+                    }
+                });
+                finalCarts = Object.values(cartMap);
+                finalDeletedIds = mergedDeletedIds;
+            }
+            
+            await initDB().then(function(db) {
+                return new Promise(function(resolve, reject) {
+                    var tx = db.transaction('fossils', 'readwrite');
+                    var store = tx.objectStore('fossils');
+                    tx.onerror = function(e) { reject(e); };
+                    tx.oncomplete = function() {
+                        fossilsCacheLoaded = false;
+                        resolve();
+                    };
+                    store.clear();
+                    finalSpecimens.forEach(function(item) {
+                        store.put(item);
+                    });
+                });
+            });
+            
+            if (finalCarts.length === 0) {
+                finalCarts = [{ id: 'cart_default', name: 'Main Comparison Cart', updatedAt: 0 }];
+            }
+            localStorage.setItem('fossil_carts', JSON.stringify(finalCarts));
+            
+            var activeCartId = localStorage.getItem('fossil_active_cart_id');
+            var cartExists = finalCarts.some(function(c) { return c.id === activeCartId; });
+            if (!cartExists) {
+                localStorage.setItem('fossil_active_cart_id', finalCarts[0].id);
+            }
+            
+            if (mode === 'push' || mode === 'sync') {
+                var syncPayload = {
+                    specimens: finalSpecimens,
+                    carts: finalCarts,
+                    deletedIds: finalDeletedIds,
+                    syncTime: Date.now()
+                };
+                
+                var boundary = '-------314159265358979323846';
+                var delimiter = "\r\n--" + boundary + "\r\n";
+                var close_delim = "\r\n--" + boundary + "--";
+                
+                var url = 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart';
+                var method = 'POST';
+                if (fileId) {
+                    url = 'https://www.googleapis.com/upload/drive/v3/files/' + fileId + '?uploadType=multipart';
+                    method = 'PATCH';
+                }
+                
+                var metadata = {
+                    'name': 'specimens_sync.json',
+                    'mimeType': 'application/json'
+                };
+                
+                var multipartRequestBody =
+                    delimiter +
+                    'Content-Type: application/json\r\n\r\n' +
+                    JSON.stringify(metadata) +
+                    delimiter +
+                    'Content-Type: application/json\r\n\r\n' +
+                    JSON.stringify(syncPayload) +
+                    close_delim;
+                
+                var uploadResp = await fetch(url, {
+                    method: method,
+                    headers: {
+                        'Authorization': 'Bearer ' + token,
+                        'Content-Type': 'multipart/related; boundary=' + boundary
+                    },
+                    body: multipartRequestBody
+                });
+                
+                if (!uploadResp.ok) {
+                    throw new Error('Upload to Google Drive failed: ' + uploadResp.statusText);
+                }
+            }
+            
+            localStorage.setItem('fossil_deleted_ids', JSON.stringify([]));
+            self.updateCloudStatus('connected', 'Connected');
+            self.showToast('Cloud synchronization successful (' + mode + ').', 'success');
+            self.renderFossils();
+        } catch (err) {
+            console.error('Cloud sync error:', err);
+            var isConnected = localStorage.getItem('fossil_gdrive_connected') === 'true';
+            self.updateCloudStatus(isConnected ? 'connected' : 'disconnected', isConnected ? 'Connection Active (Sync Error)' : 'Not Connected');
+            self.showToast('Sync failed: ' + err.message, 'danger');
+        }
+    },
+
+    autoPushCloud: function() {
+        var isConnected = localStorage.getItem('fossil_gdrive_connected') === 'true';
+        if (!isConnected) return;
+        
+        if (window.app.autoPushTimeout) {
+            clearTimeout(window.app.autoPushTimeout);
+        }
+        window.app.autoPushTimeout = setTimeout(function() {
+            window.app.syncWithGoogleDrive('sync');
+        }, 3000);
+    },
+
+    autoSyncOnLoad: function() {
+        var isConnected = localStorage.getItem('fossil_gdrive_connected') === 'true';
+        if (isConnected) {
+            window.app.getGoogleAccessToken(true).then(function() {
+                window.app.syncWithGoogleDrive('sync');
+            }).catch(function(err) {
+                console.warn('Auto sync on load failed: ', err);
+                window.app.updateCloudStatus('connected', 'Connection Active (Auth Required)');
+            });
+        }
+    },
+
+    setSyncTab: function(tab) {
+        var btnCloud = document.getElementById('btn-sync-tab-cloud');
+        var btnP2p = document.getElementById('btn-sync-tab-p2p');
+        var panelCloud = document.getElementById('panel-sync-cloud');
+        var panelP2p = document.getElementById('panel-sync-p2p');
+        var btnConnect = document.getElementById('btn-sync-connect');
+        var btnP2pInit = document.getElementById('btn-p2p-init');
+
+        if (!btnCloud || !btnP2p || !panelCloud || !panelP2p) return;
+
+        if (tab !== 'p2p') {
+            this.stopP2PScanner();
+        }
+
+        if (tab === 'p2p') {
+            btnCloud.style.borderBottom = '2px solid transparent';
+            btnCloud.style.fontWeight = '500';
+            btnCloud.style.color = 'var(--text-secondary)';
+
+            btnP2p.style.borderBottom = '2px solid var(--accent)';
+            btnP2p.style.fontWeight = '700';
+            btnP2p.style.color = 'var(--text-primary)';
+
+            panelCloud.style.display = 'none';
+            panelP2p.style.display = 'flex';
+
+            if (btnConnect) btnConnect.style.display = 'none';
+            if (btnP2pInit) {
+                if (window.p2pPeer && window.p2pPeer.open) {
+                    btnP2pInit.style.display = 'none';
+                } else {
+                    btnP2pInit.style.display = 'flex';
+                }
+            }
+        } else {
+            btnCloud.style.borderBottom = '2px solid var(--accent)';
+            btnCloud.style.fontWeight = '700';
+            btnCloud.style.color = 'var(--text-primary)';
+
+            btnP2p.style.borderBottom = '2px solid transparent';
+            btnP2p.style.fontWeight = '500';
+            btnP2p.style.color = 'var(--text-secondary)';
+
+            panelCloud.style.display = 'flex';
+            panelP2p.style.display = 'none';
+
+            if (btnP2pInit) btnP2pInit.style.display = 'none';
+            if (btnConnect) {
+                var isConnected = localStorage.getItem('fossil_gdrive_connected') === 'true';
+                btnConnect.style.display = isConnected ? 'none' : 'flex';
+            }
+        }
+    },
+
+    initP2PConnection: function() {
+        var self = this;
+        var btnP2pInit = document.getElementById('btn-p2p-init');
+        if (btnP2pInit) btnP2pInit.style.display = 'none';
+
+        self.updateP2PStatus('syncing', 'Connecting...', 'Establishing peer connection...');
+
+        try {
+            if (window.p2pPeer) {
+                try { window.p2pPeer.destroy(); } catch(e) {}
+            }
+
+            var shortId = Math.random().toString(36).substring(2, 8).toUpperCase();
+            window.p2pPeer = new Peer('SPECIMENRY-' + shortId, {
+                debug: 1
+            });
+
+            window.p2pPeer.on('open', function(id) {
+                var displayId = id.replace('SPECIMENRY-', '');
+                self.updateP2PStatus('ready', 'P2P Ready', 'Waiting for connection from peer...');
+                
+                var codeDiv = document.getElementById('p2p-sync-code');
+                if (codeDiv) {
+                    codeDiv.textContent = displayId;
+                }
+
+                var qrImg = document.getElementById('p2p-qr-img');
+                if (qrImg) {
+                    var connectUrl = window.location.origin + window.location.pathname + '?connect=' + displayId;
+                    qrImg.src = 'https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=' + encodeURIComponent(connectUrl);
+                }
+
+                var hostArea = document.getElementById('p2p-host-area');
+                var joinArea = document.getElementById('p2p-join-area');
+                if (hostArea) hostArea.style.display = 'flex';
+                if (joinArea) joinArea.style.display = 'flex';
+            });
+
+            window.p2pPeer.on('connection', function(conn) {
+                self.handleP2PConnection(conn);
+            });
+
+            window.p2pPeer.on('error', function(err) {
+                console.error('PeerJS error:', err);
+                self.updateP2PStatus('error', 'P2P Error', 'Error: ' + err.type);
+                self.showToast('P2P connection error: ' + err.message, 'danger');
+                if (btnP2pInit) btnP2pInit.style.display = 'flex';
+            });
+
+            window.p2pPeer.on('close', function() {
+                self.updateP2PStatus('offline', 'P2P Offline', 'Initialize to connect to network.');
+                if (btnP2pInit) btnP2pInit.style.display = 'flex';
+            });
+
+        } catch(err) {
+            console.error('Failed to init PeerJS:', err);
+            self.updateP2PStatus('offline', 'Initialization Failed', err.message);
+            self.showToast('Failed to initialize P2P: ' + err.message, 'danger');
+            if (btnP2pInit) btnP2pInit.style.display = 'flex';
+        }
+    },
+
+    updateP2PStatus: function(state, text, details) {
+        var dot = document.getElementById('p2p-status-dot');
+        var textDiv = document.getElementById('p2p-status-text');
+        var detailsDiv = document.getElementById('p2p-status-details');
+
+        if (!dot || !textDiv || !detailsDiv) return;
+
+        textDiv.textContent = text || '';
+        detailsDiv.textContent = details || '';
+
+        dot.style.animation = 'none';
+
+        if (state === 'ready') {
+            dot.style.background = '#22c55e';
+        } else if (state === 'syncing') {
+            dot.style.background = '#eab308';
+            if (!document.getElementById('p2p-pulse-style')) {
+                var style = document.createElement('style');
+                style.id = 'p2p-pulse-style';
+                style.textContent = '@keyframes p2p-pulse-glow { 0% { opacity: 0.4; } 50% { opacity: 1; } 100% { opacity: 0.4; } }';
+                document.head.appendChild(style);
+            }
+            dot.style.animation = 'p2p-pulse-glow 1.5s infinite ease-in-out';
+        } else if (state === 'offline') {
+            dot.style.background = '#94a3b8';
+        } else if (state === 'error') {
+            dot.style.background = '#ef4444';
+        }
+    },
+
+    toggleP2PScanner: function() {
+        var container = document.getElementById('p2p-scanner-container');
+        if (container && container.style.display === 'flex') {
+            this.stopP2PScanner();
+        } else {
+            this.startP2PScanner();
+        }
+    },
+
+    startP2PScanner: function() {
+        var self = this;
+        var container = document.getElementById('p2p-scanner-container');
+        var btn = document.getElementById('btn-p2p-scanner-toggle');
+        if (!container) return;
+
+        container.style.display = 'flex';
+        if (btn) btn.textContent = '⏹️ Stop Camera';
+
+        try {
+            if (window.p2pScannerInstance) {
+                window.p2pScannerInstance.clear();
+            }
+
+            window.p2pScannerInstance = new Html5Qrcode("p2p-qr-scanner-mount");
+            window.p2pScannerInstance.start(
+                { facingMode: "environment" },
+                {
+                    fps: 10,
+                    qrbox: function(width, height) {
+                        var size = Math.min(width, height) * 0.7;
+                        return { width: size, height: size };
+                    }
+                },
+                function(qrMessage) {
+                    self.showToast("QR code scanned successfully!", "success");
+                    self.stopP2PScanner();
+
+                    var peerId = qrMessage;
+                    if (qrMessage.indexOf('connect=') !== -1) {
+                        try {
+                            var url = new URL(qrMessage);
+                            peerId = url.searchParams.get('connect') || qrMessage;
+                        } catch(e) {}
+                    }
+                    
+                    var input = document.getElementById('p2p-target-code');
+                    if (input) input.value = peerId;
+                    self.connectToPeer(peerId);
+                },
+                function(error) {
+                    // silent scan error
+                }
+            ).catch(function(err) {
+                console.error("Camera scan failed:", err);
+                self.showToast("Camera access failed: " + err.message, "danger");
+                self.stopP2PScanner();
+            });
+        } catch(err) {
+            console.error("Scanner exception:", err);
+            self.showToast("Failed to initialize scanner: " + err.message, "danger");
+            self.stopP2PScanner();
+        }
+    },
+
+    stopP2PScanner: function() {
+        var container = document.getElementById('p2p-scanner-container');
+        var btn = document.getElementById('btn-p2p-scanner-toggle');
+        if (container) container.style.display = 'none';
+        if (btn) btn.textContent = '📷 Scan QR Code';
+
+        if (window.p2pScannerInstance) {
+            window.p2pScannerInstance.stop().then(function() {
+                if (window.p2pScannerInstance) {
+                    window.p2pScannerInstance.clear();
+                    window.p2pScannerInstance = null;
+                }
+            }).catch(function(err) {
+                console.error("Failed to stop scanner:", err);
+                window.p2pScannerInstance = null;
+            });
+        }
+    },
+
+    connectToPeer: function(targetId) {
+        var self = this;
+        if (!targetId) {
+            var input = document.getElementById('p2p-target-code');
+            if (input) targetId = input.value.trim();
+        }
+
+        if (!targetId) {
+            self.showToast('Please enter a remote sync code or scan a QR code.', 'warning');
+            return;
+        }
+
+        var fullTargetId = targetId.trim().toUpperCase();
+        if (fullTargetId.length === 6 && !fullTargetId.startsWith('SPECIMENRY-')) {
+            fullTargetId = 'SPECIMENRY-' + fullTargetId;
+        }
+
+        if (!window.p2pPeer || !window.p2pPeer.open) {
+            self.showToast('P2P connection is not initialized. Click Initialize first.', 'warning');
+            return;
+        }
+
+        self.updateP2PStatus('syncing', 'Connecting...', 'Initiating handshake with ' + targetId.toUpperCase());
+
+        try {
+            var conn = window.p2pPeer.connect(fullTargetId);
+            self.handleP2PConnection(conn, true);
+        } catch(err) {
+            self.updateP2PStatus('ready', 'Connection Failed', err.message);
+            self.showToast('Failed to connect: ' + err.message, 'danger');
+        }
+    },
+
+    handleP2PConnection: function(conn, isInitiator) {
+        var self = this;
+
+        conn.on('open', async function() {
+            self.updateP2PStatus('syncing', 'Syncing...', 'Handshake complete. Syncing database...');
+
+            if (isInitiator) {
+                try {
+                    var localSpecimens = await getAllFossils();
+                    var localCarts = self.getCarts();
+                    var localDeletedIds = JSON.parse(localStorage.getItem('fossil_deleted_ids') || '[]');
+                    var payload = {
+                        specimens: localSpecimens,
+                        carts: localCarts,
+                        deletedIds: localDeletedIds,
+                        syncTime: Date.now()
+                    };
+                    conn.send({ type: 'SYNC_DATA', data: payload });
+                } catch(e) {
+                    console.error('P2P export failed:', e);
+                    self.showToast('Failed to compile data for transfer: ' + e.message, 'danger');
+                    conn.close();
+                }
+            }
+        });
+
+        conn.on('data', async function(msg) {
+            if (msg.type === 'SYNC_DATA') {
+                self.updateP2PStatus('syncing', 'Merging...', 'Processing incoming database...');
+
+                try {
+                    var remoteData = msg.data;
+                    var localSpecimens = await getAllFossils();
+                    var localCarts = self.getCarts();
+                    var localDeletedIds = JSON.parse(localStorage.getItem('fossil_deleted_ids') || '[]');
+
+                    var mergedDeletedIds = Array.from(new Set([].concat(localDeletedIds, remoteData.deletedIds || [])));
+                    
+                    var specMap = {};
+                    localSpecimens.forEach(function(s) {
+                        if (mergedDeletedIds.indexOf(s.id) === -1) {
+                            specMap[s.id] = s;
+                        }
+                    });
+                    (remoteData.specimens || []).forEach(function(s) {
+                        if (mergedDeletedIds.indexOf(s.id) === -1) {
+                            if (!specMap[s.id]) {
+                                specMap[s.id] = s;
+                            } else {
+                                var localUpdate = specMap[s.id].updatedAt || 0;
+                                var remoteUpdate = s.updatedAt || 0;
+                                if (remoteUpdate > localUpdate) {
+                                    specMap[s.id] = s;
+                                }
+                            }
+                        }
+                    });
+                    var finalSpecimens = Object.values(specMap);
+                    
+                    var cartMap = {};
+                    localCarts.forEach(function(c) {
+                        if (mergedDeletedIds.indexOf(c.id) === -1) {
+                            cartMap[c.id] = c;
+                        }
+                    });
+                    (remoteData.carts || []).forEach(function(c) {
+                        if (mergedDeletedIds.indexOf(c.id) === -1) {
+                            if (!cartMap[c.id]) {
+                                cartMap[c.id] = c;
+                            } else {
+                                var localUpdate = cartMap[c.id].updatedAt || 0;
+                                var remoteUpdate = c.updatedAt || 0;
+                                if (remoteUpdate > localUpdate) {
+                                    cartMap[c.id] = c;
+                                }
+                            }
+                        }
+                    });
+                    var finalCarts = Object.values(cartMap);
+                    var finalDeletedIds = mergedDeletedIds;
+
+                    await initDB().then(function(db) {
+                        return new Promise(function(resolve, reject) {
+                            var tx = db.transaction('fossils', 'readwrite');
+                            var store = tx.objectStore('fossils');
+                            tx.onerror = function(e) { reject(e); };
+                            tx.oncomplete = function() {
+                                fossilsCacheLoaded = false;
+                                resolve();
+                            };
+                            store.clear();
+                            finalSpecimens.forEach(function(item) {
+                                store.put(item);
+                            });
+                        });
+                    });
+
+                    if (finalCarts.length === 0) {
+                        finalCarts = [{ id: 'cart_default', name: 'Main Comparison Cart', updatedAt: 0 }];
+                    }
+                    localStorage.setItem('fossil_carts', JSON.stringify(finalCarts));
+                    localStorage.setItem('fossil_deleted_ids', JSON.stringify(finalDeletedIds));
+
+                    self.renderFossils();
+
+                    var mergedPayload = {
+                        specimens: finalSpecimens,
+                        carts: finalCarts,
+                        deletedIds: finalDeletedIds,
+                        syncTime: Date.now()
+                    };
+                    conn.send({ type: 'SYNC_MERGED', data: mergedPayload });
+
+                    self.showToast('Direct P2P database sync successful!', 'success');
+                    self.updateP2PStatus('ready', 'P2P Synced', 'Successfully synced with peer!');
+                    setTimeout(function() { conn.close(); }, 500);
+
+                } catch(err) {
+                    console.error('Merge failure:', err);
+                    self.showToast('Failed to merge databases: ' + err.message, 'danger');
+                    self.updateP2PStatus('ready', 'Merge Error', err.message);
+                    conn.close();
+                }
+            } else if (msg.type === 'SYNC_MERGED') {
+                self.updateP2PStatus('syncing', 'Updating...', 'Finalizing local database update...');
+
+                try {
+                    var mergedData = msg.data;
+                    
+                    await initDB().then(function(db) {
+                        return new Promise(function(resolve, reject) {
+                            var tx = db.transaction('fossils', 'readwrite');
+                            var store = tx.objectStore('fossils');
+                            tx.onerror = function(e) { reject(e); };
+                            tx.oncomplete = function() {
+                                fossilsCacheLoaded = false;
+                                resolve();
+                            };
+                            store.clear();
+                            (mergedData.specimens || []).forEach(function(item) {
+                                store.put(item);
+                            });
+                        });
+                    });
+
+                    if ((mergedData.carts || []).length > 0) {
+                        localStorage.setItem('fossil_carts', JSON.stringify(mergedData.carts));
+                    }
+                    localStorage.setItem('fossil_deleted_ids', JSON.stringify(mergedData.deletedIds || []));
+
+                    self.renderFossils();
+
+                    self.showToast('Direct P2P database sync successful!', 'success');
+                    self.updateP2PStatus('ready', 'P2P Synced', 'Successfully synced with peer!');
+                    setTimeout(function() { conn.close(); }, 500);
+
+                } catch(err) {
+                    console.error('Update failure:', err);
+                    self.showToast('Failed to update database: ' + err.message, 'danger');
+                    self.updateP2PStatus('ready', 'Update Error', err.message);
+                    conn.close();
+                }
+            }
+        });
+
+        conn.on('close', function() {
+            var statusDiv = document.getElementById('p2p-status-text');
+            if (statusDiv && statusDiv.textContent === 'Syncing...') {
+                self.updateP2PStatus('ready', 'Connection Closed', 'Peer closed connection.');
+            }
+        });
+
+        conn.on('error', function(err) {
+            console.error('P2P data error:', err);
+            self.showToast('Data transfer error: ' + err.message, 'danger');
+            self.updateP2PStatus('ready', 'Transfer Error', err.message);
+            conn.close();
+        });
+    },
+
+    // =========================================================================
+    // CURATION, SETTINGS, STORAGE EXPLORER & FINANCES LEDGERS
+    // =========================================================================
+    toggleSettingsModal: function() {
+        var modal = document.getElementById('settings-modal');
+        if (!modal) return;
+        if (modal.open) {
+            modal.close();
+        } else {
+            document.getElementById('settings-museum-enabled').checked = localStorage.getItem('pref_museum_fields') === 'true';
+            document.getElementById('settings-shop-enabled').checked = localStorage.getItem('pref_shop_fields') === 'true';
+            document.getElementById('settings-storage-enabled').checked = localStorage.getItem('pref_storage_fields') === 'true';
+            modal.showModal();
+        }
+    },
+
+    saveSettings: function() {
+        var museumEnabled = document.getElementById('settings-museum-enabled').checked;
+        var shopEnabled = document.getElementById('settings-shop-enabled').checked;
+        var storageEnabled = document.getElementById('settings-storage-enabled').checked;
+
+        localStorage.setItem('pref_museum_fields', museumEnabled);
+        localStorage.setItem('pref_shop_fields', shopEnabled);
+        localStorage.setItem('pref_storage_fields', storageEnabled);
+
+        this.applySettingsVisibility();
+    },
+
+    applySettingsVisibility: function() {
+        var museumEnabled = localStorage.getItem('pref_museum_fields') === 'true';
+        var shopEnabled = localStorage.getItem('pref_shop_fields') === 'true';
+        var storageEnabled = localStorage.getItem('pref_storage_fields') === 'true';
+
+        document.body.classList.toggle('pref-museum-active', museumEnabled);
+        document.body.classList.toggle('pref-shop-active', shopEnabled);
+        document.body.classList.toggle('pref-storage-active', storageEnabled);
+
+        var chkMuseum = document.getElementById('settings-museum-enabled');
+        var chkShop = document.getElementById('settings-shop-enabled');
+        var chkStorage = document.getElementById('settings-storage-enabled');
+        if (chkMuseum) chkMuseum.checked = museumEnabled;
+        if (chkShop) chkShop.checked = shopEnabled;
+        if (chkStorage) chkStorage.checked = storageEnabled;
+
+        var mStorage = document.getElementById('mobile-link-storage');
+        var mLedger = document.getElementById('mobile-link-ledger');
+        var dStorage = document.getElementById('desktop-link-storage');
+        var dLedger = document.getElementById('desktop-link-ledger');
+
+        if (mStorage) mStorage.style.display = storageEnabled ? 'flex' : 'none';
+        if (dStorage) dStorage.style.display = storageEnabled ? 'flex' : 'none';
+        if (mLedger) mLedger.style.display = shopEnabled ? 'flex' : 'none';
+        if (dLedger) dLedger.style.display = shopEnabled ? 'flex' : 'none';
+    },
+
+    toggleQuickAddMode: function() {
+        var chk = document.getElementById('f-quick-add');
+        var form = document.getElementById('fossil-form');
+        if (chk && form) {
+            if (chk.checked) {
+                form.classList.add('simple-mode-active');
+            } else {
+                form.classList.remove('simple-mode-active');
+            }
+            var btnSimple = document.getElementById('btn-editor-simple');
+            var btnAdvanced = document.getElementById('btn-editor-advanced');
+            if (chk.checked) {
+                if (btnSimple) {
+                    btnSimple.style.background = 'var(--bg-surface)';
+                    btnSimple.style.color = 'var(--text-primary)';
+                    btnSimple.style.boxShadow = 'var(--shadow-sm)';
+                }
+                if (btnAdvanced) {
+                    btnAdvanced.style.background = 'transparent';
+                    btnAdvanced.style.color = 'var(--text-secondary)';
+                    btnAdvanced.style.boxShadow = 'none';
+                }
+            } else {
+                if (btnSimple) {
+                    btnSimple.style.background = 'transparent';
+                    btnSimple.style.color = 'var(--text-secondary)';
+                    btnSimple.style.boxShadow = 'none';
+                }
+                if (btnAdvanced) {
+                    btnAdvanced.style.background = 'var(--bg-surface)';
+                    btnAdvanced.style.color = 'var(--accent)';
+                    btnAdvanced.style.boxShadow = 'var(--shadow-sm)';
+                }
+            }
+        }
+    },
+
+    setEditorMode: function(mode) {
+        var chk = document.getElementById('f-quick-add');
+        if (chk) {
+            chk.checked = (mode === 'simple');
+            this.toggleQuickAddMode();
+            localStorage.setItem('pref_editor_mode', mode);
+            if (mode === 'simple') {
+                this.setModalTab('classification');
+            }
+        }
+    },
+
+    toggleStorageExplorerModal: function() {
+        var modal = document.getElementById('storage-explorer-modal');
+        if (!modal) return;
+        if (modal.open) {
+            modal.close();
+        } else {
+            this.renderStorageExplorer();
+            modal.showModal();
+        }
+    },
+
+    closeStorageExplorerModal: function() {
+        var modal = document.getElementById('storage-explorer-modal');
+        if (modal && modal.open) {
+            modal.close();
+        }
+    },
+
+    renderStorageExplorer: function() {
+        var treeContainer = document.getElementById('storage-explorer-tree');
+        if (!treeContainer) return;
+        treeContainer.innerHTML = '';
+
+        var storageMap = {};
+
+        fossils.forEach(function(f) {
+            var room = (f.storageRoom || '').trim() || 'Unassigned Room';
+            var cabinet = (f.storageUnit || '').trim() || 'Unassigned Cabinet';
+            var drawer = (f.storageDrawer || '').trim() || 'Unassigned Drawer';
+
+            if (!storageMap[room]) storageMap[room] = {};
+            if (!storageMap[room][cabinet]) storageMap[room][cabinet] = {};
+            if (!storageMap[room][cabinet][drawer]) storageMap[room][cabinet][drawer] = [];
+
+            storageMap[room][cabinet][drawer].push(f);
+        });
+
+        var html = '';
+        var rooms = Object.keys(storageMap).sort();
+
+        var escapeJsString = function(str) {
+            if (!str) return '';
+            return str.replace(/'/g, "\\'").replace(/"/g, '\\"');
+        };
+
+        rooms.forEach(function(roomName) {
+            var cabinets = storageMap[roomName];
+            var cabKeys = Object.keys(cabinets).sort();
+            var roomSpecimensCount = 0;
+            cabKeys.forEach(function(ck) {
+                Object.keys(cabinets[ck]).forEach(function(dk) {
+                    roomSpecimensCount += cabinets[ck][dk].length;
+                });
+            });
+
+            html += '<details style="margin-bottom: 0.5rem; border: 1px solid var(--border-color); border-radius: var(--radius-sm); background: var(--bg-warm);">';
+            html += '  <summary style="padding: 0.6rem; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: space-between; user-select: none;">';
+            html += '    <span style="display: flex; align-items: center; gap: 0.5rem;">🏠 ' + escapeHtml(roomName) + '</span>';
+            html += '    <span class="badge" style="font-size: 0.75rem; background: var(--border-color); color: var(--text-secondary); padding: 0.15rem 0.4rem; border-radius: 9999px;">' + roomSpecimensCount + '</span>';
+            html += '  </summary>';
+            html += '  <div style="padding: 0.5rem 0.5rem 0.5rem 1.5rem; display: flex; flex-direction: column; gap: 0.5rem; border-top: 1px solid var(--border-color); background: var(--bg-surface);">';
+
+            cabKeys.forEach(function(cabName) {
+                var drawers = cabinets[cabName];
+                var drwKeys = Object.keys(drawers).sort();
+                var cabSpecimensCount = 0;
+                drwKeys.forEach(function(dk) {
+                    cabSpecimensCount += drawers[dk].length;
+                });
+
+                html += '    <details style="border: 1px solid var(--border-color); border-radius: var(--radius-sm);">';
+                html += '      <summary style="padding: 0.5rem; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: space-between; user-select: none;">';
+                html += '        <span style="display: flex; align-items: center; gap: 0.4rem;">🗄️ ' + escapeHtml(cabName) + '</span>';
+                html += '        <span style="font-size: 0.75rem; color: var(--text-secondary); display: flex; align-items: center; gap: 0.5rem;">';
+                html += '          <span class="badge" style="background: var(--bg-warm); padding: 0.1rem 0.35rem; border-radius: 9999px;">' + cabSpecimensCount + '</span>';
+                html += '          <button type="button" class="btn-text" onclick="event.stopPropagation(); window.app.filterByStorage(\'' + escapeJsString(roomName) + '\', \'' + escapeJsString(cabName) + '\', \'\')" style="font-size: 0.7rem; color: var(--accent); cursor: pointer; font-weight: 600; padding: 0.1rem 0.3rem; border: none; background: none;">Filter Unit</button>';
+                html += '        </span>';
+                html += '      </summary>';
+                html += '      <div style="padding: 0.4rem 0.4rem 0.4rem 1.25rem; display: flex; flex-direction: column; gap: 0.4rem; border-top: 1px solid var(--border-color); background: var(--bg-surface);">';
+
+                drwKeys.forEach(function(drwName) {
+                    var items = drawers[drwName];
+                    html += '        <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.4rem; border-bottom: 1px solid var(--bg-warm);">';
+                    html += '          <span style="font-weight: 500; font-size: 0.8rem; display: flex; align-items: center; gap: 0.3rem;">📥 ' + escapeHtml(drwName) + ' (' + items.length + ')</span>';
+                    html += '          <button type="button" class="btn-text" onclick="window.app.filterByStorage(\'' + escapeJsString(roomName) + '\', \'' + escapeJsString(cabName) + '\', \'' + escapeJsString(drwName) + '\')" style="font-size: 0.7rem; color: var(--accent); cursor: pointer; font-weight: 600; padding: 0.1rem 0.3rem; border: none; background: none;">Filter Drawer</button>';
+                    html += '        </div>';
+                    
+                    html += '        <div style="padding-left: 1rem; display: flex; flex-direction: column; gap: 0.2rem; margin-bottom: 0.5rem;">';
+                    items.forEach(function(item) {
+                        html += '          <a href="#" onclick="window.app.closeStorageExplorerModal(); window.app.openModal(\'' + item.id + '\'); return false;" style="font-size: 0.75rem; color: var(--text-secondary); text-decoration: none; padding: 0.1rem 0; display: flex; align-items: center; gap: 0.3rem;" onmouseover="this.style.color=\'var(--accent)\'" onmouseout="this.style.color=\'var(--text-secondary)\'">';
+                        html += '            <span>•</span> <span style="font-family: monospace; color: var(--text-secondary);">' + item.id + '</span> <strong>' + escapeHtml(item.specimen) + '</strong>' + (item.storageBox ? ' <span style="opacity: 0.7; font-size: 0.7rem;">(Box: ' + escapeHtml(item.storageBox) + ')</span>' : '');
+                        html += '          </a>';
+                    });
+                    html += '        </div>';
+                });
+
+                html += '      </div>';
+                html += '    </details>';
+            });
+
+            html += '  </div>';
+            html += '</details>';
+        });
+
+        treeContainer.innerHTML = html;
+    },
+
+    filterByStorage: function(room, cabinet, drawer) {
+        var searchInput = document.getElementById('search');
+        if (searchInput) {
+            var query = '';
+            if (drawer) {
+                query = drawer;
+            } else if (cabinet) {
+                query = cabinet;
+            } else {
+                query = room;
+            }
+            searchInput.value = query;
+            searchInput.dispatchEvent(new Event('input'));
+        }
+        this.closeStorageExplorerModal();
+    },
+
+    toggleShopLedgerModal: function() {
+        var modal = document.getElementById('shop-ledger-modal');
+        if (!modal) return;
+        if (modal.open) {
+            modal.close();
+        } else {
+            this.renderShopLedger();
+            modal.showModal();
+        }
+    },
+
+    renderShopLedger: function() {
+        var tableBody = document.getElementById('ledger-table-body');
+        if (!tableBody) return;
+        tableBody.innerHTML = '';
+
+        var totalCogs = 0;
+        var totalSales = 0;
+        var totalProfit = 0;
+        var soldCount = 0;
+
+        var rowsHtml = '';
+
+        fossils.forEach(function(f) {
+            var cogsVal = parseFloat(f.cogs) || 0;
+            var cogsBase = window.app._convertCurrency(cogsVal, f.cogsCurrency || 'USD', activeBaseCurrency);
+            totalCogs += cogsBase;
+
+            var retailBase = 0;
+            var netProfit = 0;
+            var margin = 0;
+            var statusHtml = '';
+
+            if (f.isSold) {
+                var soldVal = parseFloat(f.soldPrice || f.salePrice || f.price || 0);
+                var soldBase = window.app._convertCurrency(soldVal, f.soldCurrency || 'USD', activeBaseCurrency);
+                totalSales += soldBase;
+                netProfit = soldBase - cogsBase;
+                totalProfit += netProfit;
+                soldCount++;
+
+                if (soldBase > 0) {
+                    margin = (netProfit / soldBase) * 100;
+                }
+                statusHtml = '<span class="status-badge sold" style="background: rgba(239, 68, 68, 0.1); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.2); padding: 0.15rem 0.4rem; border-radius: 4px; font-size: 0.7rem; font-weight: 700; text-transform: uppercase;">Sold</span>';
+                retailBase = soldBase;
+            } else {
+                var priceVal = parseFloat(f.price || f.estimatedValue || 0);
+                var priceBase = window.app._convertCurrency(priceVal, f.currency || 'USD', activeBaseCurrency);
+                netProfit = priceBase - cogsBase;
+
+                if (priceBase > 0) {
+                    margin = (netProfit / priceBase) * 100;
+                }
+                
+                if (f.isWishlist) {
+                    statusHtml = '<span class="status-badge wishlist" style="background: rgba(59, 130, 246, 0.1); color: #3b82f6; border: 1px solid rgba(59, 130, 246, 0.2); padding: 0.15rem 0.4rem; border-radius: 4px; font-size: 0.7rem; font-weight: 700; text-transform: uppercase;">Wishlist</span>';
+                } else if (f.isForSale) {
+                    statusHtml = '<span class="status-badge for-sale" style="background: rgba(245, 158, 11, 0.1); color: #f59e0b; border: 1px solid rgba(245, 158, 11, 0.2); padding: 0.15rem 0.4rem; border-radius: 4px; font-size: 0.7rem; font-weight: 700; text-transform: uppercase;">For Sale</span>';
+                } else if (f.isDream) {
+                    statusHtml = '<span class="status-badge dream" style="background: rgba(139, 92, 246, 0.1); color: #8b5cf6; border: 1px solid rgba(139, 92, 246, 0.2); padding: 0.15rem 0.4rem; border-radius: 4px; font-size: 0.7rem; font-weight: 700; text-transform: uppercase;">Dream</span>';
+                } else {
+                    statusHtml = '<span class="status-badge owned" style="background: rgba(16, 185, 129, 0.1); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.2); padding: 0.15rem 0.4rem; border-radius: 4px; font-size: 0.7rem; font-weight: 700; text-transform: uppercase;">Owned</span>';
+                }
+                retailBase = priceBase;
+            }
+
+            var profitColor = netProfit >= 0 ? '#10b981' : '#ef4444';
+            var profitSign = netProfit > 0 ? '+' : '';
+
+            rowsHtml += '<tr style="border-bottom: 1px solid var(--border-color);">';
+            rowsHtml += '  <td style="padding: 0.6rem 0.5rem; display: flex; align-items: center; gap: 0.5rem; border-top: none;">';
+            rowsHtml += '    <a href="#" onclick="window.app.toggleShopLedgerModal(); window.app.openModal(\'' + f.id + '\'); return false;" style="font-weight: 600; color: var(--text-primary); text-decoration: none;" onmouseover="this.style.color=\'var(--accent)\'" onmouseout="this.style.color=\'var(--text-primary)\'">' + escapeHtml(f.specimen || 'Unknown') + '</a>';
+            rowsHtml += '    <span style="font-family: monospace; font-size: 0.7rem; color: var(--text-secondary); background: var(--bg-warm); padding: 0.1rem 0.3rem; border-radius: 4px;">' + f.id + '</span>';
+            rowsHtml += '  </td>';
+            rowsHtml += '  <td style="padding: 0.6rem 0.5rem; border-top: none;">' + statusHtml + '</td>';
+            rowsHtml += '  <td style="padding: 0.6rem 0.5rem; text-align: right; font-family: monospace; border-top: none;">' + this._formatBaseCurrency(cogsBase) + '</td>';
+            rowsHtml += '  <td style="padding: 0.6rem 0.5rem; text-align: right; font-family: monospace; border-top: none;">' + this._formatBaseCurrency(retailBase) + '</td>';
+            rowsHtml += '  <td style="padding: 0.6rem 0.5rem; text-align: right; font-family: monospace; color: ' + profitColor + '; font-weight: 600; border-top: none;">' + profitSign + this._formatBaseCurrency(netProfit) + '</td>';
+            rowsHtml += '  <td style="padding: 0.6rem 0.5rem; text-align: right; font-family: monospace; color: ' + profitColor + '; font-weight: 600; border-top: none;">' + margin.toFixed(1) + '%</td>';
+            rowsHtml += '</tr>';
+        }, this);
+
+        tableBody.innerHTML = rowsHtml || '<tr><td colspan="6" style="text-align: center; padding: 2rem; color: var(--text-secondary);">No specimens logged.</td></tr>';
+
+        var avgMargin = 0;
+        if (totalSales > 0) {
+            avgMargin = (totalProfit / totalSales) * 100;
+        }
+
+        var costEl = document.getElementById('ledger-total-cost');
+        var salesEl = document.getElementById('ledger-total-sales');
+        var profitEl = document.getElementById('ledger-total-profit');
+        var marginEl = document.getElementById('ledger-avg-margin');
+
+        if (costEl) costEl.textContent = this._formatBaseCurrency(totalCogs);
+        if (salesEl) salesEl.textContent = this._formatBaseCurrency(totalSales);
+        if (profitEl) {
+            profitEl.textContent = (totalProfit >= 0 ? '+' : '') + this._formatBaseCurrency(totalProfit);
+            profitEl.style.color = totalProfit >= 0 ? 'var(--accent)' : '#ef4444';
+        }
+        if (marginEl) {
+            marginEl.textContent = avgMargin.toFixed(1) + '%';
+            marginEl.style.color = avgMargin >= 0 ? 'var(--text-primary)' : '#ef4444';
+        }
+    },
+
+    calculateMargin: function() {
+        var cogsInput = document.getElementById('f-cogs');
+        var soldInput = document.getElementById('f-sold-price');
+        var priceInput = document.getElementById('f-price');
+
+        var cogs = parseFloat(cogsInput ? cogsInput.value : 0) || 0;
+        var soldPrice = parseFloat(soldInput ? soldInput.value : 0) || 0;
+        
+        if (soldPrice === 0 && priceInput) {
+            soldPrice = parseFloat(priceInput.value) || 0;
+        }
+
+        var profit = soldPrice - cogs;
+        var margin = 0;
+        if (soldPrice > 0) {
+            margin = (profit / soldPrice) * 100;
+        }
+
+        var profitEl = document.getElementById('shop-margin-profit');
+        var percentEl = document.getElementById('shop-margin-percent');
+
+        var currencySelect = document.getElementById('f-sold-currency') || document.getElementById('f-cogs-currency');
+        var currency = currencySelect ? currencySelect.value : 'USD';
+        var symbol = '$';
+        if (currency === 'EUR') symbol = '€';
+        else if (currency === 'SEK') symbol = 'kr ';
+
+        if (profitEl) {
+            profitEl.textContent = (profit >= 0 ? '+' : '') + symbol + profit.toFixed(2);
+            profitEl.style.color = profit >= 0 ? '#10b981' : '#ef4444';
+        }
+        if (percentEl) {
+            percentEl.textContent = margin.toFixed(1) + '%';
+            percentEl.style.color = margin >= 0 ? '#10b981' : '#ef4444';
+        }
+    },
+
+    generateShopLedgerReport: function() {
+        var baseSign = '$';
+        if (activeBaseCurrency === 'EUR') baseSign = '€';
+        else if (activeBaseCurrency === 'SEK') baseSign = 'kr ';
+
+        var formatVal = function(val) {
+            return baseSign + parseFloat(val || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        };
+
+        var printWindow = window.open('', '_blank');
+        if (!printWindow) {
+            window.app.showToast('Please allow popups to export the ledger report.', 'warning');
+            return;
+        }
+
+        var totalCogs = 0;
+        var totalSales = 0;
+        var totalProfit = 0;
+        var soldCount = 0;
+
+        var rowsHtml = '';
+
+        fossils.forEach(function(f, idx) {
+            var cogsVal = parseFloat(f.cogs) || 0;
+            var cogsBase = window.app._convertCurrency(cogsVal, f.cogsCurrency || 'USD', activeBaseCurrency);
+            totalCogs += cogsBase;
+
+            var retailBase = 0;
+            var netProfit = 0;
+            var margin = 0;
+            var statusStr = 'Owned';
+
+            if (f.isSold) {
+                var soldVal = parseFloat(f.soldPrice || f.salePrice || f.price || 0);
+                var soldBase = window.app._convertCurrency(soldVal, f.soldCurrency || 'USD', activeBaseCurrency);
+                totalSales += soldBase;
+                netProfit = soldBase - cogsBase;
+                totalProfit += netProfit;
+                soldCount++;
+
+                if (soldBase > 0) {
+                    margin = (netProfit / soldBase) * 100;
+                }
+                statusStr = 'Sold';
+                retailBase = soldBase;
+            } else {
+                var priceVal = parseFloat(f.price || f.estimatedValue || 0);
+                var priceBase = window.app._convertCurrency(priceVal, f.currency || 'USD', activeBaseCurrency);
+                netProfit = priceBase - cogsBase;
+
+                if (priceBase > 0) {
+                    margin = (netProfit / priceBase) * 100;
+                }
+                
+                if (f.isWishlist) {
+                    statusStr = 'Wishlist';
+                } else if (f.isForSale) {
+                    statusStr = 'For Sale';
+                } else if (f.isDream) {
+                    statusStr = 'Dream';
+                } else {
+                    statusStr = 'Owned';
+                }
+                retailBase = priceBase;
+            }
+
+            var profitColor = netProfit >= 0 ? '#10b981' : '#ef4444';
+            var profitSign = netProfit > 0 ? '+' : '';
+
+            // Formatted scientific name
+            var rawName = f.specimen || 'Unnamed Specimen';
+            var formattedName = escapeHtml(rawName);
+            var words = rawName.split(/\s+/);
+            if (words.length >= 2 && /^[A-Z][a-z]+$/.test(words[0]) && /^[a-z]+$/.test(words[1])) {
+                formattedName = '<em>' + escapeHtml(words[0]) + ' ' + escapeHtml(words[1]) + '</em>' + (words.slice(2).join(' ') ? ' ' + escapeHtml(words.slice(2).join(' ')) : '');
+            } else if (words.length >= 1 && /^[A-Z][a-z]+$/.test(words[0])) {
+                formattedName = '<em>' + escapeHtml(words[0]) + '</em>' + (words.length > 1 ? ' ' + escapeHtml(words.slice(1).join(' ')) : '');
+            }
+
+            var fossilYear = f.createdAt ? new Date(f.createdAt).getFullYear() : 2026;
+            var customCatalogId = 'FA-' + fossilYear + '-' + String(idx + 1).padStart(4, '0');
+
+            rowsHtml += '<tr>' +
+                            '<td><strong>' + customCatalogId + '</strong></td>' +
+                            '<td>' + formattedName + '</td>' +
+                            '<td>' + statusStr + '</td>' +
+                            '<td style="text-align: right; font-family: monospace;">' + formatVal(cogsBase) + '</td>' +
+                            '<td style="text-align: right; font-family: monospace;">' + formatVal(retailBase) + '</td>' +
+                            '<td style="text-align: right; font-family: monospace; color: ' + profitColor + '; font-weight: 600;">' + profitSign + formatVal(netProfit) + '</td>' +
+                            '<td style="text-align: right; font-family: monospace; color: ' + profitColor + '; font-weight: 600;">' + margin.toFixed(1) + '%</td>' +
+                        '</tr>';
+        });
+
+        var avgMargin = 0;
+        if (totalSales > 0) {
+            avgMargin = (totalProfit / totalSales) * 100;
+        }
+
+        var html = '<!DOCTYPE html>' +
+            '<html>' +
+            '<head>' +
+            '<title>Specimenry Shop Commercial Ledger Report</title>' +
+            '<style>' +
+                'body { font-family: "Georgia", "Times New Roman", serif; padding: 2rem; color: #111; line-height: 1.4; }' +
+                '.header { text-align: center; border-bottom: 3px double #111; padding-bottom: 1.5rem; margin-bottom: 2rem; }' +
+                '.header h1 { font-family: "Times New Roman", serif; font-size: 1.8rem; text-transform: uppercase; letter-spacing: 0.1em; margin: 0; }' +
+                '.header p { font-size: 0.85rem; color: #555; text-transform: uppercase; letter-spacing: 0.05em; margin: 0.5rem 0 0 0; }' +
+                '.summary-table { width: 100%; border-collapse: collapse; margin-bottom: 2rem; font-size: 0.9rem; }' +
+                '.summary-table th, .summary-table td { border: 1px solid #ccc; padding: 0.6rem 1rem; text-align: left; }' +
+                '.summary-table th { background: #f5f5f5; font-weight: bold; }' +
+                '.inventory-table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }' +
+                '.inventory-table th, .inventory-table td { border: 1px solid #aaa; padding: 0.5rem; text-align: left; vertical-align: top; }' +
+                '.inventory-table th { background: #e0e0e0; font-weight: bold; text-transform: uppercase; font-size: 0.72rem; }' +
+                '.footer-signatures { display: flex; justify-content: space-between; margin-top: 4rem; padding-top: 2rem; border-top: 1px solid #ccc; font-size: 0.85rem; }' +
+                '.signature-line { width: 250px; border-top: 1px solid #111; text-align: center; padding-top: 0.5rem; margin-top: 3rem; }' +
+                '@media print { ' +
+                    'body { padding: 0; }' +
+                    '.no-print { display: none; }' +
+                '}' +
+            '</style>' +
+            '</head>' +
+            '<body>' +
+            '<div class="header">' +
+                '<h1>Specimenry Shop Ledger</h1>' +
+                '<p>Official Commercial Transaction Ledger & Financial Inventory</p>' +
+                '<p style="font-size:0.7rem; color:#888; margin-top:0.25rem;">Date Generated: ' + new Date().toLocaleDateString() + ' · Base Currency: ' + activeBaseCurrency + '</p>' +
+            '</div>' +
+            
+            '<table class="summary-table">' +
+                '<thead>' +
+                    '<tr>' +
+                        '<th>Total Specimens Curated</th>' +
+                        '<th>Total Acquisition (COGS)</th>' +
+                        '<th>Total Sales Revenue</th>' +
+                        '<th>Total Net Profit</th>' +
+                        '<th>Average Profit Margin</th>' +
+                    '</tr>' +
+                '</thead>' +
+                '<tbody>' +
+                    '<tr>' +
+                        '<td>' + fossils.length + '</td>' +
+                        '<td>' + formatVal(totalCogs) + '</td>' +
+                        '<td>' + formatVal(totalSales) + '</td>' +
+                        '<td style="color:' + (totalProfit >= 0 ? '#10b981' : '#ef4444') + '; font-weight:bold;">' + (totalProfit >= 0 ? '+' : '') + formatVal(totalProfit) + '</td>' +
+                        '<td>' + avgMargin.toFixed(1) + '%</td>' +
+                    '</tr>' +
+                '</tbody>' +
+            '</table>' +
+            
+            '<table class="inventory-table">' +
+                '<thead>' +
+                    '<tr>' +
+                        '<th style="width: 100px;">Catalog ID</th>' +
+                        '<th>Specimen Name</th>' +
+                        '<th>Status</th>' +
+                        '<th style="text-align: right;">Cost (COGS)</th>' +
+                        '<th style="text-align: right;">Retail / Sold</th>' +
+                        '<th style="text-align: right;">Net Profit</th>' +
+                        '<th style="text-align: right;">Margin</th>' +
+                    '</tr>' +
+                '</thead>' +
+                '<tbody>' +
+                    (rowsHtml || '<tr><td colspan="7" style="text-align: center; padding: 2rem;">No specimens in ledger.</td></tr>') +
+                '</tbody>' +
+            '</table>' +
+            
+            '<div class="footer-signatures">' +
+                '<div>' +
+                    '<p><strong>Ledger Status:</strong> Audited & Confirmed</p>' +
+                    '<p>All figures converted dynamically based on active base currency.</p>' +
+                '</div>' +
+                '<div>' +
+                    '<div class="signature-line">Authorized Curator Signature</div>' +
+                '</div>' +
+            '</div>' +
+            
+            '<script>' +
+                'window.onload = function() { setTimeout(function() { window.print(); }, 500); };' +
+            '</script>' +
+            '</body>' +
+            '</html>';
+
+        printWindow.document.open();
+        printWindow.document.write(html);
+        printWindow.document.close();
+    },
+
+    _formatBaseCurrency: function(amount) {
+        var symbol = '$';
+        if (activeBaseCurrency === 'EUR') symbol = '€';
+        else if (activeBaseCurrency === 'SEK') symbol = 'kr ';
+        
+        return symbol + parseFloat(amount || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    },
+
+    bindAutocomplete: function(inputId, fieldName) {
+        var input = document.getElementById(inputId);
+        if (!input) return;
+
+        var parent = input.parentElement;
+        if (parent && !parent.classList.contains('autocomplete-wrapper')) {
+            parent.classList.add('autocomplete-wrapper');
+        }
+
+        var containerId = inputId + '-suggestions';
+        var container = document.getElementById(containerId);
+        if (!container) {
+            container = document.createElement('div');
+            container.id = containerId;
+            container.className = 'autocomplete-suggestions';
+            container.style.display = 'none';
+            input.after(container);
+        }
+
+        var activeIndex = -1;
+        var suggestions = [];
+
+        function showSuggestions() {
+            var val = input.value.toLowerCase().trim();
+            container.innerHTML = '';
+            activeIndex = -1;
+
+            var uniqueVals = new Set();
+            fossils.forEach(function(f) {
+                var itemVal = '';
+                if (fieldName.indexOf('.') !== -1) {
+                    var parts = fieldName.split('.');
+                    var obj = f;
+                    for (var i = 0; i < parts.length; i++) {
+                        if (obj) obj = obj[parts[i]];
+                    }
+                    if (typeof obj === 'string') itemVal = obj;
+                } else {
+                    if (typeof f[fieldName] === 'string') {
+                        itemVal = f[fieldName];
+                    }
+                }
+
+                if (itemVal && itemVal.trim()) {
+                    uniqueVals.add(itemVal.trim());
+                }
+            });
+
+            var list = Array.from(uniqueVals);
+
+            if (val === '') {
+                suggestions = list.slice(0, 5);
+            } else {
+                suggestions = list.filter(function(item) {
+                    return item.toLowerCase().indexOf(val) !== -1;
+                }).sort(function(a, b) {
+                    var aStart = a.toLowerCase().startsWith(val);
+                    var bStart = b.toLowerCase().startsWith(val);
+                    if (aStart && !bStart) return -1;
+                    if (!aStart && bStart) return 1;
+                    return a.localeCompare(b);
+                }).slice(0, 5);
+            }
+
+            if (suggestions.length === 0) {
+                container.style.display = 'none';
+                return;
+            }
+
+            suggestions.forEach(function(item, index) {
+                var div = document.createElement('div');
+                div.className = 'autocomplete-suggestion';
+                div.textContent = item;
+                div.addEventListener('click', function(e) {
+                    e.stopPropagation();
+                    input.value = item;
+                    input.dispatchEvent(new Event('input'));
+                    hideSuggestions();
+                });
+                container.appendChild(div);
+            });
+
+            container.style.display = 'block';
+        }
+
+        function hideSuggestions() {
+            container.style.display = 'none';
+            activeIndex = -1;
+        }
+
+        function updateActiveSuggestion() {
+            var items = container.querySelectorAll('.autocomplete-suggestion');
+            items.forEach(function(item, idx) {
+                if (idx === activeIndex) {
+                    item.classList.add('active');
+                    item.scrollIntoView({ block: 'nearest' });
+                } else {
+                    item.classList.remove('active');
+                }
+            });
+        }
+
+        input.addEventListener('input', showSuggestions);
+        input.addEventListener('focus', showSuggestions);
+
+        input.addEventListener('keydown', function(e) {
+            if (container.style.display === 'none') return;
+
+            var items = container.querySelectorAll('.autocomplete-suggestion');
+            if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                activeIndex = (activeIndex + 1) % items.length;
+                updateActiveSuggestion();
+            } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                activeIndex = (activeIndex - 1 + items.length) % items.length;
+                updateActiveSuggestion();
+            } else if (e.key === 'Enter') {
+                if (activeIndex >= 0 && activeIndex < items.length) {
+                    e.preventDefault();
+                    input.value = items[activeIndex].textContent;
+                    input.dispatchEvent(new Event('input'));
+                    hideSuggestions();
+                }
+            } else if (e.key === 'Escape') {
+                e.preventDefault();
+                hideSuggestions();
+            }
+        });
+
+        document.addEventListener('click', function(e) {
+            if (e.target !== input && e.target !== container && !container.contains(e.target)) {
+                hideSuggestions();
+            }
+        });
+    },
+
+    initAllAutocompletes: function() {
+        this.bindAutocomplete('f-specimen', 'specimen');
+        this.bindAutocomplete('f-anatomy', 'anatomy');
+        this.bindAutocomplete('f-country', 'country');
+        this.bindAutocomplete('f-location', 'location');
+        this.bindAutocomplete('f-formation', 'formation');
+        this.bindAutocomplete('f-authority', 'authority');
+
+        this.bindAutocomplete('f-formula', 'formula');
+        this.bindAutocomplete('f-streak', 'streak');
+        this.bindAutocomplete('f-cleavage', 'cleavage');
+        this.bindAutocomplete('f-color', 'color');
+
+        // Storage fields autocomplete
+        this.bindAutocomplete('f-storage-room', 'storageRoom');
+        this.bindAutocomplete('f-storage-unit', 'storageUnit');
+        this.bindAutocomplete('f-storage-drawer', 'storageDrawer');
+        this.bindAutocomplete('f-storage-box', 'storageBox');
+
+        // Museum fields autocomplete
+        this.bindAutocomplete('f-donor-source', 'donorSource');
+        this.bindAutocomplete('f-exhibit-status', 'exhibitStatus');
     }
 };
 
@@ -11741,7 +15206,7 @@ function getTaxonomyContentHtml(f) {
 }
 
 function getFullTaxonomyTray(f) {
-    if (!f) return '';
+    if (!f || f.type === 'mineral') return '';
     var isActive = expandedTaxonomyIds.has(f.id) ? 'active' : '';
     var content = expandedTaxonomyIds.has(f.id) ? getTaxonomyContentHtml(f) : '';
     return '<div class="taxonomy-tray ' + isActive + '">' + content + '</div>';
@@ -11829,6 +15294,11 @@ function generateId() {
 function getCategoryPrefix(cat) {
     if (!cat) return "FOSL";
     var c = cat.toLowerCase().trim();
+    
+    if (MINERAL_GROUPS.some(function(grp) { return grp.toLowerCase() === c; })) {
+        return "MINR";
+    }
+    
     if (c.indexOf('vertebrate') !== -1 && c.indexOf('invertebrate') === -1) return "VERT";
     if (c.indexOf('invertebrate') !== -1) return "INVT";
     if (c.indexOf('plant') !== -1) return "PLNT";
