@@ -1,0 +1,48 @@
+# OS
+.DS_Store
+.DS_Store?
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# Editors / IDEs
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.cursor/
+.claude/
+
+# Env & secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+credentials.json
+client_secret*.json
+
+# Dependencies (not used for Pages, but ignore if added later)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Local / personal data — never commit collection backups
+*.backup.json
+specimenry-backup*.json
+fossil-backup*.json
+backup-*.json
+
+# Logs & temp
+*.log
+tmp/
+temp/
+.cache/
+
+# Optional local serve leftovers
+.firebase/
+dist/
+build/
