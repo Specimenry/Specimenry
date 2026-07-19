@@ -1,0 +1,262 @@
+/* =========================================================================
+   Mobile app shell — native-feel scroll & layout (≤768px)
+   ========================================================================= */
+
+@media (max-width: 768px) {
+    :root {
+        --app-header-height: 56px;
+        --app-fab-clearance: calc(5.75rem + env(safe-area-inset-bottom, 0px));
+    }
+
+    main {
+        padding: 1rem 0.75rem var(--app-fab-clearance, 5.75rem) !important;
+    }
+
+    /* --- Archive title: static (no sticky fight with header) --- */
+    .archive-sticky-header {
+        position: relative !important;
+        top: auto !important;
+        z-index: 1 !important;
+        backdrop-filter: none !important;
+        -webkit-backdrop-filter: none !important;
+        background: transparent !important;
+        margin-bottom: 0.5rem !important;
+    }
+    .archive-sticky-header.is-compact {
+        padding-top: 0.65rem !important;
+        padding-bottom: 0.55rem !important;
+        border-bottom-color: transparent !important;
+    }
+
+    /* --- Advanced editor: ONE scroll surface --- */
+    #fossil-modal .modal-tabs {
+        flex-shrink: 0 !important;
+        position: sticky;
+        top: 0;
+        z-index: 6;
+        background: var(--bg-surface) !important;
+    }
+    #fossil-modal .modal-body {
+        flex: 1 1 auto !important;
+        overflow-y: auto !important;
+        -webkit-overflow-scrolling: touch;
+        overscroll-behavior: contain;
+        max-height: none !important;
+    }
+    #fossil-modal .tab-slider-wrapper {
+        height: auto !important;
+        min-height: 0 !important;
+    }
+    #fossil-modal .tab-content {
+        max-height: none !important;
+        overflow: visible !important;
+        overflow-y: visible !important;
+    }
+    #fossil-modal .modal-footer {
+        flex-shrink: 0 !important;
+        position: relative !important;
+    }
+
+    /* --- Secondary dialogs → full-screen sheets (only when open) --- */
+    #settings-modal[open],
+    #field-diary-modal[open],
+    #groups-modal[open],
+    #backup-center-modal[open],
+    #cloud-sync-modal[open],
+    #storage-explorer-modal[open],
+    #shop-ledger-modal[open],
+    #share-catalog-modal[open],
+    #dream-item-modal[open],
+    #cart-item-modal[open],
+    #bug-report-modal[open],
+    #ai-export-modal[open],
+    #csv-import-instructions-modal[open],
+    #wishlist-export-modal[open] {
+        width: 100vw !important;
+        max-width: 100vw !important;
+        height: 100% !important;
+        max-height: 100dvh !important;
+        margin: 0 !important;
+        border-radius: 0 !important;
+        border: none !important;
+        box-sizing: border-box !important;
+        overflow-y: auto !important;
+        -webkit-overflow-scrolling: touch;
+        overscroll-behavior: contain;
+        padding: max(1rem, env(safe-area-inset-top, 0px)) 1rem max(1rem, env(safe-area-inset-bottom, 0px)) !important;
+    }
+
+    /* --- Lightbox: fixed photo band + scrolling details --- */
+    #lightbox.active {
+        align-items: stretch !important;
+        justify-content: stretch !important;
+        padding: 0 !important;
+    }
+    #lightbox.active .lightbox-inner {
+        height: 100dvh;
+        max-height: 100dvh;
+        width: 100vw;
+        max-width: 100vw;
+        display: flex !important;
+        flex-direction: column !important;
+        overflow: hidden !important;
+        align-items: stretch !important;
+        padding: 0 !important;
+        box-sizing: border-box;
+        background: var(--bg-surface);
+    }
+    #lightbox .lightbox-close {
+        position: absolute;
+        top: max(0.35rem, env(safe-area-inset-top, 0px));
+        right: 0.5rem;
+        z-index: 20;
+    }
+    #lightbox #lightbox-auto-enhance {
+        top: max(0.35rem, env(safe-area-inset-top, 0px)) !important;
+        right: 2.75rem !important;
+        z-index: 20;
+    }
+    #lightbox .lightbox-hero {
+        position: relative !important;
+        top: auto !important;
+        flex: 0 0 auto !important;
+        max-height: none !important;
+        padding: 0.5rem 0.5rem 0.35rem;
+        padding-top: max(0.5rem, env(safe-area-inset-top, 0px));
+        border-bottom: 1px solid var(--border-color);
+        box-shadow: none !important;
+    }
+    #lightbox .lightbox-img-row {
+        max-height: 38vh !important;
+        gap: 0.35rem !important;
+    }
+    #lightbox #lightbox-img,
+    #lightbox #lightbox-video,
+    #lightbox .lightbox-inner img {
+        max-height: 36vh !important;
+        max-width: 88vw !important;
+    }
+    #lightbox .lightbox-hero-meta {
+        padding: 0.4rem 0.75rem 0.15rem !important;
+    }
+    #lightbox .lightbox-hero-meta h3 {
+        font-size: 1.15rem !important;
+    }
+    #lightbox .lightbox-info {
+        flex: 1 1 auto !important;
+        overflow-y: auto !important;
+        -webkit-overflow-scrolling: touch;
+        overscroll-behavior: contain;
+        width: 100% !important;
+        max-width: 100% !important;
+        margin-top: 0 !important;
+        padding: 0.75rem 0.85rem 1rem !important;
+        box-sizing: border-box;
+        text-align: left;
+    }
+    #lightbox .lightbox-fossil-nav-bar {
+        flex: 0 0 auto !important;
+        width: 100%;
+        padding: 0.35rem 0.5rem max(0.5rem, env(safe-area-inset-bottom, 0px));
+        border-top: 1px solid var(--border-color);
+        background: var(--bg-surface);
+        box-sizing: border-box;
+    }
+    #lightbox .lightbox-inner.is-collapsed .lightbox-img-row,
+    #lightbox .lightbox-inner.is-collapsed #lightbox-img,
+    #lightbox .lightbox-inner.is-collapsed #lightbox-video {
+        max-height: 36vh !important;
+    }
+    #lightbox .lightbox-inner.is-collapsed #lightbox-detail,
+    #lightbox .lightbox-inner.is-collapsed #lightbox-location,
+    #lightbox .lightbox-inner.is-collapsed #lightbox-counter {
+        display: block !important;
+    }
+    #lightbox .lightbox-fossil-strip {
+        overflow-x: auto !important;
+        -webkit-overflow-scrolling: touch;
+        justify-content: flex-start !important;
+        scroll-snap-type: x mandatory;
+        padding: 0.35rem 0.65rem;
+        max-width: 100%;
+        scrollbar-width: none;
+    }
+    #lightbox .lightbox-fossil-strip::-webkit-scrollbar {
+        display: none;
+    }
+    #lightbox .lb-strip-slot {
+        scroll-snap-align: center;
+    }
+    #lightbox .lb-strip-slot.lb-strip-current {
+        width: 72px !important;
+        height: 72px !important;
+    }
+
+    /* --- Deep Dive: fixed header + one content scroll --- */
+    #deep-dive-modal.deep-dive-modal,
+    .deep-dive-modal {
+        overflow: hidden !important;
+        height: 100dvh !important;
+        max-height: 100dvh !important;
+    }
+    .deep-dive-header {
+        flex-shrink: 0 !important;
+        position: relative !important;
+        top: auto !important;
+        padding-top: max(0.85rem, env(safe-area-inset-top, 0px)) !important;
+    }
+    .deep-dive-body {
+        flex: 1 1 auto !important;
+        overflow-y: auto !important;
+        -webkit-overflow-scrolling: touch;
+        overscroll-behavior: contain;
+        max-height: none !important;
+        padding-bottom: max(1.5rem, env(safe-area-inset-bottom, 0px)) !important;
+        min-height: 0 !important;
+    }
+    .wiki-scroll {
+        max-height: none !important;
+        overflow: visible !important;
+    }
+
+    /* --- Selection bar: compact, no inner scroll well --- */
+    .selection-bar-inner {
+        max-height: none !important;
+        overflow: visible !important;
+        flex-wrap: nowrap !important;
+    }
+    .selection-actions-group {
+        flex-wrap: nowrap !important;
+    }
+
+    /* --- Compact list rows --- */
+    .fossil-grid.list-view-active {
+        gap: 0.45rem !important;
+    }
+    .fossil-grid.list-view-active .fossil-card {
+        padding: 0.55rem 0.7rem !important;
+        gap: 0.65rem !important;
+        border-radius: var(--radius-sm) !important;
+        align-items: center !important;
+    }
+    .fossil-grid.list-view-active .card-img-container,
+    .fossil-grid.list-view-active .card-image-wrap {
+        width: 64px !important;
+        min-width: 64px !important;
+        height: 64px !important;
+        aspect-ratio: 1 / 1 !important;
+        border-radius: 8px !important;
+        overflow: hidden !important;
+        flex-shrink: 0 !important;
+    }
+    .fossil-grid.list-view-active .card-title {
+        font-size: 0.95rem !important;
+        margin: 0 !important;
+    }
+    .fossil-grid.list-view-active .card-description-snippet {
+        display: none !important;
+    }
+    .fossil-grid:not(.list-view-active) .card-img-container {
+        aspect-ratio: 4 / 3 !important;
+    }
+}

@@ -36,6 +36,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400;1,600;1,700&family=Inter:wght@300;400;500;600;700;800&family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="icon" type="image/png" href="img/favicon.png">
     <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/mobile-app-shell.css">
     <script>
         try {
             if (localStorage.getItem('pref_field_outdoor') === 'true') {
@@ -79,18 +80,23 @@
                     </button>
                 </div>
 
+                <button type="button" id="btn-backup-header" class="btn-secondary desktop-only" onclick="app.openBackupCenter()" title="Backup &amp; Restore" aria-label="Backup and Restore" style="white-space: nowrap; display: flex; align-items: center; gap: 0.35rem; margin-right: 0.5rem;">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                    <span class="btn-text">Backup</span>
+                </button>
+
                 <div class="dropdown" style="position: relative; display: inline-block; margin-right: 0.5rem;">
-                    <button type="button" id="btn-db-center" class="btn-secondary" onclick="app.toggleDbDropdown(event)" title="Database Options" style="white-space: nowrap; display: flex; align-items: center; gap: 0.25rem;">
+                    <button type="button" id="btn-db-center" class="btn-secondary" onclick="app.toggleDbDropdown(event)" title="Data &amp; sync" style="white-space: nowrap; display: flex; align-items: center; gap: 0.25rem;">
                         <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/><path d="M3 12c0 1.66 4 3 9 3s9-1.34 9-3"/></svg>
-                        <span class="btn-text">Database</span>
+                        <span class="btn-text">Data</span>
                         <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="opacity: 0.7; margin-left: 0.1rem; flex-shrink: 0;"><polyline points="6 9 12 15 18 9"/></svg>
                     </button>
                     <div id="db-dropdown" class="dropdown-menu" style="display: none; position: absolute; right: 0; top: 105%; background: var(--bg-surface); border: 1px solid var(--border-color); border-radius: var(--radius-md); box-shadow: var(--shadow-md); z-index: 1000; min-width: 200px; padding: 0.5rem 0;">
+                        <a href="#" id="btn-export" onclick="app.openBackupCenter(); return false;" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.6rem 1rem; font-size: 0.8rem; color: var(--text-primary); text-decoration: none; transition: background 0.15s; font-weight: 600;" onmouseover="this.style.background='var(--bg-warm)'" onmouseout="this.style.background='transparent'">
+                            📥 Backup &amp; Restore
+                        </a>
                         <a href="#" onclick="app.toggleCloudSyncModal(); return false;" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.6rem 1rem; font-size: 0.8rem; color: var(--text-primary); text-decoration: none; transition: background 0.15s; font-weight: 600; border-bottom: 1px solid var(--border-color);" onmouseover="this.style.background='var(--bg-warm)'" onmouseout="this.style.background='transparent'">
                             🔄 Sync Center (Cloud & P2P)
-                        </a>
-                        <a href="#" id="btn-export" onclick="app.openBackupCenter(); return false;" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.6rem 1rem; font-size: 0.8rem; color: var(--text-primary); text-decoration: none; transition: background 0.15s;" onmouseover="this.style.background='var(--bg-warm)'" onmouseout="this.style.background='transparent'">
-                            📥 Backup &amp; Restore
                         </a>
                         <a href="#" onclick="app.exportZipArchive(); return false;" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.6rem 1rem; font-size: 0.8rem; color: var(--text-primary); text-decoration: none; transition: background 0.15s;" onmouseover="this.style.background='var(--bg-warm)'" onmouseout="this.style.background='transparent'">
                             📦 Export ZIP (CSV + photos)
@@ -116,9 +122,9 @@
                 <input type="file" id="file-import" accept=".csv" style="display:none;" onchange="app.importCSV(event)">
 
                 <div class="dropdown" style="position: relative; display: inline-block;">
-                    <button type="button" id="btn-enrich-center" class="btn-secondary" onclick="app.toggleEnrichDropdown(event)" title="Archive Utilities Menu" style="white-space: nowrap; display: flex; align-items: center; gap: 0.25rem;">
+                    <button type="button" id="btn-enrich-center" class="btn-secondary" onclick="app.toggleEnrichDropdown(event)" title="Collection tools" style="white-space: nowrap; display: flex; align-items: center; gap: 0.25rem;">
                         <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg> 
-                        <span class="btn-text">Utilities</span>
+                        <span class="btn-text">Tools</span>
                         <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="opacity: 0.7; margin-left: 0.1rem; flex-shrink: 0;"><polyline points="6 9 12 15 18 9"/></svg>
                     </button>
                     <div id="enrich-dropdown" class="dropdown-menu" style="display: none; position: absolute; right: 0; top: 105%; background: var(--bg-surface); border: 1px solid var(--border-color); border-radius: var(--radius-md); box-shadow: var(--shadow-md); z-index: 1000; min-width: 200px; padding: 0.5rem 0;">
@@ -181,18 +187,22 @@
             <button type="button" class="mobile-menu-close" onclick="app.closeMobileMenu()" aria-label="Close menu">&times;</button>
         </div>
         <div class="mobile-menu-sheet-body">
-            <a href="#" class="mobile-menu-add-cta" onclick="app.closeMobileMenu(); app.openModal(); return false;">
+            <a href="#" class="mobile-menu-add-cta" onclick="app.closeMobileMenu(); app.openQuickCapture(); return false;">
                 <span class="mobile-menu-add-icon" aria-hidden="true">+</span>
                 <span class="mobile-menu-add-copy">
                     <strong>Add specimen</strong>
-                    <small>Simple field log — name, photo, place, notes</small>
+                    <small>Photo, name, Save — details later</small>
                 </span>
             </a>
-            <a href="#" class="mobile-menu-link" onclick="app.closeMobileMenu(); setTimeout(function(){ app.toggleStats(); }, 50); return false;">📊 Dashboard</a>
-            <a href="#" class="mobile-menu-link mobile-menu-link-accent" onclick="app.closeMobileMenu(); app.openBackupCenter(); return false;">📥 Backup &amp; Restore</a>
 
-            <details class="mobile-menu-section" open>
-                <summary>Database</summary>
+            <!-- Essentials — always visible for new users -->
+            <a href="#" class="mobile-menu-link mobile-menu-link-accent" onclick="app.closeMobileMenu(); app.openBackupCenter(); return false;">📥 Backup &amp; Restore</a>
+            <a href="#" class="mobile-menu-link" onclick="app.closeMobileMenu(); app.toggleSettingsModal(); return false;">⚙️ Settings</a>
+            <a href="#" class="mobile-menu-link" onclick="app.closeMobileMenu(); app.openAboutSpecimenry(); return false;">ℹ️ About &amp; Privacy</a>
+            <a href="#" class="mobile-menu-link" onclick="app.closeMobileMenu(); setTimeout(function(){ app.toggleStats(); }, 50); return false;">📊 Dashboard</a>
+
+            <details class="mobile-menu-section">
+                <summary>More tools</summary>
                 <a href="#" class="mobile-menu-link" onclick="app.closeMobileMenu(); app.toggleCloudSyncModal(); return false;">🔄 Sync Center</a>
                 <a href="#" class="mobile-menu-link" onclick="app.closeMobileMenu(); app.toggleFieldDiaryModal(); return false;">📓 Field Diary</a>
                 <a href="#" class="mobile-menu-link" onclick="app.closeMobileMenu(); app.toggleGroupsModal(); return false;">📦 Lots &amp; Groups</a>
@@ -200,12 +210,6 @@
                 <a href="#" class="mobile-menu-link" onclick="app.closeMobileMenu(); app.exportZipArchive(); return false;">📦 Export ZIP (CSV + photos)</a>
                 <a href="#" class="mobile-menu-link" onclick="app.closeMobileMenu(); app.openShareCatalogModal(); return false;">📖 Shareable Catalog</a>
                 <a href="#" class="mobile-menu-link" onclick="app.closeMobileMenu(); app.copyLLMContext(); return false;">🤖 Export for AI</a>
-                <a href="#" class="mobile-menu-link" onclick="app.closeMobileMenu(); app.openAboutSpecimenry(); return false;">ℹ️ About &amp; Privacy</a>
-            </details>
-
-            <details class="mobile-menu-section">
-                <summary>Tools</summary>
-                <a href="#" class="mobile-menu-link" onclick="app.closeMobileMenu(); app.toggleSettingsModal(); return false;">⚙️ Settings &amp; Profiles</a>
                 <a href="#" class="mobile-menu-link" id="mobile-link-storage" onclick="app.closeMobileMenu(); app.toggleStorageExplorerModal(); return false;" style="display: none;">🗄️ Storage Explorer</a>
                 <a href="#" class="mobile-menu-link" id="mobile-link-ledger" onclick="app.closeMobileMenu(); app.toggleShopLedgerModal(); return false;" style="display: none;">📊 Shop Ledger</a>
                 <a href="#" class="mobile-menu-link" onclick="app.closeMobileMenu(); app.openDeepDive(); return false;">🦕 Paleo Deep Dive</a>
@@ -213,10 +217,6 @@
                 <a href="#" class="mobile-menu-link" onclick="app.closeMobileMenu(); app.toggleComparePickerMode(); return false;">⚖️ Compare</a>
                 <a href="#" class="mobile-menu-link" onclick="app.closeMobileMenu(); app.batchAutoEnrichAll(); return false;">⚡ Auto-Fill Data</a>
                 <a href="#" class="mobile-menu-link" onclick="app.closeMobileMenu(); app.toggleAutoEnhance(); return false;">💡 Auto-Enhance Lighting</a>
-            </details>
-
-            <details class="mobile-menu-section">
-                <summary>Support</summary>
                 <a href="https://ko-fi.com/specimenry" target="_blank" rel="noopener" class="mobile-menu-link mobile-menu-link-kofi" onclick="app.closeMobileMenu();">❤️ Support on Ko-fi</a>
                 <a href="#" class="mobile-menu-link" onclick="app.closeMobileMenu(); app.openBugReportModal(); return false;">🐛 Report a Bug</a>
                 <a href="#" class="mobile-menu-link" onclick="app.closeMobileMenu(); app.startTour(); return false;">🙋 Guided Tour</a>
@@ -254,33 +254,33 @@
             <div class="filter-row view-toggle-row">
                 <div class="form-group view-toggle-group">
                     <label>Archive View</label>
-                    <div class="view-toggle" role="group" aria-label="Switch between collection and wishlist">
-                        <button type="button" id="btn-collection" class="toggle-btn view-tab-primary" onclick="app.setView('false')">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                    <div class="view-toggle" role="group" aria-label="Archive views">
+                        <button type="button" id="btn-collection" class="toggle-btn view-tab-primary" aria-pressed="true" onclick="app.setView('false')">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
                             <span class="btn-text">Collection</span>
                         </button>
-                        <button type="button" id="btn-wishlist" class="toggle-btn view-tab-primary" onclick="app.setView('true')">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+                        <button type="button" id="btn-wishlist" class="toggle-btn view-tab-primary" aria-pressed="false" onclick="app.setView('true')">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
                             <span class="btn-text">Wishlist</span>
                         </button>
-                        <button type="button" id="btn-sale" class="toggle-btn view-tab-primary" onclick="app.setView('sale')">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg>
+                        <button type="button" id="btn-sale" class="toggle-btn view-tab-primary" aria-pressed="false" onclick="app.setView('sale')">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg>
                             <span class="btn-text">For Sale</span>
                         </button>
-                        <button type="button" id="btn-sold" class="toggle-btn view-tab-more" onclick="app.setView('sold')">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+                        <button type="button" id="btn-sold" class="toggle-btn view-tab-more" aria-pressed="false" onclick="app.setView('sold')">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
                             <span class="btn-text">Sold</span>
                         </button>
-                        <button type="button" id="btn-traded" class="toggle-btn view-tab-more" onclick="app.setView('traded')">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 3 21 8 16 13"/><line x1="21" y1="8" x2="9" y2="8"/><polyline points="8 21 3 16 8 11"/><line x1="3" y1="16" x2="15" y2="16"/></svg>
+                        <button type="button" id="btn-traded" class="toggle-btn view-tab-more" aria-pressed="false" onclick="app.setView('traded')">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="16 3 21 8 16 13"/><line x1="21" y1="8" x2="9" y2="8"/><polyline points="8 21 3 16 8 11"/><line x1="3" y1="16" x2="15" y2="16"/></svg>
                             <span class="btn-text">Traded</span>
                         </button>
-                        <button type="button" id="btn-carts" class="toggle-btn view-tab-more" onclick="app.setView('carts')">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>
+                        <button type="button" id="btn-carts" class="toggle-btn view-tab-more" aria-pressed="false" onclick="app.setView('carts')">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>
                             <span class="btn-text">Draft Carts</span>
                         </button>
-                        <button type="button" id="btn-dream" class="toggle-btn view-tab-more" onclick="app.setView('dream')">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+                        <button type="button" id="btn-dream" class="toggle-btn view-tab-more" aria-pressed="false" onclick="app.setView('dream')">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
                             <span class="btn-text">Dream Collection</span>
                         </button>
                         <div class="view-more-wrap mobile-only">
@@ -292,7 +292,7 @@
                                 <button type="button" class="view-more-item" data-view="sold" onclick="event.stopPropagation(); app.setViewFromMore('sold')">💰 Sold</button>
                                 <button type="button" class="view-more-item" data-view="traded" onclick="event.stopPropagation(); app.setViewFromMore('traded')">🔄 Traded</button>
                                 <button type="button" class="view-more-item" data-view="carts" onclick="event.stopPropagation(); app.setViewFromMore('carts')">🛒 Draft Carts</button>
-                                <button type="button" class="view-more-item" data-view="dream" onclick="event.stopPropagation(); app.setViewFromMore('dream')">✨ Dream</button>
+                                <button type="button" class="view-more-item" data-view="dream" onclick="event.stopPropagation(); app.setViewFromMore('dream')">✨ Dream Collection</button>
                             </div>
                         </div>
                     </div>
@@ -325,41 +325,101 @@
                 <div class="mobile-filter-sheet-handle mobile-only" aria-hidden="true"></div>
                 <div class="mobile-filter-sheet-header mobile-only">
                     <strong>Filters</strong>
-                    <button type="button" class="mobile-filter-sheet-done" onclick="app.closeMobileFilters()">Done</button>
+                    <div class="mobile-filter-sheet-header-actions">
+                        <button type="button" class="mobile-filter-sheet-clear" onclick="app.resetFiltersOnly()">Clear all</button>
+                        <button type="button" class="mobile-filter-sheet-done" onclick="app.closeMobileFilters()">Done</button>
+                    </div>
                 </div>
-                <div class="form-group filter-select">
-                    <label for="filter-specimen-type">Type</label>
-                    <select id="filter-specimen-type" onchange="app.renderFossils()">
+
+                <div class="form-group filter-select mobile-filter-type-block">
+                    <label for="filter-specimen-type">Specimen type</label>
+                    <div class="mobile-filter-chips mobile-only" id="mobile-filter-type-chips" role="group" aria-label="Specimen type">
+                        <button type="button" class="mf-chip is-active" data-spec-type="" onclick="app.setMobileSpecimenTypeFilter('', this)">All</button>
+                        <button type="button" class="mf-chip" data-spec-type="fossil" onclick="app.setMobileSpecimenTypeFilter('fossil', this)">Fossils</button>
+                        <button type="button" class="mf-chip" data-spec-type="mineral" onclick="app.setMobileSpecimenTypeFilter('mineral', this)">Minerals</button>
+                    </div>
+                    <select id="filter-specimen-type" class="desktop-filter-select" onchange="app.onSpecimenTypeFilterChange()">
                         <option value="">All Specimen Types</option>
                         <option value="fossil">Fossils</option>
                         <option value="mineral">Minerals</option>
                     </select>
                 </div>
 
-                <div class="form-group filter-select">
-                    <label for="filter-category" id="lbl-filter-category">Category</label>
-                    <select id="filter-category" onchange="app.renderFossils()">
-                        <option value="">All Categories</option>
-                    </select>
-                </div>
-
-                <div class="form-group filter-select" id="filter-type-group">
-                    <label for="filter-type">Fossil Type</label>
-                    <select id="filter-type" onchange="app.renderFossils()">
-                        <option value="">All Types</option>
-                    </select>
-                </div>
-
-                <div class="form-group filter-select">
-                    <label for="filter-period" id="lbl-filter-period">Period</label>
-                    <select id="filter-period" onchange="app.renderFossils()">
-                        <option value="">All Periods</option>
-                    </select>
-                </div>
-
-                <div class="form-group filter-select">
-                    <label for="filter-sort">Sort By</label>
-                    <select id="filter-sort" onchange="app.renderFossils()">
+                <div class="form-group filter-select mobile-sort-block">
+                    <label for="filter-sort">Sort by</label>
+                    <div class="mobile-sort-list mobile-only" id="mobile-sort-list" role="radiogroup" aria-label="Sort by">
+                        <button type="button" class="mobile-sort-option is-active" role="radio" aria-checked="true" data-sort="newest" onclick="app.setMobileSort('newest')">
+                            <span class="mobile-sort-option-main">
+                                <span class="mobile-sort-option-title">Date added</span>
+                                <span class="mobile-sort-option-sub">Newest first</span>
+                            </span>
+                            <span class="mobile-sort-check" aria-hidden="true"></span>
+                        </button>
+                        <button type="button" class="mobile-sort-option" role="radio" aria-checked="false" data-sort="oldest" onclick="app.setMobileSort('oldest')">
+                            <span class="mobile-sort-option-main">
+                                <span class="mobile-sort-option-title">Date added</span>
+                                <span class="mobile-sort-option-sub">Oldest first</span>
+                            </span>
+                            <span class="mobile-sort-check" aria-hidden="true"></span>
+                        </button>
+                        <button type="button" class="mobile-sort-option" role="radio" aria-checked="false" data-sort="name-asc" onclick="app.setMobileSort('name-asc')">
+                            <span class="mobile-sort-option-main">
+                                <span class="mobile-sort-option-title">Name</span>
+                                <span class="mobile-sort-option-sub">A → Z</span>
+                            </span>
+                            <span class="mobile-sort-check" aria-hidden="true"></span>
+                        </button>
+                        <button type="button" class="mobile-sort-option" role="radio" aria-checked="false" data-sort="name-desc" onclick="app.setMobileSort('name-desc')">
+                            <span class="mobile-sort-option-main">
+                                <span class="mobile-sort-option-title">Name</span>
+                                <span class="mobile-sort-option-sub">Z → A</span>
+                            </span>
+                            <span class="mobile-sort-check" aria-hidden="true"></span>
+                        </button>
+                        <button type="button" class="mobile-sort-option" role="radio" aria-checked="false" data-sort="age-desc" onclick="app.setMobileSort('age-desc')">
+                            <span class="mobile-sort-option-main">
+                                <span class="mobile-sort-option-title">Geological age</span>
+                                <span class="mobile-sort-option-sub">Oldest first</span>
+                            </span>
+                            <span class="mobile-sort-check" aria-hidden="true"></span>
+                        </button>
+                        <button type="button" class="mobile-sort-option" role="radio" aria-checked="false" data-sort="age-asc" onclick="app.setMobileSort('age-asc')">
+                            <span class="mobile-sort-option-main">
+                                <span class="mobile-sort-option-title">Geological age</span>
+                                <span class="mobile-sort-option-sub">Youngest first</span>
+                            </span>
+                            <span class="mobile-sort-check" aria-hidden="true"></span>
+                        </button>
+                        <button type="button" class="mobile-sort-option" role="radio" aria-checked="false" data-sort="price-desc" onclick="app.setMobileSort('price-desc')">
+                            <span class="mobile-sort-option-main">
+                                <span class="mobile-sort-option-title">Value</span>
+                                <span class="mobile-sort-option-sub">High → low</span>
+                            </span>
+                            <span class="mobile-sort-check" aria-hidden="true"></span>
+                        </button>
+                        <button type="button" class="mobile-sort-option" role="radio" aria-checked="false" data-sort="price-asc" onclick="app.setMobileSort('price-asc')">
+                            <span class="mobile-sort-option-main">
+                                <span class="mobile-sort-option-title">Value</span>
+                                <span class="mobile-sort-option-sub">Low → high</span>
+                            </span>
+                            <span class="mobile-sort-check" aria-hidden="true"></span>
+                        </button>
+                        <button type="button" class="mobile-sort-option" role="radio" aria-checked="false" data-sort="tier-desc" onclick="app.setMobileSort('tier-desc')">
+                            <span class="mobile-sort-option-main">
+                                <span class="mobile-sort-option-title">Preservation</span>
+                                <span class="mobile-sort-option-sub">S → D</span>
+                            </span>
+                            <span class="mobile-sort-check" aria-hidden="true"></span>
+                        </button>
+                        <button type="button" class="mobile-sort-option" role="radio" aria-checked="false" data-sort="tier-asc" onclick="app.setMobileSort('tier-asc')">
+                            <span class="mobile-sort-option-main">
+                                <span class="mobile-sort-option-title">Preservation</span>
+                                <span class="mobile-sort-option-sub">D → S</span>
+                            </span>
+                            <span class="mobile-sort-check" aria-hidden="true"></span>
+                        </button>
+                    </div>
+                    <select id="filter-sort" class="desktop-filter-select" onchange="app.onSortFilterChange()">
                         <option value="newest">Newest First</option>
                         <option value="oldest">Oldest First</option>
                         <option value="name-asc">Name A–Z</option>
@@ -372,6 +432,35 @@
                         <option value="tier-asc">Preservation Tier (D to S)</option>
                     </select>
                 </div>
+
+                <div class="form-group filter-select">
+                    <label for="filter-category" id="lbl-filter-category">Category</label>
+                    <select id="filter-category" onchange="app.renderFossils()">
+                        <option value="">All Categories</option>
+                    </select>
+                </div>
+
+                <div class="form-group filter-select" id="filter-type-group">
+                    <label for="filter-type">Fossil type</label>
+                    <select id="filter-type" onchange="app.renderFossils()">
+                        <option value="">All Types</option>
+                    </select>
+                </div>
+
+                <div class="form-group filter-select">
+                    <label for="filter-period" id="lbl-filter-period">Period</label>
+                    <select id="filter-period" onchange="app.renderFossils()">
+                        <option value="">All Periods</option>
+                    </select>
+                </div>
+
+                <div class="form-group mobile-filter-layout-block mobile-only">
+                    <label>Layout</label>
+                    <div class="mobile-filter-layout-toggle" role="group" aria-label="Card layout">
+                        <button type="button" id="btn-layout-grid-mobile" class="mf-chip" onclick="app.setLayoutView('grid')">Grid</button>
+                        <button type="button" id="btn-layout-list-mobile" class="mf-chip" onclick="app.setLayoutView('list')">List</button>
+                    </div>
+                </div>
                 
                 <div class="form-group compare-toggle-wrapper desktop-only" style="min-width: 100px;">
                     <label style="visibility: hidden; user-select: none;">Compare</label>
@@ -383,11 +472,11 @@
                 <div class="form-group layout-toggle-wrapper desktop-only" style="min-width: 80px;">
                     <label style="visibility: hidden; user-select: none;">View</label>
                     <div class="layout-toggle-group" style="height: 38px; display: inline-flex; align-items: center; border: 1px solid var(--border-color); border-radius: var(--radius-sm); background: var(--bg-surface); padding: 3px; gap: 2px; box-sizing: border-box; width: 100%;">
-                        <button type="button" id="btn-layout-grid" class="layout-toggle-btn active" onclick="app.setLayoutView('grid')" title="Grid View" style="height: 30px; flex: 1; display: flex; align-items: center; justify-content: center; border: none; background: transparent; border-radius: 4px; cursor: pointer; transition: all 0.15s; color: var(--text-secondary); padding: 0;">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+                        <button type="button" id="btn-layout-grid" class="layout-toggle-btn active" onclick="app.setLayoutView('grid')" title="Grid View" aria-label="Grid layout" aria-pressed="true" style="height: 30px; flex: 1; display: flex; align-items: center; justify-content: center; border: none; background: transparent; border-radius: 4px; cursor: pointer; transition: all 0.15s; color: var(--text-secondary); padding: 0;">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
                         </button>
-                        <button type="button" id="btn-layout-list" class="layout-toggle-btn" onclick="app.setLayoutView('list')" title="List View" style="height: 30px; flex: 1; display: flex; align-items: center; justify-content: center; border: none; background: transparent; border-radius: 4px; cursor: pointer; transition: all 0.15s; color: var(--text-secondary); padding: 0;">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+                        <button type="button" id="btn-layout-list" class="layout-toggle-btn" onclick="app.setLayoutView('list')" title="List View" aria-label="List layout" aria-pressed="false" style="height: 30px; flex: 1; display: flex; align-items: center; justify-content: center; border: none; background: transparent; border-radius: 4px; cursor: pointer; transition: all 0.15s; color: var(--text-secondary); padding: 0;">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
                         </button>
                     </div>
                 </div>
@@ -518,20 +607,19 @@
             <span id="archive-sticky-count" class="archive-sticky-count"></span>
         </div>
         <div id="carts-container" class="carts-container-wrapper" style="display: none;"></div>
-        <div id="fossil-grid" class="fossil-grid" aria-live="polite">
+        <div id="fossil-grid" class="fossil-grid" role="list">
             <!-- Fossils rendered by JS -->
         </div>
     </main>
 
-    <div id="specimenry-sheet-backdrop" class="specimenry-sheet-backdrop" hidden onclick="app.closeSpecimenrySheet(false)"></div>
-    <div id="specimenry-sheet" class="specimenry-sheet" role="dialog" aria-modal="true" aria-labelledby="specimenry-sheet-title" hidden>
+    <dialog id="specimenry-sheet" class="specimenry-sheet" aria-labelledby="specimenry-sheet-title">
         <div class="specimenry-sheet-handle" id="specimenry-sheet-handle" aria-hidden="true"></div>
         <div class="specimenry-sheet-header">
             <h3 id="specimenry-sheet-title">Actions</h3>
             <button type="button" class="btn-icon" aria-label="Close" onclick="app.closeSpecimenrySheet(false)">✕</button>
         </div>
         <div class="specimenry-sheet-body" id="specimenry-sheet-body"></div>
-    </div>
+    </dialog>
 
     <!-- Fossil Form Modal -->
     <dialog id="fossil-modal" aria-labelledby="modal-title">
@@ -557,12 +645,37 @@
                 </button>
             </div>
 
+            <!-- Mobile Quick Capture: photo + name + save (no scroll) -->
+            <div id="quick-capture-panel" class="quick-capture-panel" hidden>
+                <p class="quick-capture-hint">Photo, name, Save — done in three taps. Details can wait.</p>
+                <input type="file" id="qc-camera-input" accept="image/*" capture="environment" style="display:none" onchange="app.handleImageUpload(event)">
+                <div class="qc-photo-zone" id="qc-photo-zone">
+                    <div id="qc-photo-preview" class="qc-photo-preview" hidden></div>
+                    <div class="qc-photo-actions" id="qc-photo-empty">
+                        <button type="button" class="qc-photo-primary" onclick="app.quickCaptureTakePhoto()">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+                            Take photo
+                        </button>
+                        <button type="button" class="qc-photo-secondary" onclick="document.getElementById('f-images').click()">Choose from library</button>
+                    </div>
+                    <div class="qc-photo-change" id="qc-photo-change" hidden>
+                        <button type="button" class="qc-photo-secondary" onclick="app.quickCaptureTakePhoto()">Retake</button>
+                        <button type="button" class="qc-photo-secondary" onclick="document.getElementById('f-images').click()">Add more</button>
+                    </div>
+                </div>
+                <label class="qc-name-label" for="qc-specimen">Specimen name</label>
+                <input type="text" id="qc-specimen" class="qc-name-input" placeholder="e.g. Megalodon tooth" autocomplete="off" enterkeyhint="done" oninput="app.syncQuickCaptureName(this.value)">
+                <p class="qc-expand-row">
+                    <button type="button" class="qc-expand-link" onclick="app.expandQuickCapture()">Need place or notes? Open full Simple form</button>
+                </p>
+            </div>
+
             <!-- Tab Navigation (Fixed at top of dialog body) -->
-            <div class="modal-tabs" style="display: flex; gap: 0.25rem; padding: 0 1.5rem; border-bottom: 1px solid var(--border-color); background: var(--bg-surface); z-index: 10;">
-                <button type="button" class="modal-tab-btn active" onclick="app.setModalTab('classification')" id="tab-btn-classification" style="background: none; border: none; border-bottom: 2px solid var(--accent); padding: 0.85rem 1rem; font-weight: 600; color: var(--text-primary); cursor: pointer; font-size: 0.8rem; transition: all 0.2s; font-family: inherit;">🔬 Classification</button>
-                <button type="button" class="modal-tab-btn" onclick="app.setModalTab('geology')" id="tab-btn-geology" style="background: none; border: none; border-bottom: 2px solid transparent; padding: 0.85rem 1rem; font-weight: 600; color: var(--text-secondary); cursor: pointer; font-size: 0.8rem; transition: all 0.2s; font-family: inherit;">🌍 Geology & Location</button>
-                <button type="button" class="modal-tab-btn" onclick="app.setModalTab('curator')" id="tab-btn-curator" style="background: none; border: none; border-bottom: 2px solid transparent; padding: 0.85rem 1rem; font-weight: 600; color: var(--text-secondary); cursor: pointer; font-size: 0.8rem; transition: all 0.2s; font-family: inherit;">📐 Curation & Value</button>
-                <button type="button" class="modal-tab-btn" onclick="app.setModalTab('prep')" id="tab-btn-prep" style="background: none; border: none; border-bottom: 2px solid transparent; padding: 0.85rem 1rem; font-weight: 600; color: var(--text-secondary); cursor: pointer; font-size: 0.8rem; transition: all 0.2s; font-family: inherit;">🔧 Prep Log</button>
+            <div class="modal-tabs" role="tablist" aria-label="Specimen editor sections" style="display: flex; gap: 0.25rem; padding: 0 1.5rem; border-bottom: 1px solid var(--border-color); background: var(--bg-surface); z-index: 10;">
+                <button type="button" class="modal-tab-btn active" role="tab" aria-selected="true" aria-controls="tab-classification" onclick="app.setModalTab('classification')" id="tab-btn-classification" style="background: none; border: none; border-bottom: 2px solid var(--accent); padding: 0.85rem 1rem; font-weight: 600; color: var(--text-primary); cursor: pointer; font-size: 0.8rem; transition: all 0.2s; font-family: inherit;">🔬 Classification</button>
+                <button type="button" class="modal-tab-btn" role="tab" aria-selected="false" aria-controls="tab-geology" onclick="app.setModalTab('geology')" id="tab-btn-geology" style="background: none; border: none; border-bottom: 2px solid transparent; padding: 0.85rem 1rem; font-weight: 600; color: var(--text-secondary); cursor: pointer; font-size: 0.8rem; transition: all 0.2s; font-family: inherit;">🌍 Geology & Location</button>
+                <button type="button" class="modal-tab-btn" role="tab" aria-selected="false" aria-controls="tab-curator" onclick="app.setModalTab('curator')" id="tab-btn-curator" style="background: none; border: none; border-bottom: 2px solid transparent; padding: 0.85rem 1rem; font-weight: 600; color: var(--text-secondary); cursor: pointer; font-size: 0.8rem; transition: all 0.2s; font-family: inherit;">📐 Curation & Value</button>
+                <button type="button" class="modal-tab-btn" role="tab" aria-selected="false" aria-controls="tab-prep" onclick="app.setModalTab('prep')" id="tab-btn-prep" style="background: none; border: none; border-bottom: 2px solid transparent; padding: 0.85rem 1rem; font-weight: 600; color: var(--text-secondary); cursor: pointer; font-size: 0.8rem; transition: all 0.2s; font-family: inherit;">🔧 Prep Log</button>
             </div>
 
             <div class="modal-body">
@@ -1221,30 +1334,31 @@
         </div>
 
         <div class="modal-footer">
-                                <button type="button" class="btn-secondary" onclick="app.closeModal()">Cancel</button>
+                                <button type="button" class="btn-secondary" id="fossil-cancel-btn" onclick="app.closeModal()">Cancel</button>
+                                <button type="button" class="btn-secondary" id="qc-expand-footer-btn" hidden onclick="app.expandQuickCapture()">More fields</button>
                                 <button type="submit" id="fossil-submit-btn" class="btn-primary">Save specimen</button>
             </div>
         </form>
     </dialog>
 
     <!-- Lightbox Overlay -->
-    <div id="lightbox" class="lightbox-overlay" onclick="if(event.target===this) app.closeLightbox();">
+    <div id="lightbox" class="lightbox-overlay" role="dialog" aria-modal="true" aria-labelledby="lightbox-title" aria-hidden="true" onclick="if(event.target===this) app.closeLightbox();">
         <div class="lightbox-inner">
-            <button id="lightbox-auto-enhance" onclick="app.toggleAutoEnhance()" title="Toggle Auto-Enhance Lighting" style="position: absolute; top: -40px; right: 40px; background: none; border: none; color: var(--text-primary); font-size: 1.25rem; cursor: pointer; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; border-radius: 50%; transition: background 0.2s ease;" onmouseover="this.style.background='rgba(0,0,0,0.05)'" onmouseout="this.style.background='transparent'">💡</button>
-            <button class="lightbox-close" onclick="app.closeLightbox()" title="Close (Esc)">&times;</button>
+            <button type="button" id="lightbox-auto-enhance" onclick="app.toggleAutoEnhance()" title="Toggle Auto-Enhance Lighting" aria-label="Toggle auto-enhance lighting" aria-pressed="false" style="position: absolute; top: -40px; right: 40px; background: none; border: none; color: var(--text-primary); font-size: 1.25rem; cursor: pointer; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; border-radius: 50%; transition: background 0.2s ease;" onmouseover="this.style.background='rgba(0,0,0,0.05)'" onmouseout="this.style.background='transparent'">💡</button>
+            <button type="button" class="lightbox-close" onclick="app.closeLightbox()" title="Close (Esc)" aria-label="Close specimen viewer">&times;</button>
 
             <div class="lightbox-hero">
                 <div class="lightbox-img-row">
-                    <button class="lightbox-nav prev" onclick="app.lightboxNav(-1)" title="Previous photo (←)">&#10094;</button>
-                    <img id="lightbox-img" src="" alt="Full-size fossil image" />
+                    <button type="button" class="lightbox-nav prev" onclick="app.lightboxNav(-1)" title="Previous photo (←)" aria-label="Previous photo">&#10094;</button>
+                    <img id="lightbox-img" src="" alt="Full-size specimen image" />
                     <video id="lightbox-video" style="display:none; max-width: 100%; max-height: 70vh; object-fit: contain; box-shadow: var(--shadow-lg);" controls></video>
-                    <button class="lightbox-nav next" onclick="app.lightboxNav(1)" title="Next photo (→)">&#10095;</button>
+                    <button type="button" class="lightbox-nav next" onclick="app.lightboxNav(1)" title="Next photo (→)" aria-label="Next photo">&#10095;</button>
                 </div>
                 <div class="lightbox-hero-meta">
                     <h3 id="lightbox-title"></h3>
                     <p id="lightbox-detail"></p>
                     <p id="lightbox-location"></p>
-                    <div class="lightbox-counter" id="lightbox-counter"></div>
+                    <div class="lightbox-counter" id="lightbox-counter" aria-live="polite"></div>
                 </div>
             </div>
 
@@ -1260,26 +1374,26 @@
 
             <!-- Inter-fossil carousel -->
             <div class="lightbox-fossil-nav-bar">
-                <button id="lightbox-fossil-prev" class="lightbox-fossil-arrow" onclick="app.lightboxFossilNav(-1)" title="Previous fossil (↑)">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+                <button type="button" id="lightbox-fossil-prev" class="lightbox-fossil-arrow" onclick="app.lightboxFossilNav(-1)" title="Previous fossil (↑)" aria-label="Previous specimen">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="15 18 9 12 15 6"/></svg>
                 </button>
                 <div id="lightbox-fossil-strip" class="lightbox-fossil-strip"></div>
-                <button id="lightbox-fossil-next" class="lightbox-fossil-arrow" onclick="app.lightboxFossilNav(1)" title="Next fossil (↓)">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+                <button type="button" id="lightbox-fossil-next" class="lightbox-fossil-arrow" onclick="app.lightboxFossilNav(1)" title="Next fossil (↓)" aria-label="Next specimen">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="9 18 15 12 9 6"/></svg>
                 </button>
-                <div id="lightbox-fossil-pos" class="lightbox-fossil-pos"></div>
+                <div id="lightbox-fossil-pos" class="lightbox-fossil-pos" aria-live="polite"></div>
             </div>
         </div>
     </div>
 
 
     <!-- Floating Back to Top Button -->
-    <button type="button" id="btn-fab-add" class="fab-add mobile-only" onclick="app.openModal()" title="Add specimen" aria-label="Add specimen" aria-hidden="true">
+    <button type="button" id="btn-fab-add" class="fab-add mobile-only" onclick="app.openQuickCapture()" title="Quick add specimen" aria-label="Quick add specimen" aria-hidden="true" tabindex="-1">
         <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
     </button>
 
-    <button type="button" id="btn-back-to-top" onclick="window.scrollTo({ top: 0, behavior: 'smooth' })" title="Back to Top" style="position: fixed; bottom: 85px; right: 2rem; width: 44px; height: 44px; border-radius: 50%; background: var(--bg-surface); border: 1px solid var(--border-color); color: var(--text-primary); cursor: pointer; display: flex; align-items: center; justify-content: center; box-shadow: var(--shadow-md); z-index: 99; opacity: 0; pointer-events: none; transform: translateY(15px); transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);">
-        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"/></svg>
+    <button type="button" id="btn-back-to-top" onclick="window.scrollTo({ top: 0, behavior: 'smooth' })" title="Back to Top" aria-label="Back to top" style="position: fixed; bottom: 85px; right: 2rem; width: 44px; height: 44px; border-radius: 50%; background: var(--bg-surface); border: 1px solid var(--border-color); color: var(--text-primary); cursor: pointer; display: flex; align-items: center; justify-content: center; box-shadow: var(--shadow-md); z-index: 99; opacity: 0; pointer-events: none; transform: translateY(15px); transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);">
+        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="18 15 12 9 6 15"/></svg>
     </button>
 
     <!-- Floating Selection Actions Bar -->
